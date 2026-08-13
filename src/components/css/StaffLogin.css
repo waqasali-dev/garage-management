@@ -1,0 +1,204 @@
+/* Custom Palette Variables */
+:root {
+    --bg-olive: #202b22;
+    --bg-olive-dark: #161e18;
+    --bg-olive-light: #2c3a2f;
+    --accent-yellow: #ffd85f;
+    --accent-yellow-hover: #e6c14e;
+    --text-main: #f0f4f1;
+    --text-muted: #a3b1a6;
+    --border-glass: rgba(255, 216, 95, 0.15);
+}
+
+/* Page Layout Container */
+.login-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Mobile viewport fix */
+    width: 100%;
+    background-color: var(--bg-olive-dark);
+    background-image: radial-gradient(circle at center,
+            var(--bg-olive) 0%,
+            var(--bg-olive-dark) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--text-main);
+}
+
+/* Login Card Structure */
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background-color: rgba(32, 43, 34, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    padding: 32px 24px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
+}
+
+/* Header & Branding */
+.login-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.brand-icon {
+    width: 48px;
+    height: 48px;
+    background-color: var(--bg-olive-light);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px auto;
+    color: var(--accent-yellow);
+}
+
+.brand-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.brand-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Form Styling */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.label-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.forgot-link {
+    font-size: 12px;
+    color: var(--accent-yellow);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.forgot-link:hover {
+    color: var(--accent-yellow-hover);
+    text-decoration: underline;
+}
+
+/* Mobile Touch-Friendly Inputs */
+.form-group input {
+    width: 100%;
+    height: 48px;
+    /* Touch target minimum */
+    background-color: rgba(22, 30, 24, 0.6);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    padding: 0 16px;
+    font-size: 16px;
+    /* Prevents auto-zoom on mobile Safari */
+    color: var(--text-main);
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input::placeholder {
+    color: rgba(163, 177, 166, 0.4);
+}
+
+.form-group input:focus {
+    border-color: var(--accent-yellow);
+    box-shadow: 0 0 0 2px rgba(255, 216, 95, 0.2);
+}
+
+/* Primary Action Button */
+.submit-btn {
+    width: 100%;
+    height: 50px;
+    background-color: var(--accent-yellow);
+    color: var(--bg-olive-dark);
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.submit-btn:hover {
+    background-color: var(--accent-yellow-hover);
+}
+
+.submit-btn:active {
+    transform: scale(0.98);
+}
+
+/* Footer Info */
+.login-footer {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.login-footer p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.6;
+    margin: 0;
+    letter-spacing: 0.05em;
+}
+
+/* Icon Utilities */
+.icon-sm {
+    font-size: 16px;
+}
+
+/* Responsive Overrides */
+@media (max-width: 480px) {
+    .login-card {
+        padding: 24px 18px;
+        border-radius: 12px;
+    }
+}

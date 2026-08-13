@@ -1,0 +1,457 @@
+/* Color Palette Variables */
+:root {
+    --bg-olive: #202b22;
+    --bg-olive-dark: #161e18;
+    --bg-olive-card: rgba(32, 43, 34, 0.85);
+    --accent-yellow: #ffd85f;
+    --accent-yellow-dark: #e6c14e;
+    --text-main: #f0f4f1;
+    --text-muted: #a3b1a6;
+    --border-glass: rgba(255, 216, 95, 0.15);
+    --status-error: #ef4444;
+}
+
+/* Page Outer Layout */
+.intake-layout {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background-color: var(--bg-olive-dark);
+    color: var(--text-main);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    display: flex;
+}
+
+.intake-wrapper {
+    flex: 1;
+    margin-left: 260px;
+    /* Aligns next to desktop sidebar */
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+}
+
+/* Top Navigation Bar */
+.intake-header {
+    height: 64px;
+    padding: 0 24px;
+    background-color: rgba(22, 30, 24, 0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-glass);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.mobile-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.header-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.icon-btn {
+    position: relative;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+}
+
+.icon-btn:hover {
+    color: var(--accent-yellow);
+}
+
+.notification-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-yellow);
+    border-radius: 50%;
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: var(--bg-olive);
+    border: 1px solid var(--accent-yellow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+}
+
+/* Main Content Area */
+.intake-main {
+    flex: 1;
+    padding: 24px;
+    padding-bottom: 100px;
+    /* Space for fixed bottom bar */
+    overflow-y: auto;
+}
+
+.intake-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.intake-card {
+    background-color: var(--bg-olive-card);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.col-span-12 {
+    grid-column: span 12;
+}
+
+.col-span-8 {
+    grid-column: span 8;
+}
+
+.col-span-6 {
+    grid-column: span 6;
+}
+
+.col-span-4 {
+    grid-column: span 4;
+}
+
+/* Section Card Headers */
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-glass);
+}
+
+.header-icon {
+    color: var(--accent-yellow);
+    font-size: 24px;
+}
+
+.card-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+/* Form Controls & Inputs */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+}
+
+.form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-align: left;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    height: 48px;
+    background-color: rgba(22, 30, 24, 0.6);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    padding: 0 16px;
+    font-size: 15px;
+    color: var(--text-main);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group textarea {
+    height: 120px;
+    padding: 12px 16px;
+    resize: none;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    border-color: var(--accent-yellow);
+    box-shadow: 0 0 0 2px rgba(255, 216, 95, 0.15);
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.uppercase-input {
+    text-transform: uppercase;
+}
+
+/* Input Action Addon */
+.input-with-action {
+    position: relative;
+    width: 100%;
+}
+
+.input-action-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.input-action-btn:hover {
+    color: var(--accent-yellow);
+}
+
+/* Search Input styling */
+.search-group {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+}
+
+.search-group input {
+    padding-left: 42px;
+}
+
+/* Divider component */
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 16px 0;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-glass);
+}
+
+.divider span {
+    padding: 0 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Media & Notes Section */
+.media-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.notes-group {
+    height: 100%;
+}
+
+.photo-upload-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.photo-upload-btn {
+    height: 96px;
+    border: 2px dashed var(--border-glass);
+    background-color: rgba(22, 30, 24, 0.4);
+    border-radius: 8px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.photo-upload-btn span:last-child {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.photo-upload-btn:hover {
+    border-color: var(--accent-yellow);
+    color: var(--accent-yellow);
+}
+
+.photo-placeholder {
+    height: 96px;
+    border: 1px solid var(--border-glass);
+    background-color: rgba(22, 30, 24, 0.6);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(163, 177, 166, 0.3);
+}
+
+/* Sticky Action Footer */
+.intake-sticky-footer {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: 260px;
+    background-color: rgba(22, 30, 24, 0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-glass);
+    padding: 16px 24px;
+    z-index: 50;
+}
+
+.footer-actions {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.cancel-btn {
+    height: 44px;
+    padding: 0 20px;
+    background: none;
+    border: 1px solid var(--border-glass);
+    color: var(--text-main);
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.cancel-btn:hover {
+    background-color: rgba(255, 216, 95, 0.05);
+}
+
+.submit-btn {
+    height: 44px;
+    padding: 0 24px;
+    background-color: var(--accent-yellow);
+    color: var(--bg-olive-dark);
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.submit-btn:active {
+    transform: scale(0.98);
+}
+
+/* Mobile Responsiveness Overrides */
+@media (max-width: 1024px) {
+
+    .col-span-8,
+    .col-span-6,
+    .col-span-4 {
+        grid-column: span 12;
+    }
+
+    .media-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .intake-wrapper {
+        margin-left: 0;
+    }
+
+    .intake-sticky-footer {
+        left: 0;
+    }
+
+    .mobile-menu-btn {
+        display: flex;
+    }
+
+    .intake-main {
+        padding: 16px;
+    }
+
+    .form-grid .col-span-6 {
+        grid-column: span 12;
+    }
+
+    .footer-actions {
+        width: 100%;
+    }
+
+    .cancel-btn,
+    .submit-btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
