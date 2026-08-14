@@ -66,6 +66,11 @@ export default function Sidebar({ isOpen, onClose }) {
                         <span className="material-symbols-outlined">assessment</span>
                         <span>Audit Log</span>
                     </NavLink>
+
+                    <NavLink to="/users" className={getNavClass}>
+                        <span className="material-symbols-outlined">admin_panel_settings</span>
+                        <span>Users & Roles</span>
+                    </NavLink>
                 </div>
 
                 {/* Bottom Utility Links */}

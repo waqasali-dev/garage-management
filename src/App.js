@@ -14,6 +14,7 @@ import Invoices from './components/Invoices';
 import Staff from './components/Staff';
 import StaffLogin from './components/StaffLogin';
 import AuditLog from './components/AuditLog';
+import UserManagement from './components/UserManagement';
 
 function App() {
   return (
@@ -33,6 +34,8 @@ function App() {
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/audit-log" element={<AuditLog />} />
+        <Route path="/users" element={<UserManagement />} />
+        <Route path="/admin/users" element={<UserManagement />} />
         <Route path="/login" element={<StaffLogin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

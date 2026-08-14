@@ -183,7 +183,42 @@ ALTER TABLE work_order_data
     CHECK (work_order_id ~ '^WO-\d{4}-\d{4}$');
 
 
-    ALTER TABLE invoice_data 
+ALTER TABLE invoice_data 
     ALTER COLUMN invoice_id SET DEFAULT generate_invoice_id(),
     ADD CONSTRAINT chk_invoice_id_format 
     CHECK (invoice_id ~ '^INV-\d{4}-\d{4}$');
+
+CREATE TYPE user_role_enum AS ENUM (
+    'admin',
+    'staff',
+    'car_owner'
+);
+
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role user_role_enum NOT NULL DEFAULT 'staff',
+    
+    -- Optional links to specific entity profiles
+    staff_id INT UNIQUE REFERENCES staff_data(staff_id) ON DELETE CASCADE,
+    owner_id INT UNIQUE REFERENCES car_owners(owner_id) ON DELETE CASCADE,
+    
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Data integrity constraint: staff role links to staff_id, car_owner links to owner_id
+    CONSTRAINT chk_user_profile_alignment CHECK (
+        (role = 'staff' AND staff_id IS NOT NULL AND owner_id IS NULL) OR
+        (role = 'car_owner' AND owner_id IS NOT NULL AND staff_id IS NULL) OR
+        (role = 'admin') -- Admins don't strictly require a linked profile
+    )
+);
+
+-- Fast index for email lookups during login
+CREATE INDEX idx_users_email ON users(email);
+
+-- Fast lookup by role
+CREATE INDEX idx_users_role ON users(role);
