@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SecurityIcon from '@mui/icons-material/Security';
-import BadgeIcon from '@mui/icons-material/Badge';
 import KeyIcon from '@mui/icons-material/Key';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -19,27 +17,35 @@ import EngineeringIcon from '@mui/icons-material/Engineering';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import StorageIcon from '@mui/icons-material/Storage';
+import PhoneIcon from '@mui/icons-material/Phone';
+import HomeIcon from '@mui/icons-material/Home';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import StarIcon from '@mui/icons-material/Star';
 import './css/UserManagement.css';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
-const DEFAULT_STAFF = [
-    { staff_id: 1, name: 'Marcus Vance', role: 'Lead Technician', email: 'marcus.v@precision.garage' },
-    { staff_id: 2, name: 'Sarah Jenkins', role: 'Diagnostics Tech', email: 'sarah.j@precision.garage' },
-    { staff_id: 3, name: 'David Tran', role: 'Service Advisor', email: 'david.t@precision.garage' },
-];
-
-const DEFAULT_OWNERS = [
-    { owner_id: 1, name: 'Sarah Jenkins', phone: '(555) 012-3456', email: 'sarah.j@example.com' },
-    { owner_id: 2, name: 'Marcus Chen', phone: '(555) 987-6543', email: 'm.chen.corp@example.com' },
-    { owner_id: 3, name: 'Elena Rodriguez', phone: '(555) 444-2211', email: 'elena.r@example.com' },
-];
+const INITIAL_FORM_STATE = {
+    role: 'admin',
+    email: '',
+    password: '',
+    is_active: true,
+    // staff_data fields
+    staff_name: '',
+    staff_role: 'Lead Technician',
+    staff_phone: '',
+    staff_address: '',
+    staff_hourly_rate: '35.00',
+    // car_owners fields
+    owner_name: '',
+    owner_phone: '',
+    owner_address: '',
+    owner_is_vip: false,
+};
 
 export default function UserManagement() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [users, setUsers] = useState([]);
-    const [staffProfiles, setStaffProfiles] = useState(DEFAULT_STAFF);
-    const [ownerProfiles, setOwnerProfiles] = useState(DEFAULT_OWNERS);
     const [isLoading, setIsLoading] = useState(true);
     const [dbConnected, setDbConnected] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -47,33 +53,24 @@ export default function UserManagement() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [notification, setNotification] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
-
-    // Form state matching PostgreSQL 'users' table
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-        role: 'admin',
-        staff_id: '',
-        owner_id: '',
-        is_active: true,
-    });
+    const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
         setTimeout(() => setNotification(null), 5000);
     };
 
-    // Load data from PostgreSQL database via Express API
+    // Load live user data from PostgreSQL database via Express API
     const loadDatabaseData = async () => {
         setIsLoading(true);
         try {
-            // 1. Health & Connection check
             const healthRes = await fetch(`${API_BASE_URL}/health`);
             if (healthRes.ok) {
                 setDbConnected(true);
+            } else {
+                setDbConnected(false);
             }
 
-            // 2. Fetch Users
             const usersRes = await fetch(`${API_BASE_URL}/users`);
             if (usersRes.ok) {
                 const usersJson = await usersRes.json();
@@ -81,26 +78,8 @@ export default function UserManagement() {
                     setUsers(usersJson.data);
                 }
             }
-
-            // 3. Fetch Staff Profiles
-            const staffRes = await fetch(`${API_BASE_URL}/staff-profiles`);
-            if (staffRes.ok) {
-                const staffJson = await staffRes.json();
-                if (staffJson.success && staffJson.data.length > 0) {
-                    setStaffProfiles(staffJson.data);
-                }
-            }
-
-            // 4. Fetch Owner Profiles
-            const ownerRes = await fetch(`${API_BASE_URL}/owner-profiles`);
-            if (ownerRes.ok) {
-                const ownerJson = await ownerRes.json();
-                if (ownerJson.success && ownerJson.data.length > 0) {
-                    setOwnerProfiles(ownerJson.data);
-                }
-            }
         } catch (err) {
-            console.warn('Backend server connecting / not yet reachable:', err.message);
+            console.warn('Backend server connecting / not reachable:', err.message);
             setDbConnected(false);
         } finally {
             setIsLoading(false);
@@ -113,12 +92,9 @@ export default function UserManagement() {
 
     const handleOpenModal = (presetRole = 'admin') => {
         setFormData({
-            email: presetRole === 'admin' ? 'superadmin@precision.garage' : '',
-            password: '',
+            ...INITIAL_FORM_STATE,
             role: presetRole,
-            staff_id: '',
-            owner_id: '',
-            is_active: true,
+            email: presetRole === 'admin' ? 'superadmin@precision.garage' : '',
         });
         setShowPassword(false);
         setIsModalOpen(true);
@@ -136,19 +112,8 @@ export default function UserManagement() {
                 [name]: type === 'checkbox' ? checked : value,
             };
 
-            // Auto-fill email if staff/owner is selected
-            if (name === 'staff_id' && value) {
-                const staff = staffProfiles.find((s) => s.staff_id === parseInt(value, 10));
-                if (staff && staff.email) updated.email = staff.email;
-            } else if (name === 'owner_id' && value) {
-                const owner = ownerProfiles.find((o) => o.owner_id === parseInt(value, 10));
-                if (owner && owner.email) updated.email = owner.email;
-            }
-
-            // Reset profile link when switching role
             if (name === 'role') {
-                updated.staff_id = '';
-                updated.owner_id = '';
+                updated.email = value === 'admin' ? 'admin@precision.garage' : '';
             }
 
             return updated;
@@ -158,13 +123,24 @@ export default function UserManagement() {
     const handleCreateUser = async (e) => {
         e.preventDefault();
 
-        // Client-side validation for constraint chk_user_profile_alignment
-        if (formData.role === 'staff' && !formData.staff_id) {
-            showNotification('Staff accounts must be linked to a Staff Profile (staff_id).', 'error');
-            return;
+        // Validation for Staff
+        if (formData.role === 'staff') {
+            if (!formData.staff_name.trim() || !formData.staff_role.trim() || !formData.email.trim()) {
+                showNotification('Please provide Staff Full Name, Role, and Email Address.', 'error');
+                return;
+            }
         }
-        if (formData.role === 'car_owner' && !formData.owner_id) {
-            showNotification('Car Owner accounts must be linked to an Owner Profile (owner_id).', 'error');
+
+        // Validation for Car Owner
+        if (formData.role === 'car_owner') {
+            if (!formData.owner_name.trim() || !formData.owner_phone.trim() || !formData.email.trim()) {
+                showNotification('Please provide Owner Full Name, Phone Number, and Email Address.', 'error');
+                return;
+            }
+        }
+
+        if (!formData.password) {
+            showNotification('Password is required to create a user account.', 'error');
             return;
         }
 
@@ -183,11 +159,11 @@ export default function UserManagement() {
             }
 
             showNotification(
-                `🎉 Success: [${formData.email}] saved to PostgreSQL with role [${formData.role.toUpperCase()}].`,
+                `🎉 Success: Created ${formData.role.toUpperCase()} account for [${data.user?.email || formData.email}] in PostgreSQL!`,
                 'success'
             );
             setIsModalOpen(false);
-            loadDatabaseData(); // Refresh list from PostgreSQL
+            loadDatabaseData(); // Reload list directly from database
         } catch (err) {
             showNotification(`Server error: ${err.message}`, 'error');
         }
@@ -278,7 +254,7 @@ export default function UserManagement() {
                             <SearchIcon className="search-icon" fontSize="small" />
                             <input
                                 type="text"
-                                placeholder="Search email or linked profile..."
+                                placeholder="Search email or name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -323,12 +299,12 @@ export default function UserManagement() {
                                 <div className="badge-row">
                                     <span className="security-tag">
                                         <AdminPanelSettingsIcon fontSize="inherit" />
-                                        SUPERADMIN RESTRICTED
+                                        SUPERADMIN ACCESS CONTROL
                                     </span>
                                 </div>
-                                <h2 className="page-title">User Account & Role Control</h2>
+                                <h2 className="page-title">User Accounts & Role Management</h2>
                                 <p className="page-subtitle">
-                                    Provision credentials directly into PostgreSQL <code>public.users</code> with bcrypt hashing.
+                                    Create and manage accounts stored in PostgreSQL <code>users</code>, <code>staff_data</code>, and <code>car_owners</code> tables.
                                 </p>
                             </div>
 
@@ -339,7 +315,7 @@ export default function UserManagement() {
                                     onClick={() => handleOpenModal('admin')}
                                 >
                                     <AdminPanelSettingsIcon fontSize="small" />
-                                    <span>CREATE ADMIN ACCOUNT</span>
+                                    <span>CREATE ADMIN</span>
                                 </button>
 
                                 <button
@@ -347,8 +323,17 @@ export default function UserManagement() {
                                     className="secondary-btn"
                                     onClick={() => handleOpenModal('staff')}
                                 >
-                                    <PersonAddIcon fontSize="small" />
-                                    <span>PROVISION USER</span>
+                                    <EngineeringIcon fontSize="small" />
+                                    <span>CREATE STAFF USER</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="secondary-btn"
+                                    onClick={() => handleOpenModal('car_owner')}
+                                >
+                                    <DirectionsCarIcon fontSize="small" />
+                                    <span>CREATE CAR OWNER USER</span>
                                 </button>
                             </div>
                         </div>
@@ -371,9 +356,9 @@ export default function UserManagement() {
                                     <EngineeringIcon />
                                 </div>
                                 <div>
-                                    <div className="metric-title">Staff / Technicians</div>
+                                    <div className="metric-title">Staff Members</div>
                                     <div className="metric-num text-emerald">{stats.staff}</div>
-                                    <div className="metric-sub">Work Order & Shop Terminal</div>
+                                    <div className="metric-sub">Stored in staff_data</div>
                                 </div>
                             </div>
 
@@ -384,7 +369,7 @@ export default function UserManagement() {
                                 <div>
                                     <div className="metric-title">Car Owners</div>
                                     <div className="metric-num text-blue">{stats.carOwners}</div>
-                                    <div className="metric-sub">Client Portal & Invoices</div>
+                                    <div className="metric-sub">Stored in car_owners</div>
                                 </div>
                             </div>
 
@@ -439,8 +424,8 @@ export default function UserManagement() {
                                 <thead>
                                     <tr>
                                         <th>USER & EMAIL</th>
-                                        <th>ROLE (ENUM)</th>
-                                        <th>LINKED PROFILE / SCOPE</th>
+                                        <th>ROLE</th>
+                                        <th>PROFILE & RECORD DETAILS</th>
                                         <th>STATUS</th>
                                         <th>LAST LOGIN</th>
                                         <th>CREATED</th>
@@ -457,7 +442,7 @@ export default function UserManagement() {
                                     ) : filteredUsers.length === 0 ? (
                                         <tr>
                                             <td colSpan="7" className="no-data-cell">
-                                                No user accounts in database. Click "CREATE ADMIN ACCOUNT" above to provision your first admin.
+                                                No user accounts in PostgreSQL. Click "CREATE ADMIN", "CREATE STAFF USER", or "CREATE CAR OWNER USER" above to add accounts.
                                             </td>
                                         </tr>
                                     ) : (
@@ -491,13 +476,17 @@ export default function UserManagement() {
                                                     <div className="linked-profile-info">
                                                         <span className="profile-name">{user.linkedName}</span>
                                                         {user.staff_id && (
-                                                            <span className="foreign-key-tag">FK: staff_id #{user.staff_id}</span>
+                                                            <span className="foreign-key-tag">
+                                                                <code>staff_data.staff_id #{user.staff_id}</code> {user.details && `• ${user.details}`}
+                                                            </span>
                                                         )}
                                                         {user.owner_id && (
-                                                            <span className="foreign-key-tag">FK: owner_id #{user.owner_id}</span>
+                                                            <span className="foreign-key-tag">
+                                                                <code>car_owners.owner_id #{user.owner_id}</code> {user.details && `• ${user.details}`}
+                                                            </span>
                                                         )}
                                                         {!user.staff_id && !user.owner_id && (
-                                                            <span className="foreign-key-tag admin-key-tag">Root Authority</span>
+                                                            <span className="foreign-key-tag admin-key-tag">Root Superadmin Clearance</span>
                                                         )}
                                                     </div>
                                                 </td>
@@ -553,35 +542,39 @@ export default function UserManagement() {
                         <div className="schema-info-card">
                             <div className="schema-info-header">
                                 <KeyIcon fontSize="small" />
-                                <span>Database Integrity Constraint Enforced: chk_user_profile_alignment</span>
+                                <span>Relational Integrity (staff_data & car_owners tables)</span>
                             </div>
                             <p className="schema-info-text">
-                                Credentials in <code>public.users</code> strictly adhere to PostgreSQL specifications: <code>role = 'staff'</code> requires <code>staff_id</code>, <code>role = 'car_owner'</code> requires <code>owner_id</code>, and <code>role = 'admin'</code> holds master root authority.
+                                PostgreSQL <code>users</code> table enforces <code>chk_user_profile_alignment</code>: Staff records are inserted into <code>staff_data</code> and linked via <code>staff_id</code>, Car Owner records are inserted into <code>car_owners</code> and linked via <code>owner_id</code>, and Admin accounts hold root authority.
                             </p>
                         </div>
                     </div>
                 </main>
             </div>
 
-            {/* Modal: Create / Provision User Account */}
+            {/* Modal: Create User Account & Entity Profile */}
             {isModalOpen && (
                 <div className="modal-overlay">
-                    <div className="modal-content">
+                    <div className="modal-content modal-large">
                         <div className="modal-header">
                             <div className="modal-title-group">
                                 <div className="modal-icon">
                                     {formData.role === 'admin' ? (
                                         <AdminPanelSettingsIcon />
+                                    ) : formData.role === 'staff' ? (
+                                        <EngineeringIcon />
                                     ) : (
-                                        <PersonAddIcon />
+                                        <DirectionsCarIcon />
                                     )}
                                 </div>
                                 <div>
                                     <h3 className="modal-title">
-                                        {formData.role === 'admin' ? 'Create Admin Superuser Account' : 'Provision User Account'}
+                                        {formData.role === 'admin' && 'Create Admin Account'}
+                                        {formData.role === 'staff' && 'Create Staff Member (staff_data & users)'}
+                                        {formData.role === 'car_owner' && 'Create Car Owner (car_owners & users)'}
                                     </h3>
                                     <p className="modal-subtitle">
-                                        Write directly to PostgreSQL <code>users</code> table
+                                        Insert record directly into PostgreSQL <code>{formData.role === 'staff' ? 'staff_data & users' : formData.role === 'car_owner' ? 'car_owners & users' : 'users'}</code>
                                     </p>
                                 </div>
                             </div>
@@ -595,7 +588,7 @@ export default function UserManagement() {
                             <div className="form-group">
                                 <label className="form-label">
                                     <SecurityIcon className="label-icon" fontSize="inherit" />
-                                    Select User Role (user_role_enum)
+                                    Select Target Role (user_role_enum)
                                 </label>
                                 <div className="role-selector-tabs">
                                     <button
@@ -605,16 +598,14 @@ export default function UserManagement() {
                                             setFormData((prev) => ({
                                                 ...prev,
                                                 role: 'admin',
-                                                staff_id: '',
-                                                owner_id: '',
-                                                email: prev.email || 'admin@precision.garage',
+                                                email: 'admin@precision.garage',
                                             }))
                                         }
                                     >
                                         <AdminPanelSettingsIcon fontSize="small" />
                                         <div>
                                             <div className="tab-title">ADMIN</div>
-                                            <div className="tab-desc">Superuser Authority</div>
+                                            <div className="tab-desc">Root Authority</div>
                                         </div>
                                     </button>
 
@@ -625,15 +616,14 @@ export default function UserManagement() {
                                             setFormData((prev) => ({
                                                 ...prev,
                                                 role: 'staff',
-                                                staff_id: '',
-                                                owner_id: '',
+                                                email: '',
                                             }))
                                         }
                                     >
                                         <EngineeringIcon fontSize="small" />
                                         <div>
                                             <div className="tab-title">STAFF</div>
-                                            <div className="tab-desc">Shop & Work Orders</div>
+                                            <div className="tab-desc">staff_data Table</div>
                                         </div>
                                     </button>
 
@@ -644,133 +634,255 @@ export default function UserManagement() {
                                             setFormData((prev) => ({
                                                 ...prev,
                                                 role: 'car_owner',
-                                                staff_id: '',
-                                                owner_id: '',
+                                                email: '',
                                             }))
                                         }
                                     >
                                         <DirectionsCarIcon fontSize="small" />
                                         <div>
                                             <div className="tab-title">CAR OWNER</div>
-                                            <div className="tab-desc">Customer Portal</div>
+                                            <div className="tab-desc">car_owners Table</div>
                                         </div>
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Conditional Profile Link Selection based on Role */}
+                            {/* ========================================================= */}
+                            {/* 1. STAFF SPECIFIC SECTION (staff_data)                     */}
+                            {/* ========================================================= */}
                             {formData.role === 'staff' && (
-                                <div className="form-group highlighted-field">
-                                    <label className="form-label" htmlFor="staff_id">
-                                        <BadgeIcon className="label-icon" fontSize="inherit" />
-                                        Link to Existing Staff Profile (staff_data table) *
-                                    </label>
-                                    <select
-                                        id="staff_id"
-                                        name="staff_id"
-                                        value={formData.staff_id}
-                                        onChange={handleFormChange}
-                                        required
-                                        className="form-input"
-                                    >
-                                        <option value="">-- Choose Staff Personnel --</option>
-                                        {staffProfiles.map((s) => (
-                                            <option key={s.staff_id} value={s.staff_id}>
-                                                ID #{s.staff_id} - {s.name} ({s.role}) - {s.email}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <span className="field-hint">Enforces FOREIGN KEY references <code>staff_data(staff_id)</code></span>
+                                <div className="profile-section-box">
+                                    <div className="subform-grid">
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="staff_name">
+                                                Staff Full Name (staff_data.full_name) *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="staff_name"
+                                                name="staff_name"
+                                                placeholder="e.g. Marcus Vance"
+                                                value={formData.staff_name}
+                                                onChange={handleFormChange}
+                                                required
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="staff_role">
+                                                Staff Role / Designation *
+                                            </label>
+                                            <select
+                                                id="staff_role"
+                                                name="staff_role"
+                                                value={formData.staff_role}
+                                                onChange={handleFormChange}
+                                                required
+                                                className="form-input"
+                                            >
+                                                <option value="Lead Technician">Lead Technician</option>
+                                                <option value="Diagnostics Tech">Diagnostics Tech</option>
+                                                <option value="Service Advisor">Service Advisor</option>
+                                                <option value="Master Mechanic">Master Mechanic</option>
+                                                <option value="Junior Mechanic">Junior Mechanic</option>
+                                                <option value="Shop Manager">Shop Manager</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="staff_phone">
+                                                <PhoneIcon fontSize="inherit" /> Phone Number (staff_data.phone_number)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="staff_phone"
+                                                name="staff_phone"
+                                                placeholder="(555) 234-5678"
+                                                value={formData.staff_phone}
+                                                onChange={handleFormChange}
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="staff_hourly_rate">
+                                                <AttachMoneyIcon fontSize="inherit" /> Hourly Rate ($/hr)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.50"
+                                                id="staff_hourly_rate"
+                                                name="staff_hourly_rate"
+                                                placeholder="35.00"
+                                                value={formData.staff_hourly_rate}
+                                                onChange={handleFormChange}
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group grid-full">
+                                            <label className="form-label" htmlFor="staff_address">
+                                                <HomeIcon fontSize="inherit" /> Residential Address (staff_data.residential_address)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="staff_address"
+                                                name="staff_address"
+                                                placeholder="123 Industrial Way, Suite 4B"
+                                                value={formData.staff_address}
+                                                onChange={handleFormChange}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
+                            {/* ========================================================= */}
+                            {/* 2. CAR OWNER SPECIFIC SECTION (car_owners)                */}
+                            {/* ========================================================= */}
                             {formData.role === 'car_owner' && (
-                                <div className="form-group highlighted-field">
-                                    <label className="form-label" htmlFor="owner_id">
-                                        <DirectionsCarIcon className="label-icon" fontSize="inherit" />
-                                        Link to Existing Car Owner Profile (car_owners table) *
-                                    </label>
-                                    <select
-                                        id="owner_id"
-                                        name="owner_id"
-                                        value={formData.owner_id}
-                                        onChange={handleFormChange}
-                                        required
-                                        className="form-input"
-                                    >
-                                        <option value="">-- Choose Car Owner --</option>
-                                        {ownerProfiles.map((o) => (
-                                            <option key={o.owner_id} value={o.owner_id}>
-                                                ID #{o.owner_id} - {o.name} ({o.phone}) - {o.email}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <span className="field-hint">Enforces FOREIGN KEY references <code>car_owners(owner_id)</code></span>
+                                <div className="profile-section-box">
+                                    <div className="subform-grid">
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="owner_name">
+                                                Owner Full Name (car_owners.full_name) *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="owner_name"
+                                                name="owner_name"
+                                                placeholder="e.g. Sarah Jenkins"
+                                                value={formData.owner_name}
+                                                onChange={handleFormChange}
+                                                required
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="owner_phone">
+                                                <PhoneIcon fontSize="inherit" /> Phone Number (car_owners.phone_number) *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="owner_phone"
+                                                name="owner_phone"
+                                                placeholder="(555) 012-3456"
+                                                value={formData.owner_phone}
+                                                onChange={handleFormChange}
+                                                required
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group grid-full">
+                                            <label className="form-label" htmlFor="owner_address">
+                                                <HomeIcon fontSize="inherit" /> Billing Address (car_owners.billing_address)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="owner_address"
+                                                name="owner_address"
+                                                placeholder="742 Evergreen Terrace, Springfield"
+                                                value={formData.owner_address}
+                                                onChange={handleFormChange}
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-checkbox-row grid-full">
+                                            <label className="checkbox-label">
+                                                <input
+                                                    type="checkbox"
+                                                    name="owner_is_vip"
+                                                    checked={formData.owner_is_vip}
+                                                    onChange={handleFormChange}
+                                                />
+                                                <span className="vip-text">
+                                                    <StarIcon fontSize="inherit" /> Mark as VIP Customer (<code>car_owners.is_vip = TRUE</code>)
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Email Address */}
-                            <div className="form-group">
-                                <label className="form-label" htmlFor="email">
-                                    <span className="material-symbols-outlined label-icon">mail</span>
-                                    Account Email Address (Unique) *
-                                </label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    placeholder="user@precision.garage"
-                                    value={formData.email}
-                                    onChange={handleFormChange}
-                                    required
-                                    className="form-input"
-                                />
-                            </div>
-
-                            {/* Password with Visibility Toggle */}
-                            <div className="form-group">
-                                <label className="form-label" htmlFor="password">
-                                    <KeyIcon className="label-icon" fontSize="inherit" />
-                                    Initial Passcode / Password *
-                                </label>
-                                <div className="password-input-wrapper">
-                                    <input
-                                        type={showPassword ? 'text' : 'password'}
-                                        id="password"
-                                        name="password"
-                                        placeholder={showPassword ? 'Enter account password' : '••••••••••••'}
-                                        value={formData.password}
-                                        onChange={handleFormChange}
-                                        required
-                                        className="form-input password-input-field"
-                                    />
-                                    <button
-                                        type="button"
-                                        className="password-toggle-btn"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        title={showPassword ? 'Hide password' : 'Show password'}
-                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                    >
-                                        {showPassword ? (
-                                            <VisibilityOffIcon fontSize="small" />
-                                        ) : (
-                                            <VisibilityIcon fontSize="small" />
-                                        )}
-                                    </button>
+                            {/* ========================================================= */}
+                            {/* 3. USER ACCOUNT CREDENTIALS (users table)                 */}
+                            {/* ========================================================= */}
+                            <div className="credentials-section-box">
+                                <div className="section-title">
+                                    <KeyIcon fontSize="small" />
+                                    <span>Account Authentication Details (users table)</span>
                                 </div>
-                            </div>
 
-                            {/* Active Status Checkbox */}
-                            <div className="form-checkbox-row">
-                                <label className="checkbox-label">
-                                    <input
-                                        type="checkbox"
-                                        name="is_active"
-                                        checked={formData.is_active}
-                                        onChange={handleFormChange}
-                                    />
-                                    <span>Enable account immediately (<code>is_active = TRUE</code>)</span>
-                                </label>
+                                <div className="subform-grid">
+                                    {/* Email Address */}
+                                    <div className="form-group">
+                                        <label className="form-label" htmlFor="email">
+                                            <span className="material-symbols-outlined label-icon">mail</span>
+                                            Login Email (users.email) *
+                                        </label>
+                                        <input
+                                            type="email"
+                                            id="email"
+                                            name="email"
+                                            placeholder="user@precision.garage"
+                                            value={formData.email}
+                                            onChange={handleFormChange}
+                                            required
+                                            className="form-input"
+                                        />
+                                    </div>
+
+                                    {/* Password with Visibility Toggle */}
+                                    <div className="form-group">
+                                        <label className="form-label" htmlFor="password">
+                                            <KeyIcon className="label-icon" fontSize="inherit" />
+                                            Password / Passcode *
+                                        </label>
+                                        <div className="password-input-wrapper">
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                id="password"
+                                                name="password"
+                                                placeholder={showPassword ? 'Enter account password' : '••••••••••••'}
+                                                value={formData.password}
+                                                onChange={handleFormChange}
+                                                required
+                                                className="form-input password-input-field"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="password-toggle-btn"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                title={showPassword ? 'Hide password' : 'Show password'}
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            >
+                                                {showPassword ? (
+                                                    <VisibilityOffIcon fontSize="small" />
+                                                ) : (
+                                                    <VisibilityIcon fontSize="small" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Active Status Checkbox */}
+                                <div className="form-checkbox-row" style={{ marginTop: '8px' }}>
+                                    <label className="checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            name="is_active"
+                                            checked={formData.is_active}
+                                            onChange={handleFormChange}
+                                        />
+                                        <span>Enable account login immediately (<code>is_active = TRUE</code>)</span>
+                                    </label>
+                                </div>
                             </div>
 
                             {/* Action Buttons */}
@@ -782,7 +894,11 @@ export default function UserManagement() {
                                     type="submit"
                                     className={`btn-submit ${formData.role === 'admin' ? 'btn-submit-admin' : ''}`}
                                 >
-                                    {formData.role === 'admin' ? 'CREATE ADMIN ACCOUNT' : 'PROVISION USER'}
+                                    {formData.role === 'admin'
+                                        ? 'CREATE ADMIN ACCOUNT'
+                                        : formData.role === 'staff'
+                                        ? 'CREATE STAFF & USER'
+                                        : 'CREATE OWNER & USER'}
                                 </button>
                             </div>
                         </form>
