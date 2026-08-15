@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import path from "path";
 import { fileURLToPath } from "url";
 import pool from "./db.js";
+import redisClient, { getCache, setCache, deleteCache, deleteCachePattern } from "./redis.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -16,33 +17,365 @@ app.use(cors());
 app.use(express.json());
 
 // ==========================================
-// 1. HEALTH CHECK & DATABASE CONNECTION
+// 1. HEALTH CHECK & DATABASE / REDIS STATUS
 // ==========================================
 app.get("/api/health", async (req, res) => {
+    let dbStatus = "Disconnected";
+    let serverTime = null;
+    let pgVersion = null;
+    let redisStatus = redisClient.isReady ? "Connected (In-Memory Cache)" : "Disconnected";
+
     try {
         const result = await pool.query("SELECT NOW() as server_time, version() as pg_version");
-        res.json({
-            status: "OK",
-            service: "Precision Garage API",
-            database: "Connected",
-            serverTime: result.rows[0].server_time,
-            version: result.rows[0].pg_version,
+        dbStatus = "Connected";
+        serverTime = result.rows[0].server_time;
+        pgVersion = result.rows[0].pg_version;
+    } catch (err) {
+        dbStatus = `Error: ${err.message}`;
+    }
+
+    res.json({
+        status: dbStatus === "Connected" ? "OK" : "Degraded",
+        service: "Precision Garage API",
+        database: dbStatus,
+        redis: redisStatus,
+        serverTime,
+        version: pgVersion,
+    });
+});
+
+// ==========================================
+// 2. VEHICLE INTAKE & WORK ORDER GENERATION
+// ==========================================
+app.post("/api/intake", async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const {
+            vin,
+            make,
+            model,
+            year,
+            licensePlate,
+            fullName,
+            phone,
+            email,
+            selectedOwnerId,
+            notes,
+        } = req.body;
+
+        if (!vin || !make || !model || !year || !licensePlate) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+                error: "All vehicle details (VIN, Make, Model, Year, License Plate) are required.",
+            });
+        }
+
+        const sanitizedVin = vin.trim().toUpperCase();
+        const parsedYear = parseInt(year, 10);
+        if (isNaN(parsedYear) || parsedYear < 1900 || parsedYear > 2100) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+                error: "Invalid vehicle year. Must be between 1900 and 2100.",
+            });
+        }
+
+        // STEP 1: RESOLVE CAR OWNER
+        let ownerId = selectedOwnerId || null;
+
+        if (ownerId) {
+            const checkOwner = await client.query(
+                "SELECT owner_id, full_name, phone_number, email_address FROM car_owners WHERE owner_id = $1;",
+                [ownerId]
+            );
+            if (checkOwner.rows.length === 0) {
+                ownerId = null;
+            }
+        }
+
+        if (!ownerId) {
+            const cleanPhone = (phone || "").trim();
+            const cleanEmail = (email || "").trim().toLowerCase();
+            const cleanName = (fullName || "").trim();
+
+            if (!cleanName || !cleanPhone) {
+                await client.query("ROLLBACK");
+                return res.status(400).json({
+                    error: "Owner Full Name and Phone Number are required.",
+                });
+            }
+
+            const findOwnerQuery = `
+                SELECT owner_id, full_name, phone_number, email_address 
+                FROM car_owners 
+                WHERE phone_number = $1 OR (email_address IS NOT NULL AND LOWER(email_address) = $2)
+                LIMIT 1;
+            `;
+            const existingOwner = await client.query(findOwnerQuery, [cleanPhone, cleanEmail || null]);
+
+            if (existingOwner.rows.length > 0) {
+                ownerId = existingOwner.rows[0].owner_id;
+            } else {
+                const insertOwnerQuery = `
+                    INSERT INTO car_owners (
+                        full_name,
+                        phone_number,
+                        email_address,
+                        billing_address,
+                        is_vip
+                    )
+                    VALUES ($1, $2, $3, NULL, FALSE)
+                    RETURNING owner_id, full_name, phone_number, email_address;
+                `;
+                const newOwnerResult = await client.query(insertOwnerQuery, [
+                    cleanName,
+                    cleanPhone,
+                    cleanEmail || null,
+                ]);
+                ownerId = newOwnerResult.rows[0].owner_id;
+            }
+        }
+
+        // STEP 2: RESOLVE VEHICLE
+        let vehicleId = null;
+        const checkVehicle = await client.query(
+            "SELECT vehicle_id, owner_id, vin, make, model, year, license_plate FROM vehicles WHERE UPPER(vin) = $1;",
+            [sanitizedVin]
+        );
+
+        if (checkVehicle.rows.length > 0) {
+            vehicleId = checkVehicle.rows[0].vehicle_id;
+            await client.query(
+                `UPDATE vehicles 
+                 SET owner_id = $1, make = $2, model = $3, year = $4, license_plate = $5 
+                 WHERE vehicle_id = $6;`,
+                [ownerId, make.trim(), model.trim(), parsedYear, licensePlate.trim().toUpperCase(), vehicleId]
+            );
+        } else {
+            const insertVehicleQuery = `
+                INSERT INTO vehicles (
+                    owner_id,
+                    vin,
+                    make,
+                    model,
+                    year,
+                    license_plate
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING vehicle_id, owner_id, vin, make, model, year, license_plate;
+            `;
+            const newVehicleResult = await client.query(insertVehicleQuery, [
+                ownerId,
+                sanitizedVin,
+                make.trim(),
+                model.trim(),
+                parsedYear,
+                licensePlate.trim().toUpperCase(),
+            ]);
+            vehicleId = newVehicleResult.rows[0].vehicle_id;
+        }
+
+        // STEP 3: CREATE WORK ORDER
+        const insertWorkOrderQuery = `
+            INSERT INTO work_order_data (
+                vehicle_id,
+                assigned_staff_id,
+                service_advisor_id,
+                status,
+                bay_assigned,
+                scheduled_start,
+                scheduled_end,
+                initial_observations,
+                estimated_cost,
+                total_cost
+            )
+            VALUES (
+                $1,
+                NULL,
+                NULL,
+                'received',
+                NULL,
+                NULL,
+                NULL,
+                $2,
+                0.00,
+                0.00
+            )
+            RETURNING 
+                work_order_id,
+                vehicle_id,
+                status,
+                bay_assigned,
+                scheduled_start,
+                scheduled_end,
+                initial_observations,
+                estimated_cost,
+                total_cost,
+                created_at,
+                updated_at;
+        `;
+
+        const workOrderResult = await client.query(insertWorkOrderQuery, [
+            vehicleId,
+            notes ? notes.trim() : null,
+        ]);
+        const createdWorkOrder = workOrderResult.rows[0];
+
+        // STEP 4: AUDIT LOG
+        const auditDescription = `Vehicle intake completed for VIN ${sanitizedVin}. Generated Work Order ${createdWorkOrder.work_order_id}.`;
+        const auditPayload = JSON.stringify({
+            event: "INTAKE_CREATED",
+            work_order_id: createdWorkOrder.work_order_id,
+            vehicle_id: vehicleId,
+            owner_id: ownerId,
+            vin: sanitizedVin,
+            status: "received",
+        });
+
+        await client.query(
+            `INSERT INTO audit_logs (work_order_id, event_type, description, payload_json)
+             VALUES ($1, 'STATUS_CHANGE', $2, $3);`,
+            [createdWorkOrder.work_order_id, auditDescription, auditPayload]
+        );
+
+        await client.query("COMMIT");
+
+        // Fetch full resolved details
+        const fullDetailsQuery = `
+            SELECT 
+                w.*,
+                v.vin, v.make, v.model, v.year, v.license_plate,
+                o.owner_id, o.full_name as owner_name, o.phone_number as owner_phone, o.email_address as owner_email
+            FROM work_order_data w
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            WHERE w.work_order_id = $1;
+        `;
+        const fullDetails = await pool.query(fullDetailsQuery, [createdWorkOrder.work_order_id]);
+        const responseData = fullDetails.rows[0] || createdWorkOrder;
+
+        // REDIS CACHE INVALIDATION & UPDATE
+        await deleteCachePattern("garage:cache:owners:*");
+        await deleteCachePattern("garage:cache:users:*");
+        await setCache(`garage:cache:vehicle:vin:${sanitizedVin}`, responseData, 3600);
+        await setCache(`garage:cache:workorder:${createdWorkOrder.work_order_id}`, responseData, 3600);
+
+        return res.status(201).json({
+            success: true,
+            message: `Vehicle intake processed successfully. Work Order '${createdWorkOrder.work_order_id}' generated.`,
+            data: responseData,
         });
     } catch (err) {
-        res.status(500).json({
-            status: "Error",
-            database: "Disconnected",
-            error: err.message,
-            hint: "Check backend/.env credentials",
+        await client.query("ROLLBACK");
+        console.error("Error during vehicle intake transaction:", err);
+        return res.status(500).json({
+            error: "Failed to process vehicle intake and create work order in database.",
+            details: err.message,
         });
+    } finally {
+        client.release();
     }
 });
 
 // ==========================================
-// 2. GET ALL USERS (WITH JOINED PROFILE DATA)
+// 3. OWNER SEARCH (REDIS CACHED)
+// ==========================================
+app.get("/api/owners/search", async (req, res) => {
+    try {
+        const { query } = req.query;
+        if (!query || query.trim().length < 2) {
+            return res.json({ success: true, source: "none", data: [] });
+        }
+
+        const normalizedQuery = query.trim().toLowerCase();
+        const cacheKey = `garage:cache:owners:search:${normalizedQuery}`;
+
+        // 1. Check Redis Cache
+        const cachedResults = await getCache(cacheKey);
+        if (cachedResults) {
+            return res.json({ success: true, source: "redis", data: cachedResults });
+        }
+
+        // 2. Query PostgreSQL
+        const searchTerm = `%${normalizedQuery}%`;
+        const result = await pool.query(
+            `SELECT owner_id, full_name, phone_number, email_address, billing_address, is_vip
+             FROM car_owners
+             WHERE full_name ILIKE $1 
+                OR phone_number ILIKE $1 
+                OR email_address ILIKE $1
+                OR owner_id ILIKE $1
+             ORDER BY created_at DESC
+             LIMIT 8;`,
+            [searchTerm]
+        );
+
+        // 3. Store in Redis (TTL: 5 minutes)
+        await setCache(cacheKey, result.rows, 300);
+
+        res.json({ success: true, source: "postgres", data: result.rows });
+    } catch (err) {
+        console.error("Error searching owners:", err);
+        res.status(500).json({ error: "Failed to search owners", details: err.message });
+    }
+});
+
+// ==========================================
+// 4. VEHICLE LOOKUP BY VIN (REDIS CACHED)
+// ==========================================
+app.get("/api/vehicles/vin/:vin", async (req, res) => {
+    try {
+        const { vin } = req.params;
+        const sanitizedVin = (vin || "").trim().toUpperCase();
+        const cacheKey = `garage:cache:vehicle:vin:${sanitizedVin}`;
+
+        // 1. Check Redis Cache
+        const cachedVehicle = await getCache(cacheKey);
+        if (cachedVehicle) {
+            return res.json({ found: true, source: "redis", data: cachedVehicle });
+        }
+
+        // 2. Query PostgreSQL
+        const query = `
+            SELECT 
+                v.vehicle_id, v.owner_id, v.vin, v.make, v.model, v.year, v.license_plate,
+                o.full_name as owner_name, o.phone_number as owner_phone, o.email_address as owner_email
+            FROM vehicles v
+            LEFT JOIN car_owners o ON v.owner_id = o.owner_id
+            WHERE UPPER(v.vin) = $1
+            LIMIT 1;
+        `;
+        const result = await pool.query(query, [sanitizedVin]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ found: false, message: "Vehicle not found" });
+        }
+
+        // 3. Store in Redis (TTL: 1 hour)
+        await setCache(cacheKey, result.rows[0], 3600);
+
+        res.json({ found: true, source: "postgres", data: result.rows[0] });
+    } catch (err) {
+        console.error("Error looking up vehicle by VIN:", err);
+        res.status(500).json({ error: "Failed to lookup vehicle", details: err.message });
+    }
+});
+
+// ==========================================
+// 5. GET ALL USERS (REDIS CACHED)
 // ==========================================
 app.get("/api/users", async (req, res) => {
+    const cacheKey = "garage:cache:users:all";
+
     try {
+        // 1. Check Redis Cache First
+        const cachedUsers = await getCache(cacheKey);
+        if (cachedUsers) {
+            return res.json({ success: true, source: "redis", data: cachedUsers });
+        }
+
+        // 2. Query PostgreSQL on Cache Miss
         const query = `
             SELECT 
                 u.user_id,
@@ -92,7 +425,10 @@ app.get("/api/users", async (req, res) => {
             };
         });
 
-        res.json({ success: true, data: formattedUsers });
+        // 3. Save to Redis Cache (TTL: 10 minutes)
+        await setCache(cacheKey, formattedUsers, 600);
+
+        res.json({ success: true, source: "postgres", data: formattedUsers });
     } catch (err) {
         console.error("Error fetching users from database:", err);
         res.status(500).json({ error: "Failed to fetch users from database", details: err.message });
@@ -100,7 +436,7 @@ app.get("/api/users", async (req, res) => {
 });
 
 // ==========================================
-// 3. CREATE USER & INSERT INTO CORRESPONDING TABLE
+// 6. CREATE USER (ADMIN ACCESS & CACHE INVALIDATION)
 // ==========================================
 app.post("/api/admin/create-user", async (req, res) => {
     const client = await pool.connect();
@@ -112,13 +448,11 @@ app.post("/api/admin/create-user", async (req, res) => {
             email,
             password,
             is_active = true,
-            // staff_data fields
             staff_name,
             staff_role,
             staff_phone,
             staff_address,
             staff_hourly_rate,
-            // car_owners fields
             owner_name,
             owner_phone,
             owner_address,
@@ -144,7 +478,7 @@ app.post("/api/admin/create-user", async (req, res) => {
         let targetStaffId = null;
         let targetOwnerId = null;
 
-        // 1. ADMIN ROLE -> users table directly
+        // 1. ADMIN ROLE
         if (role === "admin") {
             if (!targetEmail) {
                 await client.query("ROLLBACK");
@@ -152,7 +486,7 @@ app.post("/api/admin/create-user", async (req, res) => {
             }
         }
 
-        // 2. STAFF ROLE -> insert into staff_data table first
+        // 2. STAFF ROLE
         else if (role === "staff") {
             if (!staff_name || !staff_role || !targetEmail) {
                 await client.query("ROLLBACK");
@@ -161,7 +495,6 @@ app.post("/api/admin/create-user", async (req, res) => {
                 });
             }
 
-            // Check staff_data email uniqueness
             const checkStaff = await client.query(
                 "SELECT staff_id FROM staff_data WHERE LOWER(email) = LOWER($1);",
                 [targetEmail]
@@ -199,7 +532,7 @@ app.post("/api/admin/create-user", async (req, res) => {
             targetStaffId = staffResult.rows[0].staff_id;
         }
 
-        // 3. CAR OWNER ROLE -> insert into car_owners table first
+        // 3. CAR OWNER ROLE
         else if (role === "car_owner") {
             if (!owner_name || !owner_phone || !targetEmail) {
                 await client.query("ROLLBACK");
@@ -230,7 +563,7 @@ app.post("/api/admin/create-user", async (req, res) => {
             targetOwnerId = ownerResult.rows[0].owner_id;
         }
 
-        // Check if email already exists in users table
+        // Check users email uniqueness
         const checkUserEmail = await client.query(
             "SELECT user_id FROM users WHERE LOWER(email) = LOWER($1);",
             [targetEmail]
@@ -242,11 +575,9 @@ app.post("/api/admin/create-user", async (req, res) => {
             });
         }
 
-        // Hash password securely with bcrypt
         const saltRounds = 10;
         const password_hash = await bcrypt.hash(password, saltRounds);
 
-        // INSERT into PostgreSQL users table
         const insertUserQuery = `
             INSERT INTO users (
                 email, 
@@ -279,6 +610,10 @@ app.post("/api/admin/create-user", async (req, res) => {
 
         await client.query("COMMIT");
 
+        // REDIS CACHE INVALIDATION
+        await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:owners:*");
+
         return res.status(201).json({
             success: true,
             message: `User account created successfully with '${role}' role.`,
@@ -297,7 +632,7 @@ app.post("/api/admin/create-user", async (req, res) => {
 });
 
 // ==========================================
-// 4. TOGGLE ACTIVE / SUSPEND STATUS
+// 7. TOGGLE USER STATUS (WITH CACHE INVALIDATION)
 // ==========================================
 app.patch("/api/users/:id/status", async (req, res) => {
     try {
@@ -317,6 +652,9 @@ app.patch("/api/users/:id/status", async (req, res) => {
             return res.status(404).json({ error: "User not found in database" });
         }
 
+        // REDIS CACHE INVALIDATION
+        await deleteCachePattern("garage:cache:users:*");
+
         return res.json({
             success: true,
             message: `User status updated to ${is_active ? "ACTIVE" : "SUSPENDED"}`,
@@ -329,7 +667,7 @@ app.patch("/api/users/:id/status", async (req, res) => {
 });
 
 // ==========================================
-// 5. DELETE / REVOKE USER
+// 8. DELETE USER (WITH CACHE INVALIDATION)
 // ==========================================
 app.delete("/api/users/:id", async (req, res) => {
     try {
@@ -347,6 +685,10 @@ app.delete("/api/users/:id", async (req, res) => {
             return res.status(404).json({ error: "User not found in database" });
         }
 
+        // REDIS CACHE INVALIDATION
+        await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:owners:*");
+
         return res.json({
             success: true,
             message: `User account '${result.rows[0].email}' revoked and deleted.`,
@@ -359,7 +701,7 @@ app.delete("/api/users/:id", async (req, res) => {
 });
 
 // ==========================================
-// 6. AUTH LOGIN
+// 9. AUTH LOGIN
 // ==========================================
 app.post("/api/auth/login", async (req, res) => {
     try {
@@ -392,6 +734,9 @@ app.post("/api/auth/login", async (req, res) => {
             "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1;",
             [user.user_id]
         );
+
+        // Invalidate user cache to reflect new last_login
+        await deleteCachePattern("garage:cache:users:*");
 
         const { password: _, ...safeUser } = user;
         return res.json({
