@@ -16,9 +16,7 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// ==========================================
-// 1. HEALTH CHECK & DATABASE / REDIS STATUS
-// ==========================================
+
 app.get("/api/health", async (req, res) => {
     let dbStatus = "Disconnected";
     let serverTime = null;
@@ -44,9 +42,6 @@ app.get("/api/health", async (req, res) => {
     });
 });
 
-// ==========================================
-// 2. VEHICLE INTAKE & WORK ORDER GENERATION
-// ==========================================
 app.post("/api/intake", async (req, res) => {
     const client = await pool.connect();
     try {
@@ -81,7 +76,6 @@ app.post("/api/intake", async (req, res) => {
             });
         }
 
-        // STEP 1: RESOLVE CAR OWNER
         let ownerId = selectedOwnerId || null;
 
         if (ownerId) {
@@ -137,7 +131,6 @@ app.post("/api/intake", async (req, res) => {
             }
         }
 
-        // STEP 2: RESOLVE VEHICLE
         let vehicleId = null;
         const checkVehicle = await client.query(
             "SELECT vehicle_id, owner_id, vin, make, model, year, license_plate FROM vehicles WHERE UPPER(vin) = $1;",
@@ -176,7 +169,6 @@ app.post("/api/intake", async (req, res) => {
             vehicleId = newVehicleResult.rows[0].vehicle_id;
         }
 
-        // STEP 3: CREATE WORK ORDER
         const insertWorkOrderQuery = `
             INSERT INTO work_order_data (
                 vehicle_id,
@@ -222,7 +214,6 @@ app.post("/api/intake", async (req, res) => {
         ]);
         const createdWorkOrder = workOrderResult.rows[0];
 
-        // STEP 4: AUDIT LOG
         const auditDescription = `Vehicle intake completed for VIN ${sanitizedVin}. Generated Work Order ${createdWorkOrder.work_order_id}.`;
         const auditPayload = JSON.stringify({
             event: "INTAKE_CREATED",
@@ -241,7 +232,6 @@ app.post("/api/intake", async (req, res) => {
 
         await client.query("COMMIT");
 
-        // Fetch full resolved details
         const fullDetailsQuery = `
             SELECT 
                 w.*,
@@ -255,7 +245,6 @@ app.post("/api/intake", async (req, res) => {
         const fullDetails = await pool.query(fullDetailsQuery, [createdWorkOrder.work_order_id]);
         const responseData = fullDetails.rows[0] || createdWorkOrder;
 
-        // REDIS CACHE INVALIDATION & UPDATE
         await deleteCachePattern("garage:cache:owners:*");
         await deleteCachePattern("garage:cache:users:*");
         await setCache(`garage:cache:vehicle:vin:${sanitizedVin}`, responseData, 3600);
@@ -278,9 +267,7 @@ app.post("/api/intake", async (req, res) => {
     }
 });
 
-// ==========================================
-// 3. OWNER SEARCH (REDIS CACHED)
-// ==========================================
+
 app.get("/api/owners/search", async (req, res) => {
     try {
         const { query } = req.query;
@@ -291,13 +278,11 @@ app.get("/api/owners/search", async (req, res) => {
         const normalizedQuery = query.trim().toLowerCase();
         const cacheKey = `garage:cache:owners:search:${normalizedQuery}`;
 
-        // 1. Check Redis Cache
         const cachedResults = await getCache(cacheKey);
         if (cachedResults) {
             return res.json({ success: true, source: "redis", data: cachedResults });
         }
 
-        // 2. Query PostgreSQL
         const searchTerm = `%${normalizedQuery}%`;
         const result = await pool.query(
             `SELECT owner_id, full_name, phone_number, email_address, billing_address, is_vip
@@ -311,7 +296,6 @@ app.get("/api/owners/search", async (req, res) => {
             [searchTerm]
         );
 
-        // 3. Store in Redis (TTL: 5 minutes)
         await setCache(cacheKey, result.rows, 300);
 
         res.json({ success: true, source: "postgres", data: result.rows });
@@ -321,22 +305,18 @@ app.get("/api/owners/search", async (req, res) => {
     }
 });
 
-// ==========================================
-// 4. VEHICLE LOOKUP BY VIN (REDIS CACHED)
-// ==========================================
+
 app.get("/api/vehicles/vin/:vin", async (req, res) => {
     try {
         const { vin } = req.params;
         const sanitizedVin = (vin || "").trim().toUpperCase();
         const cacheKey = `garage:cache:vehicle:vin:${sanitizedVin}`;
 
-        // 1. Check Redis Cache
         const cachedVehicle = await getCache(cacheKey);
         if (cachedVehicle) {
             return res.json({ found: true, source: "redis", data: cachedVehicle });
         }
 
-        // 2. Query PostgreSQL
         const query = `
             SELECT 
                 v.vehicle_id, v.owner_id, v.vin, v.make, v.model, v.year, v.license_plate,
@@ -352,7 +332,6 @@ app.get("/api/vehicles/vin/:vin", async (req, res) => {
             return res.status(404).json({ found: false, message: "Vehicle not found" });
         }
 
-        // 3. Store in Redis (TTL: 1 hour)
         await setCache(cacheKey, result.rows[0], 3600);
 
         res.json({ found: true, source: "postgres", data: result.rows[0] });
@@ -362,20 +341,14 @@ app.get("/api/vehicles/vin/:vin", async (req, res) => {
     }
 });
 
-// ==========================================
-// 5. GET ALL USERS (REDIS CACHED)
-// ==========================================
 app.get("/api/users", async (req, res) => {
     const cacheKey = "garage:cache:users:all";
 
     try {
-        // 1. Check Redis Cache First
         const cachedUsers = await getCache(cacheKey);
         if (cachedUsers) {
             return res.json({ success: true, source: "redis", data: cachedUsers });
         }
-
-        // 2. Query PostgreSQL on Cache Miss
         const query = `
             SELECT 
                 u.user_id,
@@ -425,7 +398,6 @@ app.get("/api/users", async (req, res) => {
             };
         });
 
-        // 3. Save to Redis Cache (TTL: 10 minutes)
         await setCache(cacheKey, formattedUsers, 600);
 
         res.json({ success: true, source: "postgres", data: formattedUsers });
@@ -435,9 +407,6 @@ app.get("/api/users", async (req, res) => {
     }
 });
 
-// ==========================================
-// 6. CREATE USER (ADMIN ACCESS & CACHE INVALIDATION)
-// ==========================================
 app.post("/api/admin/create-user", async (req, res) => {
     const client = await pool.connect();
     try {
@@ -478,7 +447,6 @@ app.post("/api/admin/create-user", async (req, res) => {
         let targetStaffId = null;
         let targetOwnerId = null;
 
-        // 1. ADMIN ROLE
         if (role === "admin") {
             if (!targetEmail) {
                 await client.query("ROLLBACK");
@@ -486,7 +454,6 @@ app.post("/api/admin/create-user", async (req, res) => {
             }
         }
 
-        // 2. STAFF ROLE
         else if (role === "staff") {
             if (!staff_name || !staff_role || !targetEmail) {
                 await client.query("ROLLBACK");
@@ -532,7 +499,6 @@ app.post("/api/admin/create-user", async (req, res) => {
             targetStaffId = staffResult.rows[0].staff_id;
         }
 
-        // 3. CAR OWNER ROLE
         else if (role === "car_owner") {
             if (!owner_name || !owner_phone || !targetEmail) {
                 await client.query("ROLLBACK");
@@ -563,7 +529,6 @@ app.post("/api/admin/create-user", async (req, res) => {
             targetOwnerId = ownerResult.rows[0].owner_id;
         }
 
-        // Check users email uniqueness
         const checkUserEmail = await client.query(
             "SELECT user_id FROM users WHERE LOWER(email) = LOWER($1);",
             [targetEmail]
@@ -610,7 +575,6 @@ app.post("/api/admin/create-user", async (req, res) => {
 
         await client.query("COMMIT");
 
-        // REDIS CACHE INVALIDATION
         await deleteCachePattern("garage:cache:users:*");
         await deleteCachePattern("garage:cache:owners:*");
 
@@ -631,9 +595,6 @@ app.post("/api/admin/create-user", async (req, res) => {
     }
 });
 
-// ==========================================
-// 7. TOGGLE USER STATUS (WITH CACHE INVALIDATION)
-// ==========================================
 app.patch("/api/users/:id/status", async (req, res) => {
     try {
         const userId = parseInt(req.params.id, 10);
@@ -652,7 +613,6 @@ app.patch("/api/users/:id/status", async (req, res) => {
             return res.status(404).json({ error: "User not found in database" });
         }
 
-        // REDIS CACHE INVALIDATION
         await deleteCachePattern("garage:cache:users:*");
 
         return res.json({
@@ -666,9 +626,6 @@ app.patch("/api/users/:id/status", async (req, res) => {
     }
 });
 
-// ==========================================
-// 8. DELETE USER (WITH CACHE INVALIDATION)
-// ==========================================
 app.delete("/api/users/:id", async (req, res) => {
     try {
         const userId = parseInt(req.params.id, 10);
@@ -685,7 +642,6 @@ app.delete("/api/users/:id", async (req, res) => {
             return res.status(404).json({ error: "User not found in database" });
         }
 
-        // REDIS CACHE INVALIDATION
         await deleteCachePattern("garage:cache:users:*");
         await deleteCachePattern("garage:cache:owners:*");
 
@@ -700,9 +656,6 @@ app.delete("/api/users/:id", async (req, res) => {
     }
 });
 
-// ==========================================
-// 9. AUTH LOGIN
-// ==========================================
 app.post("/api/auth/login", async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -735,7 +688,6 @@ app.post("/api/auth/login", async (req, res) => {
             [user.user_id]
         );
 
-        // Invalidate user cache to reflect new last_login
         await deleteCachePattern("garage:cache:users:*");
 
         const { password: _, ...safeUser } = user;
