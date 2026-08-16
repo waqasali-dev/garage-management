@@ -27,6 +27,11 @@ export default function Sidebar({ isOpen, onClose }) {
                         <span>Dashboard</span>
                     </NavLink>
 
+                    <NavLink to="/staff/dashboard" className={getNavClass}>
+                        <span className="material-symbols-outlined">handyman</span>
+                        <span>Staff Hub</span>
+                    </NavLink>
+
                     <NavLink to="/work-orders" className={getNavClass}>
                         <span className="material-symbols-outlined">build</span>
                         <span>Work Orders</span>

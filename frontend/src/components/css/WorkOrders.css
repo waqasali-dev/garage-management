@@ -499,6 +499,60 @@
     text-align: right;
 }
 
+.stat-card.stat-active {
+    border-color: var(--accent-yellow) !important;
+    background-color: rgba(255, 216, 95, 0.08);
+    box-shadow: 0 0 16px rgba(255, 216, 95, 0.2);
+}
+
+.orders-toast {
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    animation: fadeIn 0.2s ease;
+}
+
+.toast-success {
+    background-color: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+}
+
+.toast-error {
+    background-color: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+}
+
+.view-order-btn {
+    background: none;
+    border: 1px solid var(--border-glass);
+    color: var(--text-muted);
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.view-order-btn:hover {
+    border-color: var(--accent-yellow);
+    color: var(--accent-yellow);
+    background-color: rgba(255, 216, 95, 0.1);
+}
+
+.empty-table-state {
+    text-align: center;
+    padding: 48px 16px !important;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
 .more-btn {
     background: none;
     border: none;

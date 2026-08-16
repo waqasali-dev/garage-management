@@ -16,7 +16,9 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-
+// ==========================================
+// 1. HEALTH CHECK & DATABASE / REDIS STATUS
+// ==========================================
 app.get("/api/health", async (req, res) => {
     let dbStatus = "Disconnected";
     let serverTime = null;
@@ -42,6 +44,410 @@ app.get("/api/health", async (req, res) => {
     });
 });
 
+// ==========================================
+// 2. INVENTORY MANAGEMENT (CRUD & KPIS)
+// ==========================================
+
+// GET /api/inventory - Fetch all inventory parts with computed statuses and KPI metrics
+app.get("/api/inventory", async (req, res) => {
+    const cacheKey = "garage:cache:inventory:all";
+
+    try {
+        // 1. Check Redis Cache
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", ...cached });
+        }
+
+        // 2. Fetch all parts from inventory_data
+        const itemsQuery = `
+            SELECT 
+                part_id,
+                sku,
+                part_name AS name,
+                category,
+                stock_quantity AS stock,
+                reorder_threshold,
+                unit_cost,
+                selling_price,
+                created_at
+            FROM inventory_data
+            ORDER BY created_at DESC, part_name ASC;
+        `;
+        const itemsResult = await pool.query(itemsQuery);
+
+        // 3. Compute statuses and formatted currency
+        const formattedItems = itemsResult.rows.map((item) => {
+            const stock = parseInt(item.stock, 10) || 0;
+            const threshold = parseInt(item.reorder_threshold, 10) || 5;
+            const unitCostNum = parseFloat(item.unit_cost) || 0;
+            const sellingPriceNum = parseFloat(item.selling_price) || 0;
+
+            let status = "Optimal";
+            let statusType = "success";
+
+            if (stock <= 0) {
+                status = "Out of Stock";
+                statusType = "error";
+            } else if (stock <= threshold) {
+                status = "Low Stock";
+                statusType = "warning";
+            }
+
+            return {
+                part_id: item.part_id,
+                sku: item.sku,
+                name: item.name,
+                category: item.category,
+                stock: stock,
+                reorder_threshold: threshold,
+                unit_cost: unitCostNum,
+                selling_price: sellingPriceNum,
+                unitCost: `$${unitCostNum.toFixed(2)}`,
+                sellingPrice: `$${sellingPriceNum.toFixed(2)}`,
+                status: status,
+                statusType: statusType,
+                created_at: item.created_at,
+            };
+        });
+
+        // 4. Compute KPI Metrics
+        let totalVal = 0;
+        let lowStockCount = 0;
+        let outOfStockCount = 0;
+        let totalQuantity = 0;
+        const categorySet = new Set();
+
+        formattedItems.forEach((it) => {
+            totalVal += it.stock * it.unit_cost;
+            totalQuantity += it.stock;
+            categorySet.add(it.category);
+            if (it.statusType === "warning") lowStockCount++;
+            if (it.statusType === "error") outOfStockCount++;
+        });
+
+        const kpiStats = {
+            totalValue: `$${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            totalValueRaw: totalVal,
+            lowStockAlerts: lowStockCount + outOfStockCount,
+            lowStockCount,
+            outOfStockCount,
+            totalItems: totalQuantity,
+            totalSKUs: formattedItems.length,
+            categoriesCount: categorySet.size,
+        };
+
+        const responsePayload = {
+            data: formattedItems,
+            kpi: kpiStats,
+        };
+
+        // 5. Save to Redis Cache (TTL: 5 minutes)
+        await setCache(cacheKey, responsePayload, 300);
+
+        res.json({ success: true, source: "postgres", ...responsePayload });
+    } catch (err) {
+        console.error("Error fetching inventory:", err);
+        res.status(500).json({ error: "Failed to fetch inventory from database", details: err.message });
+    }
+});
+
+// GET /api/inventory/categories - List unique categories
+app.get("/api/inventory/categories", async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT DISTINCT category FROM inventory_data WHERE category IS NOT NULL ORDER BY category ASC;"
+        );
+        const categories = result.rows.map((r) => r.category);
+        res.json({ success: true, data: categories });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch categories", details: err.message });
+    }
+});
+
+// POST /api/inventory - Add a new part to inventory_data
+app.post("/api/inventory", async (req, res) => {
+    const {
+        sku,
+        part_name,
+        name,
+        category,
+        stock_quantity = 0,
+        stock = 0,
+        reorder_threshold = 5,
+        unit_cost = 0.0,
+        selling_price = 0.0,
+    } = req.body;
+
+    const targetName = (part_name || name || "").trim();
+    const targetSku = (sku || "").trim().toUpperCase();
+    const targetCategory = (category || "General").trim();
+    const initialStock = parseInt(stock_quantity || stock || 0, 10);
+    const threshold = parseInt(reorder_threshold || 5, 10);
+    const unitCost = parseFloat(unit_cost) || 0.0;
+    const sellingPrice = parseFloat(selling_price) || 0.0;
+
+    if (!targetSku || !targetName) {
+        return res.status(400).json({ error: "SKU and Part Name are required fields." });
+    }
+
+    if (initialStock < 0) {
+        return res.status(400).json({ error: "Stock quantity cannot be negative." });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // Check SKU uniqueness
+        const checkSku = await client.query(
+            "SELECT part_id FROM inventory_data WHERE UPPER(sku) = $1;",
+            [targetSku]
+        );
+        if (checkSku.rows.length > 0) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({ error: `Part with SKU '${targetSku}' already exists in inventory.` });
+        }
+
+        const insertQuery = `
+            INSERT INTO inventory_data (
+                sku,
+                part_name,
+                category,
+                stock_quantity,
+                reorder_threshold,
+                unit_cost,
+                selling_price
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *;
+        `;
+        const result = await client.query(insertQuery, [
+            targetSku,
+            targetName,
+            targetCategory,
+            initialStock,
+            threshold,
+            unitCost,
+            sellingPrice,
+        ]);
+
+        const newPart = result.rows[0];
+
+        // Audit Log
+        await client.query(
+            `INSERT INTO audit_logs (event_type, description, payload_json)
+             VALUES ('PART_ALLOCATED', $1, $2);`,
+            [
+                `New part '${targetName}' (${targetSku}) added to inventory`,
+                JSON.stringify({ part_id: newPart.part_id, sku: targetSku, stock: initialStock }),
+            ]
+        );
+
+        await client.query("COMMIT");
+
+        // Invalidate Redis Caches
+        await deleteCachePattern("garage:cache:inventory:*");
+
+        res.status(201).json({
+            success: true,
+            message: `Part '${targetName}' (${targetSku}) added successfully to inventory.`,
+            data: newPart,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error adding inventory part:", err);
+        res.status(500).json({ error: "Database error while adding part", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// PATCH /api/inventory/:id - Update part details
+app.patch("/api/inventory/:id", async (req, res) => {
+    const { id } = req.params;
+    const partId = parseInt(id, 10);
+
+    if (isNaN(partId)) {
+        return res.status(400).json({ error: "Invalid part ID" });
+    }
+
+    const {
+        sku,
+        part_name,
+        name,
+        category,
+        stock_quantity,
+        stock,
+        reorder_threshold,
+        unit_cost,
+        selling_price,
+    } = req.body;
+
+    const targetName = part_name || name;
+    const targetStock = stock_quantity !== undefined ? stock_quantity : stock;
+
+    try {
+        const query = `
+            UPDATE inventory_data
+            SET
+                sku = COALESCE($1, sku),
+                part_name = COALESCE($2, part_name),
+                category = COALESCE($3, category),
+                stock_quantity = COALESCE($4, stock_quantity),
+                reorder_threshold = COALESCE($5, reorder_threshold),
+                unit_cost = COALESCE($6, unit_cost),
+                selling_price = COALESCE($7, selling_price)
+            WHERE part_id = $8
+            RETURNING *;
+        `;
+
+        const result = await pool.query(query, [
+            sku ? sku.trim().toUpperCase() : null,
+            targetName ? targetName.trim() : null,
+            category ? category.trim() : null,
+            targetStock !== undefined ? parseInt(targetStock, 10) : null,
+            reorder_threshold !== undefined ? parseInt(reorder_threshold, 10) : null,
+            unit_cost !== undefined ? parseFloat(unit_cost) : null,
+            selling_price !== undefined ? parseFloat(selling_price) : null,
+            partId,
+        ]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Part not found in inventory" });
+        }
+
+        await deleteCachePattern("garage:cache:inventory:*");
+
+        res.json({
+            success: true,
+            message: "Part details updated successfully",
+            data: result.rows[0],
+        });
+    } catch (err) {
+        console.error("Error updating inventory part:", err);
+        res.status(500).json({ error: "Failed to update part", details: err.message });
+    }
+});
+
+// PATCH /api/inventory/:id/restock - Restock / add stock units to a part
+app.patch("/api/inventory/:id/restock", async (req, res) => {
+    const { id } = req.params;
+    const partId = parseInt(id, 10);
+    const { added_quantity, unit_cost } = req.body;
+
+    if (isNaN(partId)) {
+        return res.status(400).json({ error: "Invalid part ID" });
+    }
+
+    const qtyToAdd = parseInt(added_quantity, 10);
+    if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
+        return res.status(400).json({ error: "Added quantity must be a positive integer greater than 0." });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const updateQuery = `
+            UPDATE inventory_data
+            SET 
+                stock_quantity = stock_quantity + $1,
+                unit_cost = COALESCE($2, unit_cost)
+            WHERE part_id = $3
+            RETURNING *;
+        `;
+        const updatedCost = unit_cost !== undefined && unit_cost !== "" ? parseFloat(unit_cost) : null;
+        const result = await client.query(updateQuery, [qtyToAdd, updatedCost, partId]);
+
+        if (result.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Part not found in inventory" });
+        }
+
+        const updatedPart = result.rows[0];
+
+        // Audit Log
+        await client.query(
+            `INSERT INTO audit_logs (event_type, description, payload_json)
+             VALUES ('PART_ALLOCATED', $1, $2);`,
+            [
+                `Restocked ${qtyToAdd} units of '${updatedPart.part_name}' (${updatedPart.sku}). New stock: ${updatedPart.stock_quantity}`,
+                JSON.stringify({
+                    part_id: updatedPart.part_id,
+                    sku: updatedPart.sku,
+                    added_quantity: qtyToAdd,
+                    new_stock: updatedPart.stock_quantity,
+                    unit_cost: updatedPart.unit_cost,
+                }),
+            ]
+        );
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:inventory:*");
+
+        res.json({
+            success: true,
+            message: `Restocked ${qtyToAdd} units of [${updatedPart.sku}] ${updatedPart.part_name}. Total in stock: ${updatedPart.stock_quantity}`,
+            data: updatedPart,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error restocking inventory part:", err);
+        res.status(500).json({ error: "Failed to restock part in database", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// DELETE /api/inventory/:id - Delete a part from inventory
+app.delete("/api/inventory/:id", async (req, res) => {
+    const { id } = req.params;
+    const partId = parseInt(id, 10);
+
+    if (isNaN(partId)) {
+        return res.status(400).json({ error: "Invalid part ID" });
+    }
+
+    try {
+        const result = await pool.query(
+            "DELETE FROM inventory_data WHERE part_id = $1 RETURNING part_id, sku, part_name;",
+            [partId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Part not found in inventory" });
+        }
+
+        const deleted = result.rows[0];
+
+        // Audit Log
+        await pool.query(
+            `INSERT INTO audit_logs (event_type, description, payload_json)
+             VALUES ('STATUS_CHANGE', $1, $2);`,
+            [
+                `Part '${deleted.part_name}' (${deleted.sku}) removed from inventory`,
+                JSON.stringify({ deleted_part_id: deleted.part_id, sku: deleted.sku }),
+            ]
+        );
+
+        await deleteCachePattern("garage:cache:inventory:*");
+
+        res.json({
+            success: true,
+            message: `Part '${deleted.part_name}' (${deleted.sku}) deleted successfully.`,
+            deletedPart: deleted,
+        });
+    } catch (err) {
+        console.error("Error deleting part:", err);
+        res.status(500).json({ error: "Failed to delete part from database", details: err.message });
+    }
+});
+
+// ==========================================
+// 3. VEHICLE INTAKE & WORK ORDER GENERATION
+// ==========================================
 app.post("/api/intake", async (req, res) => {
     const client = await pool.connect();
     try {
@@ -76,6 +482,7 @@ app.post("/api/intake", async (req, res) => {
             });
         }
 
+        // STEP 1: RESOLVE CAR OWNER
         let ownerId = selectedOwnerId || null;
 
         if (ownerId) {
@@ -131,6 +538,7 @@ app.post("/api/intake", async (req, res) => {
             }
         }
 
+        // STEP 2: RESOLVE VEHICLE
         let vehicleId = null;
         const checkVehicle = await client.query(
             "SELECT vehicle_id, owner_id, vin, make, model, year, license_plate FROM vehicles WHERE UPPER(vin) = $1;",
@@ -169,6 +577,7 @@ app.post("/api/intake", async (req, res) => {
             vehicleId = newVehicleResult.rows[0].vehicle_id;
         }
 
+        // STEP 3: CREATE WORK ORDER
         const insertWorkOrderQuery = `
             INSERT INTO work_order_data (
                 vehicle_id,
@@ -214,6 +623,7 @@ app.post("/api/intake", async (req, res) => {
         ]);
         const createdWorkOrder = workOrderResult.rows[0];
 
+        // STEP 4: AUDIT LOG
         const auditDescription = `Vehicle intake completed for VIN ${sanitizedVin}. Generated Work Order ${createdWorkOrder.work_order_id}.`;
         const auditPayload = JSON.stringify({
             event: "INTAKE_CREATED",
@@ -232,6 +642,7 @@ app.post("/api/intake", async (req, res) => {
 
         await client.query("COMMIT");
 
+        // Fetch full resolved details
         const fullDetailsQuery = `
             SELECT 
                 w.*,
@@ -245,8 +656,10 @@ app.post("/api/intake", async (req, res) => {
         const fullDetails = await pool.query(fullDetailsQuery, [createdWorkOrder.work_order_id]);
         const responseData = fullDetails.rows[0] || createdWorkOrder;
 
+        // REDIS CACHE INVALIDATION & UPDATE
         await deleteCachePattern("garage:cache:owners:*");
         await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:workorders:*");
         await setCache(`garage:cache:vehicle:vin:${sanitizedVin}`, responseData, 3600);
         await setCache(`garage:cache:workorder:${createdWorkOrder.work_order_id}`, responseData, 3600);
 
@@ -267,7 +680,765 @@ app.post("/api/intake", async (req, res) => {
     }
 });
 
+// ==========================================
+// 4. STAFF WORK ORDERS LIST & METRICS
+// ==========================================
+app.get("/api/staff/work-orders", async (req, res) => {
+    const cacheKey = "garage:cache:workorders:list";
 
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const query = `
+            SELECT 
+                w.work_order_id,
+                w.vehicle_id,
+                w.assigned_staff_id,
+                w.service_advisor_id,
+                w.status,
+                w.bay_assigned,
+                w.scheduled_start,
+                w.scheduled_end,
+                w.initial_observations,
+                w.estimated_cost,
+                w.total_cost,
+                w.created_at,
+                w.updated_at,
+                v.vin,
+                v.make,
+                v.model,
+                v.year,
+                v.license_plate,
+                o.owner_id,
+                o.full_name AS owner_name,
+                o.phone_number AS owner_phone,
+                o.email_address AS owner_email,
+                o.is_vip AS owner_is_vip,
+                s.full_name AS assigned_staff_name,
+                s.role AS assigned_staff_role,
+                sa.full_name AS service_advisor_name,
+                (SELECT COUNT(*) FROM work_order_items wi WHERE wi.work_order_id = w.work_order_id) AS items_count,
+                (SELECT COUNT(*) FROM work_order_media wm WHERE wm.work_order_id = w.work_order_id) AS media_count
+            FROM work_order_data w
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
+            LEFT JOIN staff_data sa ON w.service_advisor_id = sa.staff_id
+            ORDER BY 
+                CASE 
+                    WHEN w.status = 'in_progress' THEN 1
+                    WHEN w.status = 'received' THEN 2
+                    WHEN w.status = 'diagnosed' THEN 3
+                    WHEN w.status = 'completed' THEN 4
+                    ELSE 5 
+                END,
+                w.created_at DESC;
+        `;
+        const result = await pool.query(query);
+
+        await setCache(cacheKey, result.rows, 300);
+
+        res.json({ success: true, source: "postgres", data: result.rows });
+    } catch (err) {
+        console.error("Error fetching staff work orders:", err);
+        res.status(500).json({ error: "Failed to fetch work orders", details: err.message });
+    }
+});
+
+// ==========================================
+// 5. SINGLE WORK ORDER EXECUTION DETAILS
+// ==========================================
+app.get("/api/staff/work-orders/:id", async (req, res) => {
+    const { id } = req.params;
+    const cacheKey = `garage:cache:workorder:details:${id}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const mainQuery = `
+            SELECT 
+                w.*,
+                v.vin, v.make, v.model, v.year, v.license_plate,
+                o.owner_id, o.full_name AS owner_name, o.phone_number AS owner_phone, o.email_address AS owner_email, o.is_vip AS owner_is_vip,
+                s.full_name AS assigned_staff_name, s.role AS assigned_staff_role, s.hourly_rate AS staff_hourly_rate,
+                sa.full_name AS service_advisor_name
+            FROM work_order_data w
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
+            LEFT JOIN staff_data sa ON w.service_advisor_id = sa.staff_id
+            WHERE w.work_order_id = $1;
+        `;
+        const mainResult = await pool.query(mainQuery, [id]);
+
+        if (mainResult.rows.length === 0) {
+            return res.status(404).json({ error: "Work order not found" });
+        }
+
+        const itemsQuery = `
+            SELECT 
+                wi.*,
+                i.sku,
+                i.part_name,
+                i.category as part_category,
+                i.stock_quantity
+            FROM work_order_items wi
+            LEFT JOIN inventory_data i ON wi.part_id = i.part_id
+            WHERE wi.work_order_id = $1
+            ORDER BY wi.item_id ASC;
+        `;
+        const itemsResult = await pool.query(itemsQuery, [id]);
+
+        const mediaQuery = `
+            SELECT * FROM work_order_media 
+            WHERE work_order_id = $1 
+            ORDER BY uploaded_at DESC;
+        `;
+        const mediaResult = await pool.query(mediaQuery, [id]);
+
+        const timelineQuery = `
+            SELECT 
+                a.log_id,
+                a.event_type,
+                a.description,
+                a.payload_json,
+                a.created_at,
+                s.full_name AS staff_name
+            FROM audit_logs a
+            LEFT JOIN staff_data s ON a.staff_id = s.staff_id
+            WHERE a.work_order_id = $1
+            ORDER BY a.created_at DESC;
+        `;
+        const timelineResult = await pool.query(timelineQuery, [id]);
+
+        const fullData = {
+            ...mainResult.rows[0],
+            items: itemsResult.rows,
+            media: mediaResult.rows,
+            timeline: timelineResult.rows,
+        };
+
+        await setCache(cacheKey, fullData, 300);
+
+        res.json({ success: true, source: "postgres", data: fullData });
+    } catch (err) {
+        console.error("Error fetching work order details:", err);
+        res.status(500).json({ error: "Failed to fetch work order details", details: err.message });
+    }
+});
+
+// Aliases for /api/work-orders
+app.get("/api/work-orders", (req, res, next) => {
+    req.url = "/api/staff/work-orders";
+    app.handle(req, res, next);
+});
+
+app.get("/api/work-orders/:id", (req, res, next) => {
+    req.url = `/api/staff/work-orders/${req.params.id}`;
+    app.handle(req, res, next);
+});
+
+// POST /api/work-orders/:id/notes - Add note / activity log
+app.post("/api/work-orders/:id/notes", async (req, res) => {
+    const { id } = req.params;
+    const { note, staff_id } = req.body;
+
+    if (!note || !note.trim()) {
+        return res.status(400).json({ error: "Note text is required." });
+    }
+
+    try {
+        const query = `
+            INSERT INTO audit_logs (work_order_id, staff_id, event_type, description, payload_json)
+            VALUES ($1, $2, 'NOTE_ADDED', $3, $4)
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [
+            id,
+            staff_id ? parseInt(staff_id, 10) : null,
+            note.trim(),
+            JSON.stringify({ type: "INTERNAL_NOTE" }),
+        ]);
+
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+
+        res.status(201).json({ success: true, message: "Note added to activity log", data: result.rows[0] });
+    } catch (err) {
+        console.error("Error adding note:", err);
+        res.status(500).json({ error: "Failed to add note", details: err.message });
+    }
+});
+
+// ==========================================
+// 6. UPDATE WORK ORDER STATUS & ADVANCE PIPELINE
+// ==========================================
+app.patch("/api/staff/work-orders/:id/status", async (req, res) => {
+    const { id } = req.params;
+    const { status, staff_id, notes } = req.body;
+
+    const validStatuses = ["received", "diagnosed", "in_progress", "completed", "cancelled"];
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE work_order_data 
+             SET status = $1, updated_at = CURRENT_TIMESTAMP 
+             WHERE work_order_id = $2 
+             RETURNING *;`,
+            [status, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Work order not found" });
+        }
+
+        // Audit Log
+        await pool.query(
+            `INSERT INTO audit_logs (work_order_id, staff_id, event_type, description, payload_json)
+             VALUES ($1, $2, 'STATUS_CHANGE', $3, $4);`,
+            [
+                id,
+                staff_id || null,
+                `Work Order ${id} transitioned to '${status.toUpperCase()}'`,
+                JSON.stringify({ new_status: status, notes: notes || null }),
+            ]
+        );
+
+        await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+
+        res.json({ success: true, message: `Status updated to ${status}`, data: result.rows[0] });
+    } catch (err) {
+        console.error("Error updating work order status:", err);
+        res.status(500).json({ error: "Failed to update status", details: err.message });
+    }
+});
+
+// ==========================================
+// 7. UPDATE WORK ORDER ASSIGNMENTS (BAY, STAFF, ESTIMATE)
+// ==========================================
+app.patch("/api/staff/work-orders/:id/details", async (req, res) => {
+    const { id } = req.params;
+    const { bay_assigned, assigned_staff_id, service_advisor_id, estimated_cost, initial_observations } = req.body;
+
+    try {
+        const query = `
+            UPDATE work_order_data 
+            SET 
+                bay_assigned = COALESCE($1, bay_assigned),
+                assigned_staff_id = COALESCE($2, assigned_staff_id),
+                service_advisor_id = COALESCE($3, service_advisor_id),
+                estimated_cost = COALESCE($4, estimated_cost),
+                initial_observations = COALESCE($5, initial_observations),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE work_order_id = $6
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [
+            bay_assigned || null,
+            assigned_staff_id ? parseInt(assigned_staff_id, 10) : null,
+            service_advisor_id ? parseInt(service_advisor_id, 10) : null,
+            estimated_cost !== undefined ? parseFloat(estimated_cost) : null,
+            initial_observations !== undefined ? initial_observations : null,
+            id,
+        ]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Work order not found" });
+        }
+
+        await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+
+        res.json({ success: true, message: "Work order details updated", data: result.rows[0] });
+    } catch (err) {
+        console.error("Error updating work order details:", err);
+        res.status(500).json({ error: "Failed to update work order details", details: err.message });
+    }
+});
+
+// ==========================================
+// 8. ADD LINE ITEM (PART OR LABOR) TO WORK ORDER
+// ==========================================
+app.post("/api/staff/work-orders/:id/items", async (req, res) => {
+    const { id } = req.params;
+    const { item_type, part_id, description, quantity_or_hours, unit_price } = req.body;
+
+    if (!item_type || !description || !unit_price) {
+        return res.status(400).json({ error: "item_type, description, and unit_price are required." });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const qty = parseFloat(quantity_or_hours) || 1.0;
+        const price = parseFloat(unit_price) || 0.0;
+
+        const insertItemQuery = `
+            INSERT INTO work_order_items (
+                work_order_id,
+                item_type,
+                part_id,
+                description,
+                quantity_or_hours,
+                unit_price
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING *;
+        `;
+        const itemResult = await client.query(insertItemQuery, [
+            id,
+            item_type,
+            part_id ? parseInt(part_id, 10) : null,
+            description.trim(),
+            qty,
+            price,
+        ]);
+
+        // If it's a part, decrement inventory stock
+        if (item_type === "part" && part_id) {
+            await client.query(
+                `UPDATE inventory_data 
+                 SET stock_quantity = GREATEST(stock_quantity - $1, 0) 
+                 WHERE part_id = $2;`,
+                [Math.round(qty), parseInt(part_id, 10)]
+            );
+            await deleteCachePattern("garage:cache:inventory:*");
+        }
+
+        // Recalculate total_cost on work_order_data
+        const calcQuery = `
+            UPDATE work_order_data 
+            SET total_cost = (
+                SELECT COALESCE(SUM(total_price), 0.00) 
+                FROM work_order_items 
+                WHERE work_order_id = $1
+            ),
+            updated_at = CURRENT_TIMESTAMP
+            WHERE work_order_id = $1
+            RETURNING total_cost;
+        `;
+        const totalResult = await client.query(calcQuery, [id]);
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+
+        res.status(201).json({
+            success: true,
+            message: "Item added to work order",
+            item: itemResult.rows[0],
+            newTotalCost: totalResult.rows[0]?.total_cost,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error adding work order item:", err);
+        res.status(500).json({ error: "Failed to add work order item", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================
+// 9. DELETE LINE ITEM
+// ==========================================
+app.delete("/api/staff/work-orders/:id/items/:itemId", async (req, res) => {
+    const { id, itemId } = req.params;
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const deleteResult = await client.query(
+            "DELETE FROM work_order_items WHERE item_id = $1 AND work_order_id = $2 RETURNING *;",
+            [parseInt(itemId, 10), id]
+        );
+
+        if (deleteResult.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Item not found" });
+        }
+
+        // Recalculate total
+        const calcQuery = `
+            UPDATE work_order_data 
+            SET total_cost = (
+                SELECT COALESCE(SUM(total_price), 0.00) 
+                FROM work_order_items 
+                WHERE work_order_id = $1
+            ),
+            updated_at = CURRENT_TIMESTAMP
+            WHERE work_order_id = $1
+            RETURNING total_cost;
+        `;
+        const totalResult = await client.query(calcQuery, [id]);
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+
+        res.json({
+            success: true,
+            message: "Item removed",
+            newTotalCost: totalResult.rows[0]?.total_cost,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error deleting line item:", err);
+        res.status(500).json({ error: "Failed to remove line item", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================
+// 10. UPLOAD / ATTACH MEDIA
+// ==========================================
+app.post("/api/staff/work-orders/:id/media", async (req, res) => {
+    const { id } = req.params;
+    const { file_url, file_type = "vehicle_condition" } = req.body;
+
+    if (!file_url) {
+        return res.status(400).json({ error: "file_url is required." });
+    }
+
+    try {
+        const query = `
+            INSERT INTO work_order_media (work_order_id, file_url, file_type)
+            VALUES ($1, $2, $3)
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [id, file_url.trim(), file_type]);
+
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+
+        res.status(201).json({ success: true, message: "Media attached", data: result.rows[0] });
+    } catch (err) {
+        console.error("Error attaching media:", err);
+        res.status(500).json({ error: "Failed to attach media", details: err.message });
+    }
+});
+
+// ==========================================
+// 11. STAFF DIRECTORY & METRICS
+// ==========================================
+app.get("/api/staff", async (req, res) => {
+    const cacheKey = "garage:cache:staff:all";
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const query = `
+            SELECT 
+                s.staff_id,
+                s.full_name,
+                s.role,
+                s.email,
+                s.phone_number,
+                s.residential_address,
+                s.hourly_rate,
+                s.is_active,
+                s.created_at,
+                u.user_id,
+                u.is_active AS account_active,
+                (
+                    SELECT COUNT(*) 
+                    FROM work_order_data w 
+                    WHERE w.assigned_staff_id = s.staff_id 
+                      AND w.status IN ('in_progress', 'received', 'diagnosed')
+                ) AS active_jobs_count,
+                (
+                    SELECT COUNT(*) 
+                    FROM work_order_data w 
+                    WHERE w.assigned_staff_id = s.staff_id 
+                      AND w.status = 'completed'
+                ) AS completed_jobs_count
+            FROM staff_data s
+            LEFT JOIN users u ON s.staff_id = u.staff_id
+            ORDER BY s.is_active DESC, s.full_name ASC;
+        `;
+        const result = await pool.query(query);
+
+        // Format and compute workload percentages
+        const formattedStaff = result.rows.map((member) => {
+            const activeJobs = parseInt(member.active_jobs_count, 10) || 0;
+            const completedJobs = parseInt(member.completed_jobs_count, 10) || 0;
+            const isLead = (member.role || "").toLowerCase().includes("lead");
+            
+            // Compute initials
+            const parts = (member.full_name || "").trim().split(" ");
+            const initials = parts.length === 1 
+                ? parts[0].substring(0, 2).toUpperCase()
+                : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+
+            // Workload heuristics
+            let workloadPercent = Math.min(activeJobs * 25, 100);
+            let workloadLabel = `${workloadPercent}% - Light`;
+            let workloadType = "success";
+
+            if (workloadPercent >= 75) {
+                workloadLabel = `${workloadPercent}% - Heavy`;
+                workloadType = "warning";
+            } else if (workloadPercent >= 40) {
+                workloadLabel = `${workloadPercent}% - Optimal`;
+                workloadType = "success";
+            }
+
+            const efficiency = completedJobs > 0 ? `${Math.min(90 + completedJobs, 99)}%` : "Available";
+
+            return {
+                id: member.staff_id,
+                staff_id: member.staff_id,
+                name: member.full_name,
+                role: member.role,
+                email: member.email,
+                phone: member.phone_number,
+                address: member.residential_address,
+                hourly_rate: parseFloat(member.hourly_rate || 0).toFixed(2),
+                is_active: member.is_active,
+                account_active: member.account_active,
+                has_user_account: member.user_id !== null,
+                isLead,
+                activeJobs,
+                completedJobs,
+                efficiency,
+                workload: `${workloadPercent}%`,
+                workloadLabel,
+                workloadType,
+                initials,
+                created_at: member.created_at,
+            };
+        });
+
+        await setCache(cacheKey, formattedStaff, 300);
+
+        res.json({ success: true, source: "postgres", data: formattedStaff });
+    } catch (err) {
+        console.error("Error fetching staff directory:", err);
+        res.status(500).json({ error: "Failed to fetch staff from database", details: err.message });
+    }
+});
+
+app.get("/api/staff/list", async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT staff_id, full_name, role, hourly_rate, is_active FROM staff_data WHERE is_active = TRUE ORDER BY full_name ASC;"
+        );
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch staff list", details: err.message });
+    }
+});
+
+// ==========================================
+// 12. CAR OWNERS DIRECTORY & DETAIL PROFILES
+// ==========================================
+app.get("/api/owners", async (req, res) => {
+    const cacheKey = "garage:cache:owners:all";
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const query = `
+            SELECT 
+                o.owner_id,
+                o.full_name,
+                o.phone_number,
+                o.email_address,
+                o.billing_address,
+                o.is_vip,
+                o.created_at,
+                u.user_id,
+                u.is_active AS account_active,
+                (SELECT COUNT(*) FROM vehicles v WHERE v.owner_id = o.owner_id) AS vehicles_count,
+                (
+                    SELECT v.make || ' ' || v.model 
+                    FROM vehicles v 
+                    WHERE v.owner_id = o.owner_id 
+                    ORDER BY v.created_at DESC 
+                    LIMIT 1
+                ) AS primary_vehicle,
+                (
+                    SELECT v.vin 
+                    FROM vehicles v 
+                    WHERE v.owner_id = o.owner_id 
+                    ORDER BY v.created_at DESC 
+                    LIMIT 1
+                ) AS primary_vin,
+                (
+                    SELECT COUNT(*) 
+                    FROM work_order_data w 
+                    JOIN vehicles v ON w.vehicle_id = v.vehicle_id 
+                    WHERE v.owner_id = o.owner_id 
+                      AND w.status IN ('in_progress', 'received', 'diagnosed')
+                ) AS active_orders_count,
+                (
+                    SELECT COALESCE(SUM(w.total_cost), 0.00) 
+                    FROM work_order_data w 
+                    JOIN vehicles v ON w.vehicle_id = v.vehicle_id 
+                    WHERE v.owner_id = o.owner_id
+                ) AS lifetime_spent
+            FROM car_owners o
+            LEFT JOIN users u ON o.owner_id = u.owner_id
+            ORDER BY o.created_at DESC, o.full_name ASC;
+        `;
+        const result = await pool.query(query);
+
+        const formattedOwners = result.rows.map((owner) => {
+            const parts = (owner.full_name || "").trim().split(" ");
+            const initials = parts.length === 1 
+                ? parts[0].substring(0, 2).toUpperCase()
+                : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+
+            const vehiclesCount = parseInt(owner.vehicles_count, 10) || 0;
+            const activeOrders = parseInt(owner.active_orders_count, 10) || 0;
+            const lifetimeSpentNum = parseFloat(owner.lifetime_spent) || 0.0;
+
+            return {
+                id: owner.owner_id,
+                owner_id: owner.owner_id,
+                name: owner.full_name,
+                phone: owner.phone_number,
+                email: owner.email_address,
+                address: owner.billing_address,
+                is_vip: owner.is_vip,
+                isActive: activeOrders > 0,
+                statusType: activeOrders > 0 ? "active" : "history",
+                lastService: activeOrders > 0 ? "In Shop (Active)" : "Prior Service",
+                initials,
+                vehicle: owner.primary_vehicle || "No Vehicle Registered",
+                vin: owner.primary_vin ? `VIN: ${owner.primary_vin}` : "",
+                vehicleType: "directions_car",
+                additionalVehicles: Math.max(vehiclesCount - 1, 0),
+                vehicles_count: vehiclesCount,
+                active_orders_count: activeOrders,
+                lifetime_spent: `$${lifetimeSpentNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                lifetime_spent_raw: lifetimeSpentNum,
+                has_user_account: owner.user_id !== null,
+                account_active: owner.account_active,
+                created_at: owner.created_at,
+            };
+        });
+
+        await setCache(cacheKey, formattedOwners, 300);
+
+        res.json({ success: true, source: "postgres", data: formattedOwners });
+    } catch (err) {
+        console.error("Error fetching owners directory:", err);
+        res.status(500).json({ error: "Failed to fetch owners from database", details: err.message });
+    }
+});
+
+// GET /api/owners/:id - Detailed profile with vehicles and work orders
+app.get("/api/owners/:id", async (req, res) => {
+    const { id } = req.params;
+    const cacheKey = `garage:cache:owner:details:${id}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const ownerQuery = `
+            SELECT 
+                o.*,
+                u.user_id,
+                u.is_active AS account_active,
+                u.last_login
+            FROM car_owners o
+            LEFT JOIN users u ON o.owner_id = u.owner_id
+            WHERE o.owner_id = $1;
+        `;
+        const ownerResult = await pool.query(ownerQuery, [id]);
+
+        if (ownerResult.rows.length === 0) {
+            return res.status(404).json({ error: "Car owner not found" });
+        }
+
+        const owner = ownerResult.rows[0];
+
+        // Fetch vehicles
+        const vehiclesQuery = `
+            SELECT * FROM vehicles 
+            WHERE owner_id = $1 
+            ORDER BY created_at DESC;
+        `;
+        const vehiclesResult = await pool.query(vehiclesQuery, [id]);
+
+        // Fetch work orders
+        const workOrdersQuery = `
+            SELECT 
+                w.*,
+                v.make, v.model, v.year, v.license_plate, v.vin
+            FROM work_order_data w
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            WHERE v.owner_id = $1
+            ORDER BY w.created_at DESC;
+        `;
+        const workOrdersResult = await pool.query(workOrdersQuery, [id]);
+
+        // Calculate lifetime value
+        const lifetimeValue = workOrdersResult.rows.reduce(
+            (sum, wo) => sum + (parseFloat(wo.total_cost) || 0),
+            0
+        );
+
+        const parts = (owner.full_name || "").trim().split(" ");
+        const initials = parts.length === 1 
+            ? parts[0].substring(0, 2).toUpperCase()
+            : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+
+        const fullOwnerData = {
+            ...owner,
+            initials,
+            tier: owner.is_vip ? "VIP Client" : "Standard Client",
+            joinedDate: owner.created_at ? new Date(owner.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "--",
+            lifetimeValue: `$${lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            vehicles: vehiclesResult.rows,
+            workOrders: workOrdersResult.rows,
+        };
+
+        await setCache(cacheKey, fullOwnerData, 300);
+
+        res.json({ success: true, source: "postgres", data: fullOwnerData });
+    } catch (err) {
+        console.error("Error fetching single owner details:", err);
+        res.status(500).json({ error: "Failed to fetch owner details", details: err.message });
+    }
+});
+
+app.get("/api/inventory/items", async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT part_id, sku, part_name, category, stock_quantity, selling_price FROM inventory_data ORDER BY part_name ASC;"
+        );
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch inventory items", details: err.message });
+    }
+});
+
+// ==========================================
+// 12. OWNER SEARCH & LOOKUPS (REDIS CACHED)
+// ==========================================
 app.get("/api/owners/search", async (req, res) => {
     try {
         const { query } = req.query;
@@ -305,7 +1476,6 @@ app.get("/api/owners/search", async (req, res) => {
     }
 });
 
-
 app.get("/api/vehicles/vin/:vin", async (req, res) => {
     try {
         const { vin } = req.params;
@@ -341,6 +1511,9 @@ app.get("/api/vehicles/vin/:vin", async (req, res) => {
     }
 });
 
+// ==========================================
+// 13. GET ALL USERS (REDIS CACHED)
+// ==========================================
 app.get("/api/users", async (req, res) => {
     const cacheKey = "garage:cache:users:all";
 
@@ -349,6 +1522,7 @@ app.get("/api/users", async (req, res) => {
         if (cachedUsers) {
             return res.json({ success: true, source: "redis", data: cachedUsers });
         }
+
         const query = `
             SELECT 
                 u.user_id,
@@ -407,6 +1581,9 @@ app.get("/api/users", async (req, res) => {
     }
 });
 
+// ==========================================
+// 14. USER CREATION & MANAGEMENT
+// ==========================================
 app.post("/api/admin/create-user", async (req, res) => {
     const client = await pool.connect();
     try {
@@ -452,9 +1629,7 @@ app.post("/api/admin/create-user", async (req, res) => {
                 await client.query("ROLLBACK");
                 return res.status(400).json({ error: "Email is required for admin account." });
             }
-        }
-
-        else if (role === "staff") {
+        } else if (role === "staff") {
             if (!staff_name || !staff_role || !targetEmail) {
                 await client.query("ROLLBACK");
                 return res.status(400).json({
@@ -497,9 +1672,7 @@ app.post("/api/admin/create-user", async (req, res) => {
             ]);
 
             targetStaffId = staffResult.rows[0].staff_id;
-        }
-
-        else if (role === "car_owner") {
+        } else if (role === "car_owner") {
             if (!owner_name || !owner_phone || !targetEmail) {
                 await client.query("ROLLBACK");
                 return res.status(400).json({
@@ -656,6 +1829,9 @@ app.delete("/api/users/:id", async (req, res) => {
     }
 });
 
+// ==========================================
+// 15. AUTH LOGIN
+// ==========================================
 app.post("/api/auth/login", async (req, res) => {
     try {
         const { email, password } = req.body;

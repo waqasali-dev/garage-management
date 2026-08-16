@@ -16,6 +16,10 @@ import StaffLogin from './components/StaffLogin';
 import AuditLog from './components/AuditLog';
 import UserManagement from './components/UserManagement';
 
+// Staff Portal Components
+import StaffDashboard from './staff/StaffDashboard';
+import WorkOrderExecution from './staff/WorkOrderExecution';
+
 function App() {
   return (
     <div className="App">
@@ -25,6 +29,11 @@ function App() {
         <Route path="/work-orders" element={<WorkOrders />} />
         <Route path="/work-orders/details" element={<WorkOrderDetails />} />
         <Route path="/work-orders/:id" element={<WorkOrderDetails />} />
+        
+        {/* Staff Dedicated Workspace Routes */}
+        <Route path="/staff/dashboard" element={<StaffDashboard />} />
+        <Route path="/staff/work-orders/:id" element={<WorkOrderExecution />} />
+
         <Route path="/owners" element={<OwnersList />} />
         <Route path="/owners/details" element={<OwnerDetail />} />
         <Route path="/owners/:id" element={<OwnerDetail />} />
