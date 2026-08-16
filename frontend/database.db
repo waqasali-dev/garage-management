@@ -224,6 +224,49 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Scheduled Tasks & Workshop Calendar
+CREATE SEQUENCE IF NOT EXISTS task_seq START WITH 1 INCREMENT BY 1;
+
+CREATE OR REPLACE FUNCTION generate_task_id()
+RETURNS TEXT AS $$
+BEGIN
+    RETURN 'TSK-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-' || LPAD(NEXTVAL('task_seq')::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TYPE task_priority_enum AS ENUM (
+    'low',
+    'standard',
+    'high',
+    'urgent'
+);
+
+CREATE TYPE task_status_enum AS ENUM (
+    'scheduled',
+    'in_progress',
+    'completed',
+    'cancelled'
+);
+
+CREATE TABLE scheduled_tasks (
+    task_id VARCHAR(30) PRIMARY KEY DEFAULT generate_task_id(),
+    work_order_id VARCHAR(30) REFERENCES work_order_data(work_order_id) ON DELETE SET NULL,
+    vehicle_id VARCHAR(30) REFERENCES vehicles(vehicle_id) ON DELETE SET NULL,
+    assigned_staff_id INT REFERENCES staff_data(staff_id) ON DELETE SET NULL,
+    task_title VARCHAR(200) NOT NULL,
+    task_description TEXT,
+    priority task_priority_enum NOT NULL DEFAULT 'standard',
+    status task_status_enum NOT NULL DEFAULT 'scheduled',
+    bay_assigned VARCHAR(50) DEFAULT 'B1',
+    scheduled_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    start_time TIME DEFAULT '09:00:00',
+    end_time TIME DEFAULT '11:00:00',
+    duration_hours NUMERIC(4, 2) DEFAULT 2.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_task_id_format CHECK (task_id ~ '^TSK-\d{4}-\d{4}$')
+);
+
 -- ============================================================================
 -- 5. PERFORMANCE INDEXES
 -- ============================================================================
@@ -239,6 +282,11 @@ CREATE INDEX idx_vehicles_vin ON vehicles(vin);
 -- Work Orders
 CREATE INDEX idx_wo_status ON work_order_data(status);
 CREATE INDEX idx_wo_schedule ON work_order_data(scheduled_start, scheduled_end);
+
+-- Scheduled Tasks
+CREATE INDEX idx_tasks_date ON scheduled_tasks(scheduled_date);
+CREATE INDEX idx_tasks_staff ON scheduled_tasks(assigned_staff_id);
+CREATE INDEX idx_tasks_status ON scheduled_tasks(status);
 
 -- Inventory
 CREATE INDEX idx_inventory_reorder ON inventory_data(stock_quantity, reorder_threshold);
