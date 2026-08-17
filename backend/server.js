@@ -1168,8 +1168,9 @@ app.get("/api/staff", async (req, res) => {
                       AND w.status = 'completed'
                 ) AS completed_jobs_count
             FROM staff_data s
-            LEFT JOIN users u ON s.staff_id = u.staff_id
-            ORDER BY s.is_active DESC, s.full_name ASC;
+            INNER JOIN users u ON s.staff_id = u.staff_id
+            WHERE s.is_active = TRUE AND u.is_active = TRUE
+            ORDER BY s.full_name ASC;
         `;
         const result = await pool.query(query);
 
@@ -1178,10 +1179,10 @@ app.get("/api/staff", async (req, res) => {
             const activeJobs = parseInt(member.active_jobs_count, 10) || 0;
             const completedJobs = parseInt(member.completed_jobs_count, 10) || 0;
             const isLead = (member.role || "").toLowerCase().includes("lead");
-            
+
             // Compute initials
             const parts = (member.full_name || "").trim().split(" ");
-            const initials = parts.length === 1 
+            const initials = parts.length === 1
                 ? parts[0].substring(0, 2).toUpperCase()
                 : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 
@@ -1234,13 +1235,101 @@ app.get("/api/staff", async (req, res) => {
 });
 
 app.get("/api/staff/list", async (req, res) => {
+    const cacheKey = "garage:cache:staff:list:active";
     try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
         const result = await pool.query(
             "SELECT staff_id, full_name, role, hourly_rate, is_active FROM staff_data WHERE is_active = TRUE ORDER BY full_name ASC;"
         );
-        res.json({ success: true, data: result.rows });
+
+        await setCache(cacheKey, result.rows, 300);
+
+        res.json({ success: true, source: "postgres", data: result.rows });
     } catch (err) {
+        console.error("Error fetching staff list:", err);
         res.status(500).json({ error: "Failed to fetch staff list", details: err.message });
+    }
+});
+
+// PATCH /api/staff/:id/status - Update staff active status & sync linked user
+app.patch("/api/staff/:id/status", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_active } = req.body;
+
+        const result = await pool.query(
+            "UPDATE staff_data SET is_active = $1 WHERE staff_id = $2 RETURNING *;",
+            [Boolean(is_active), id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Staff member not found" });
+        }
+
+        // Also sync linked user account
+        await pool.query(
+            "UPDATE users SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE staff_id = $2;",
+            [Boolean(is_active), id]
+        );
+
+        await deleteCachePattern("garage:cache:staff:*");
+        await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:schedules:*");
+
+        res.json({
+            success: true,
+            message: `Staff member status updated to ${is_active ? "ACTIVE" : "INACTIVE"}`,
+            data: result.rows[0],
+        });
+    } catch (err) {
+        console.error("Error updating staff status:", err);
+        res.status(500).json({ error: "Failed to update staff status", details: err.message });
+    }
+});
+
+// DELETE /api/staff/:id - Delete staff member and linked user account
+app.delete("/api/staff/:id", async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        const { id } = req.params;
+
+        // Unlink from work orders and schedules
+        await client.query("UPDATE work_order_data SET assigned_staff_id = NULL WHERE assigned_staff_id = $1;", [id]);
+        await client.query("UPDATE schedules SET assigned_staff_id = NULL WHERE assigned_staff_id = $1;", [id]);
+
+        // Delete linked user
+        await client.query("DELETE FROM users WHERE staff_id = $1;", [id]);
+
+        // Delete staff record
+        const result = await client.query("DELETE FROM staff_data WHERE staff_id = $1 RETURNING *;", [id]);
+
+        if (result.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Staff member not found" });
+        }
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:staff:*");
+        await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:schedules:*");
+
+        res.json({
+            success: true,
+            message: `Staff member ${result.rows[0].full_name} deleted successfully`,
+            deletedStaff: result.rows[0],
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error deleting staff member:", err);
+        res.status(500).json({ error: "Failed to delete staff member", details: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -1303,7 +1392,7 @@ app.get("/api/owners", async (req, res) => {
 
         const formattedOwners = result.rows.map((owner) => {
             const parts = (owner.full_name || "").trim().split(" ");
-            const initials = parts.length === 1 
+            const initials = parts.length === 1
                 ? parts[0].substring(0, 2).toUpperCase()
                 : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 
@@ -1343,6 +1432,44 @@ app.get("/api/owners", async (req, res) => {
     } catch (err) {
         console.error("Error fetching owners directory:", err);
         res.status(500).json({ error: "Failed to fetch owners from database", details: err.message });
+    }
+});
+
+// GET /api/owners/unlinked - Fetch customers from car_owners without a user portal account
+app.get("/api/owners/unlinked", async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                o.owner_id,
+                o.full_name,
+                o.phone_number,
+                o.email_address,
+                o.billing_address,
+                o.is_vip,
+                o.created_at,
+                (SELECT COUNT(*) FROM vehicles v WHERE v.owner_id = o.owner_id) AS vehicles_count,
+                (
+                    SELECT v.make || ' ' || v.model || ' (' || v.year || ')'
+                    FROM vehicles v 
+                    WHERE v.owner_id = o.owner_id 
+                    ORDER BY v.created_at DESC 
+                    LIMIT 1
+                ) AS primary_vehicle
+            FROM car_owners o
+            LEFT JOIN users u ON o.owner_id = u.owner_id
+            WHERE u.user_id IS NULL
+            ORDER BY o.created_at DESC, o.full_name ASC;
+        `;
+        const result = await pool.query(query);
+
+        res.json({
+            success: true,
+            count: result.rows.length,
+            data: result.rows,
+        });
+    } catch (err) {
+        console.error("Error fetching unlinked owners:", err);
+        res.status(500).json({ error: "Failed to fetch unlinked owners", details: err.message });
     }
 });
 
@@ -1402,7 +1529,7 @@ app.get("/api/owners/:id", async (req, res) => {
         );
 
         const parts = (owner.full_name || "").trim().split(" ");
-        const initials = parts.length === 1 
+        const initials = parts.length === 1
             ? parts[0].substring(0, 2).toUpperCase()
             : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 
@@ -1642,6 +1769,248 @@ app.delete("/api/schedules/:id", async (req, res) => {
     }
 });
 
+// ==========================================
+// 13. AUDIT LOGS & EVENT STREAM (PAGINATED)
+// ==========================================
+app.get("/api/audit-logs", async (req, res) => {
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const { range = "ALL", event_type = "all", search = "" } = req.query;
+
+    const cacheKey = `garage:cache:audit:logs:${limit}:${offset}:${range}:${event_type}:${search.trim().toLowerCase()}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", ...cached });
+        }
+
+        // Build Time Range Clause
+        let timeCondition = "1=1";
+        if (range === "1H") {
+            timeCondition = "a.created_at >= NOW() - INTERVAL '1 hour'";
+        } else if (range === "24H") {
+            timeCondition = "a.created_at >= NOW() - INTERVAL '24 hours'";
+        } else if (range === "7D") {
+            timeCondition = "a.created_at >= NOW() - INTERVAL '7 days'";
+        }
+
+        // Build Event Type Clause
+        let typeCondition = "1=1";
+        if (event_type && event_type !== "all") {
+            typeCondition = `a.event_type ILIKE '%${event_type}%'`;
+        }
+
+        // Build Search Clause
+        let searchCondition = "1=1";
+        const queryParams = [];
+        if (search && search.trim().length > 0) {
+            queryParams.push(`%${search.trim()}%`);
+            const sIdx = queryParams.length;
+            searchCondition = `(
+                a.description ILIKE $${sIdx} 
+                OR a.event_type ILIKE $${sIdx} 
+                OR a.work_order_id ILIKE $${sIdx}
+                OR s.full_name ILIKE $${sIdx}
+            )`;
+        }
+
+        const whereClause = `WHERE ${timeCondition} AND ${typeCondition} AND ${searchCondition}`;
+
+        // Query Logs with joined staff details
+        const query = `
+            SELECT 
+                a.log_id,
+                a.work_order_id,
+                a.staff_id,
+                a.event_type,
+                a.description,
+                a.payload_json,
+                a.created_at,
+                s.full_name AS staff_name,
+                s.role AS staff_role
+            FROM audit_logs a
+            LEFT JOIN staff_data s ON a.staff_id = s.staff_id
+            ${whereClause}
+            ORDER BY a.created_at DESC
+            LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2};
+        `;
+
+        const logsResult = await pool.query(query, [...queryParams, limit, offset]);
+
+        // Total Count
+        const countQuery = `
+            SELECT COUNT(*) AS total
+            FROM audit_logs a
+            LEFT JOIN staff_data s ON a.staff_id = s.staff_id
+            ${whereClause};
+        `;
+        const countResult = await pool.query(countQuery, queryParams);
+        const total = parseInt(countResult.rows[0]?.total, 10) || 0;
+
+        // KPI Stats (Events 24h, Critical Alerts, Top Actors)
+        const statsQuery = `
+            SELECT 
+                (SELECT COUNT(*) FROM audit_logs WHERE created_at >= NOW() - INTERVAL '24 hours') AS events_24h,
+                (SELECT COUNT(*) FROM audit_logs WHERE event_type IN ('AUTH_FAILURE', 'CRITICAL', 'ERROR')) AS critical_alerts;
+        `;
+        const statsResult = await pool.query(statsQuery);
+
+        const actorsQuery = `
+            SELECT s.full_name, s.staff_id, COUNT(*) AS count
+            FROM audit_logs a
+            JOIN staff_data s ON a.staff_id = s.staff_id
+            GROUP BY s.full_name, s.staff_id
+            ORDER BY count DESC
+            LIMIT 4;
+        `;
+        const actorsResult = await pool.query(actorsQuery);
+
+        // Format Logs
+        const formattedLogs = logsResult.rows.map((log) => {
+            const dateObj = new Date(log.created_at);
+            const timeStr = dateObj.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true,
+            });
+
+            // Date label
+            const today = new Date();
+            const isToday =
+                dateObj.getDate() === today.getDate() &&
+                dateObj.getMonth() === today.getMonth() &&
+                dateObj.getFullYear() === today.getFullYear();
+
+            const dateStr = isToday
+                ? "Today"
+                : dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+            // Map event type categories
+            let typeCategory = "creation";
+            let badgeLabel = log.event_type;
+            let badgeType = "neutral";
+            let actionText = "recorded event on";
+
+            const evt = (log.event_type || "").toUpperCase();
+            if (evt.includes("AUTH") || evt.includes("CRITICAL") || evt.includes("FAILURE")) {
+                typeCategory = "critical";
+                badgeType = "error";
+                actionText = "triggered";
+            } else if (evt.includes("STATUS")) {
+                typeCategory = "status_change";
+                badgeType = "warning";
+                actionText = "updated status on";
+            } else if (evt.includes("PART") || evt.includes("INVENTORY") || evt.includes("STOCK")) {
+                typeCategory = "inventory";
+                badgeType = "info";
+                actionText = "allocated part / stock for";
+            } else if (evt.includes("ORDER") || evt.includes("CREATE") || evt.includes("TASK")) {
+                typeCategory = "creation";
+                badgeType = "success";
+                actionText = "created new entity";
+            }
+
+            // Actor Initials
+            let actorName = log.staff_name || "System Automated";
+            const nameParts = actorName.trim().split(" ");
+            const initials =
+                nameParts.length === 1
+                    ? nameParts[0].substring(0, 2).toUpperCase()
+                    : (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+
+            return {
+                id: log.log_id,
+                log_id: log.log_id,
+                type: typeCategory,
+                event_type: log.event_type,
+                actor: actorName,
+                initials,
+                action: actionText,
+                targetId: log.work_order_id || null,
+                badge: badgeLabel,
+                badgeType,
+                description: log.description,
+                payload: log.payload_json ? JSON.stringify(log.payload_json, null, 2) : null,
+                raw_payload: log.payload_json,
+                time: timeStr,
+                date: dateStr,
+                created_at: log.created_at,
+            };
+        });
+
+        const responsePayload = {
+            data: formattedLogs,
+            total,
+            hasMore: offset + limit < total,
+            stats: {
+                events24h: parseInt(statsResult.rows[0]?.events_24h, 10) || 0,
+                criticalAlerts: parseInt(statsResult.rows[0]?.critical_alerts, 10) || 0,
+                topActors: actorsResult.rows.map((a) => {
+                    const parts = (a.full_name || "").trim().split(" ");
+                    const init =
+                        parts.length === 1
+                            ? parts[0].substring(0, 2).toUpperCase()
+                            : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    return { name: a.full_name, initials: init, count: a.count };
+                }),
+            },
+        };
+
+        await setCache(cacheKey, responsePayload, 60);
+
+        res.json({ success: true, source: "postgres", ...responsePayload });
+    } catch (err) {
+        if (err.code === "42P01") {
+            console.warn("Notice: audit_logs table does not exist yet.");
+            return res.json({
+                success: true,
+                source: "empty_fallback",
+                data: [],
+                total: 0,
+                hasMore: false,
+                tablePending: true,
+                stats: { events24h: 0, criticalAlerts: 0, topActors: [] },
+                message: "audit_logs table pending creation in database",
+            });
+        }
+        console.error("Error fetching audit logs:", err);
+        res.status(500).json({ error: "Failed to fetch audit logs", details: err.message });
+    }
+});
+
+// Endpoint to insert audit event
+app.post("/api/audit-logs", async (req, res) => {
+    const { work_order_id, staff_id, event_type, description, payload_json } = req.body;
+
+    if (!event_type || !description) {
+        return res.status(400).json({ error: "event_type and description are required." });
+    }
+
+    try {
+        const query = `
+            INSERT INTO audit_logs (work_order_id, staff_id, event_type, description, payload_json)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [
+            work_order_id || null,
+            staff_id ? parseInt(staff_id, 10) : null,
+            event_type,
+            description.trim(),
+            payload_json || null,
+        ]);
+
+        await deleteCachePattern("garage:cache:audit:*");
+
+        res.status(201).json({ success: true, message: "Audit event recorded", data: result.rows[0] });
+    } catch (err) {
+        console.error("Error inserting audit log:", err);
+        res.status(500).json({ error: "Failed to insert audit log", details: err.message });
+    }
+});
+
 app.get("/api/inventory/items", async (req, res) => {
     try {
         const result = await pool.query(
@@ -1816,6 +2185,7 @@ app.post("/api/admin/create-user", async (req, res) => {
             staff_phone,
             staff_address,
             staff_hourly_rate,
+            existing_owner_id,
             owner_name,
             owner_phone,
             owner_address,
@@ -1890,33 +2260,87 @@ app.post("/api/admin/create-user", async (req, res) => {
 
             targetStaffId = staffResult.rows[0].staff_id;
         } else if (role === "car_owner") {
-            if (!owner_name || !owner_phone || !targetEmail) {
-                await client.query("ROLLBACK");
-                return res.status(400).json({
-                    error: "Full Name, Phone Number, and Email are required to create car owner.",
-                });
+            if (existing_owner_id) {
+                // Link Existing Customer from car_owners
+                const checkExisting = await client.query(
+                    "SELECT * FROM car_owners WHERE owner_id = $1;",
+                    [existing_owner_id]
+                );
+
+                if (checkExisting.rows.length === 0) {
+                    await client.query("ROLLBACK");
+                    return res.status(404).json({
+                        error: `Car owner profile '${existing_owner_id}' not found in database.`,
+                    });
+                }
+
+                const checkExistingUser = await client.query(
+                    "SELECT user_id FROM users WHERE owner_id = $1;",
+                    [existing_owner_id]
+                );
+                if (checkExistingUser.rows.length > 0) {
+                    await client.query("ROLLBACK");
+                    return res.status(409).json({
+                        error: `A user portal account is already linked to car owner '${existing_owner_id}'.`,
+                    });
+                }
+
+                // Optionally update profile details if provided
+                if (owner_name || owner_phone || targetEmail || owner_address) {
+                    await client.query(
+                        `UPDATE car_owners
+                         SET
+                            full_name = COALESCE($1, full_name),
+                            phone_number = COALESCE($2, phone_number),
+                            email_address = COALESCE($3, email_address),
+                            billing_address = COALESCE($4, billing_address),
+                            is_vip = COALESCE($5, is_vip)
+                         WHERE owner_id = $6;`,
+                        [
+                            owner_name ? owner_name.trim() : null,
+                            owner_phone ? owner_phone.trim() : null,
+                            targetEmail || null,
+                            owner_address ? owner_address.trim() : null,
+                            owner_is_vip !== undefined ? Boolean(owner_is_vip) : null,
+                            existing_owner_id,
+                        ]
+                    );
+                }
+
+                targetOwnerId = existing_owner_id;
+                if (!targetEmail && checkExisting.rows[0].email_address) {
+                    targetEmail = checkExisting.rows[0].email_address.trim().toLowerCase();
+                }
+            } else {
+                // Create New Customer profile in car_owners
+                if (!owner_name || !owner_phone || !targetEmail) {
+                    await client.query("ROLLBACK");
+                    return res.status(400).json({
+                        error: "Full Name, Phone Number, and Email are required to create car owner.",
+                    });
+                }
+
+                const insertOwnerQuery = `
+                    INSERT INTO car_owners (
+                        full_name,
+                        phone_number,
+                        email_address,
+                        billing_address,
+                        is_vip
+                    )
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING owner_id, full_name, email_address;
+                `;
+                const ownerResult = await client.query(insertOwnerQuery, [
+                    owner_name.trim(),
+                    owner_phone.trim(),
+                    targetEmail,
+                    owner_address ? owner_address.trim() : null,
+                    Boolean(owner_is_vip),
+                ]);
+
+                targetOwnerId = ownerResult.rows[0].owner_id;
             }
-
-            const insertOwnerQuery = `
-                INSERT INTO car_owners (
-                    full_name,
-                    phone_number,
-                    email_address,
-                    billing_address,
-                    is_vip
-                )
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING owner_id, full_name, email_address;
-            `;
-            const ownerResult = await client.query(insertOwnerQuery, [
-                owner_name.trim(),
-                owner_phone.trim(),
-                targetEmail,
-                owner_address ? owner_address.trim() : null,
-                Boolean(owner_is_vip),
-            ]);
-
-            targetOwnerId = ownerResult.rows[0].owner_id;
         }
 
         const checkUserEmail = await client.query(
@@ -1967,6 +2391,7 @@ app.post("/api/admin/create-user", async (req, res) => {
 
         await deleteCachePattern("garage:cache:users:*");
         await deleteCachePattern("garage:cache:owners:*");
+        await deleteCachePattern("garage:cache:staff:*");
 
         return res.status(201).json({
             success: true,
@@ -1995,7 +2420,7 @@ app.patch("/api/users/:id/status", async (req, res) => {
         }
 
         const result = await pool.query(
-            "UPDATE users SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 RETURNING user_id, email, is_active, updated_at;",
+            "UPDATE users SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 RETURNING user_id, email, role, staff_id, owner_id, is_active, updated_at;",
             [Boolean(is_active), userId]
         );
 
@@ -2003,7 +2428,21 @@ app.patch("/api/users/:id/status", async (req, res) => {
             return res.status(404).json({ error: "User not found in database" });
         }
 
+        const user = result.rows[0];
+
+        // If this user account belongs to a staff member, synchronize staff_data.is_active
+        if (user.staff_id) {
+            await pool.query(
+                "UPDATE staff_data SET is_active = $1 WHERE staff_id = $2;",
+                [Boolean(is_active), user.staff_id]
+            );
+        }
+
+        // Invalidate all related Redis caches immediately
         await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:staff:*");
+        await deleteCachePattern("garage:cache:owners:*");
+        await deleteCachePattern("garage:cache:schedules:*");
 
         return res.json({
             success: true,
@@ -2023,8 +2462,9 @@ app.delete("/api/users/:id", async (req, res) => {
             return res.status(400).json({ error: "Invalid user ID" });
         }
 
+        // Soft-deactivate user record so foreign keys in other tables stay intact
         const result = await pool.query(
-            "DELETE FROM users WHERE user_id = $1 RETURNING user_id, email, role;",
+            "UPDATE users SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 RETURNING user_id, email, role, staff_id, owner_id, is_active, updated_at;",
             [userId]
         );
 
@@ -2032,17 +2472,30 @@ app.delete("/api/users/:id", async (req, res) => {
             return res.status(404).json({ error: "User not found in database" });
         }
 
+        const user = result.rows[0];
+
+        // If user is a staff member, synchronize staff_data.is_active = FALSE
+        if (user.staff_id) {
+            await pool.query(
+                "UPDATE staff_data SET is_active = FALSE WHERE staff_id = $1;",
+                [user.staff_id]
+            );
+        }
+
+        // Invalidate all Redis caches
         await deleteCachePattern("garage:cache:users:*");
+        await deleteCachePattern("garage:cache:staff:*");
         await deleteCachePattern("garage:cache:owners:*");
+        await deleteCachePattern("garage:cache:schedules:*");
 
         return res.json({
             success: true,
-            message: `User account '${result.rows[0].email}' revoked and deleted.`,
-            deletedUser: result.rows[0],
+            message: `User account '${user.email}' disabled and moved to disabled accounts.`,
+            user,
         });
     } catch (err) {
-        console.error("Error deleting user from database:", err);
-        res.status(500).json({ error: "Failed to delete user from database", details: err.message });
+        console.error("Error disabling user in database:", err);
+        res.status(500).json({ error: "Failed to disable user", details: err.message });
     }
 });
 

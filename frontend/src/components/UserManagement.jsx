@@ -37,6 +37,7 @@ const INITIAL_FORM_STATE = {
     staff_address: '',
     staff_hourly_rate: '35.00',
     // car_owners fields
+    existing_owner_id: '',
     owner_name: '',
     owner_phone: '',
     owner_address: '',
@@ -54,6 +55,11 @@ export default function UserManagement() {
     const [notification, setNotification] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
+
+    // "Already Customer" linking state
+    const [isAlreadyCustomer, setIsAlreadyCustomer] = useState(false);
+    const [unlinkedOwners, setUnlinkedOwners] = useState([]);
+    const [showEmailDropdown, setShowEmailDropdown] = useState(false);
 
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
@@ -86,6 +92,20 @@ export default function UserManagement() {
         }
     };
 
+    const fetchUnlinkedOwners = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/owners/unlinked`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data)) {
+                    setUnlinkedOwners(json.data);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching unlinked owners:', err);
+        }
+    };
+
     useEffect(() => {
         loadDatabaseData();
     }, []);
@@ -96,12 +116,48 @@ export default function UserManagement() {
             role: presetRole,
             email: presetRole === 'admin' ? 'superadmin@precision.garage' : '',
         });
+        setIsAlreadyCustomer(false);
+        setShowEmailDropdown(false);
         setShowPassword(false);
         setIsModalOpen(true);
+        if (presetRole === 'car_owner') {
+            fetchUnlinkedOwners();
+        }
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
+        setIsAlreadyCustomer(false);
+        setShowEmailDropdown(false);
+    };
+
+    const handleToggleAlreadyCustomer = (e) => {
+        const checked = e.target.checked;
+        setIsAlreadyCustomer(checked);
+        if (checked) {
+            fetchUnlinkedOwners();
+            setShowEmailDropdown(true);
+        } else {
+            setShowEmailDropdown(false);
+            setFormData((prev) => ({
+                ...prev,
+                existing_owner_id: '',
+            }));
+        }
+    };
+
+    const handleSelectUnlinkedOwner = (owner) => {
+        setFormData((prev) => ({
+            ...prev,
+            existing_owner_id: owner.owner_id,
+            owner_name: owner.full_name || '',
+            owner_phone: owner.phone_number || '',
+            email: owner.email_address || '',
+            owner_address: owner.billing_address || '',
+            owner_is_vip: Boolean(owner.is_vip),
+        }));
+        setShowEmailDropdown(false);
+        showNotification(`✓ Linked intake customer profile ${owner.full_name} (${owner.owner_id})`, 'info');
     };
 
     const handleFormChange = (e) => {
@@ -114,6 +170,7 @@ export default function UserManagement() {
 
             if (name === 'role') {
                 updated.email = value === 'admin' ? 'admin@precision.garage' : '';
+                if (value === 'car_owner') fetchUnlinkedOwners();
             }
 
             return updated;
@@ -194,7 +251,7 @@ export default function UserManagement() {
     };
 
     const handleDeleteUser = async (userId, userEmail) => {
-        if (!window.confirm(`Are you sure you want to permanently delete account "${userEmail}" from database?`)) {
+        if (!window.confirm(`Are you sure you want to disable account "${userEmail}"? It will be moved to Disabled Accounts.`)) {
             return;
         }
 
@@ -204,14 +261,14 @@ export default function UserManagement() {
             });
 
             if (response.ok) {
-                showNotification(`Account [${userEmail}] revoked and deleted from PostgreSQL.`, 'warning');
+                showNotification(`Account [${userEmail}] disabled and moved to Disabled Accounts.`, 'warning');
                 loadDatabaseData();
             } else {
                 const errData = await response.json();
-                showNotification(errData.error || 'Could not delete user.', 'error');
+                showNotification(errData.error || 'Could not disable user.', 'error');
             }
         } catch (err) {
-            showNotification(`Delete failed: ${err.message}`, 'error');
+            showNotification(`Action failed: ${err.message}`, 'error');
         }
     };
 
@@ -222,16 +279,26 @@ export default function UserManagement() {
         const matchesSearch =
             email.toLowerCase().includes(searchTerm.toLowerCase()) ||
             name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+
+        let matchesRole = true;
+        if (roleFilter === 'all') {
+            matchesRole = true;
+        } else if (roleFilter === 'disabled') {
+            matchesRole = !u.is_active;
+        } else {
+            matchesRole = u.role === roleFilter && u.is_active;
+        }
+
         return matchesSearch && matchesRole;
     });
 
     const stats = {
         total: users.length,
-        admins: users.filter((u) => u.role === 'admin').length,
-        staff: users.filter((u) => u.role === 'staff').length,
-        carOwners: users.filter((u) => u.role === 'car_owner').length,
+        admins: users.filter((u) => u.role === 'admin' && u.is_active).length,
+        staff: users.filter((u) => u.role === 'staff' && u.is_active).length,
+        carOwners: users.filter((u) => u.role === 'car_owner' && u.is_active).length,
         active: users.filter((u) => u.is_active).length,
+        disabled: users.filter((u) => !u.is_active).length,
     };
 
     return (
@@ -414,6 +481,18 @@ export default function UserManagement() {
                                     onClick={() => setRoleFilter('car_owner')}
                                 >
                                     Car Owners ({stats.carOwners})
+                                </button>
+                                <button
+                                    className={`filter-chip chip-disabled ${roleFilter === 'disabled' ? 'active' : ''}`}
+                                    onClick={() => setRoleFilter('disabled')}
+                                    style={{
+                                        borderColor: roleFilter === 'disabled' ? 'var(--status-error)' : 'rgba(239, 68, 68, 0.3)',
+                                        color: roleFilter === 'disabled' ? '#fff' : '#fca5a5',
+                                        backgroundColor: roleFilter === 'disabled' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.08)'
+                                    }}
+                                >
+                                    <BlockIcon fontSize="inherit" style={{ marginRight: '4px' }} />
+                                    Disabled Accounts ({stats.disabled})
                                 </button>
                             </div>
                         </div>
@@ -691,6 +770,23 @@ export default function UserManagement() {
                                         </div>
 
                                         <div className="form-group">
+                                            <label className="form-label" htmlFor="email">
+                                                <span className="material-symbols-outlined label-icon">mail</span>
+                                                Staff Work Email (users.email) *
+                                            </label>
+                                            <input
+                                                type="email"
+                                                id="email"
+                                                name="email"
+                                                placeholder="marcus.v@precision.garage"
+                                                value={formData.email}
+                                                onChange={handleFormChange}
+                                                required
+                                                className="form-input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
                                             <label className="form-label" htmlFor="staff_phone">
                                                 <PhoneIcon fontSize="inherit" /> Phone Number (staff_data.phone_number)
                                             </label>
@@ -721,6 +817,31 @@ export default function UserManagement() {
                                             />
                                         </div>
 
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="password">
+                                                <KeyIcon className="label-icon" fontSize="inherit" /> Password *
+                                            </label>
+                                            <div className="password-input-wrapper">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    id="password"
+                                                    name="password"
+                                                    placeholder="Account password"
+                                                    value={formData.password}
+                                                    onChange={handleFormChange}
+                                                    required
+                                                    className="form-input password-input-field"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="password-toggle-btn"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                >
+                                                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <div className="form-group grid-full">
                                             <label className="form-label" htmlFor="staff_address">
                                                 <HomeIcon fontSize="inherit" /> Residential Address (staff_data.residential_address)
@@ -735,16 +856,127 @@ export default function UserManagement() {
                                                 className="form-input"
                                             />
                                         </div>
+
+                                        <div className="form-checkbox-row grid-full">
+                                            <label className="checkbox-label">
+                                                <input
+                                                    type="checkbox"
+                                                    name="is_active"
+                                                    checked={formData.is_active}
+                                                    onChange={handleFormChange}
+                                                />
+                                                <span>Enable account login immediately (<code>is_active = TRUE</code>)</span>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* ========================================================= */}
-                            {/* 2. CAR OWNER SPECIFIC SECTION (car_owners)                */}
+                            {/* 2. CAR OWNER SPECIFIC SECTION (car_owners & users)        */}
                             {/* ========================================================= */}
                             {formData.role === 'car_owner' && (
                                 <div className="profile-section-box">
                                     <div className="subform-grid">
+                                        {/* "Already Customer" toggle checkbox */}
+                                        <div className="form-checkbox-row grid-full already-customer-box">
+                                            <label className="checkbox-label">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isAlreadyCustomer}
+                                                    onChange={handleToggleAlreadyCustomer}
+                                                />
+                                                <span style={{ fontWeight: 700, color: 'var(--accent-yellow)' }}>
+                                                    Already Customer (Link Existing Intake Profile)
+                                                </span>
+                                            </label>
+                                            <span className="already-customer-hint font-mono">
+                                                Select customers created during vehicle intake without portal accounts
+                                            </span>
+                                        </div>
+
+                                        {formData.existing_owner_id && (
+                                            <div className="form-group grid-full linked-pill-banner">
+                                                <CheckCircleIcon fontSize="small" style={{ color: 'var(--status-success)' }} />
+                                                <span>
+                                                    Linked to Existing Customer: <strong>{formData.existing_owner_id}</strong>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className="unlink-btn font-mono"
+                                                    onClick={() => setFormData((prev) => ({ ...prev, existing_owner_id: '' }))}
+                                                >
+                                                    Change / Unlink
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Email Address & Customer Dropdown placed at the TOP */}
+                                        <div className="form-group grid-full" style={{ position: 'relative' }}>
+                                            <label className="form-label" htmlFor="email">
+                                                <span className="material-symbols-outlined label-icon">mail</span>
+                                                Customer Login Email *
+                                            </label>
+                                            <input
+                                                type="email"
+                                                id="email"
+                                                name="email"
+                                                placeholder="sarah.j@example.com"
+                                                value={formData.email}
+                                                onChange={handleFormChange}
+                                                onFocus={() => {
+                                                    if (isAlreadyCustomer && unlinkedOwners.length > 0) {
+                                                        setShowEmailDropdown(true);
+                                                    }
+                                                }}
+                                                required
+                                                className="form-input"
+                                            />
+
+                                            {/* Unlinked Customers Dropdown */}
+                                            {isAlreadyCustomer && showEmailDropdown && unlinkedOwners.length > 0 && (
+                                                <div className="unlinked-owners-dropdown">
+                                                    <div className="dropdown-header font-mono">
+                                                        Existing Intake Customers without Portal Accounts ({unlinkedOwners.length})
+                                                    </div>
+                                                    <div className="dropdown-list">
+                                                        {unlinkedOwners
+                                                            .filter(
+                                                                (o) =>
+                                                                    !formData.email ||
+                                                                    (o.email_address || '').toLowerCase().includes(formData.email.toLowerCase()) ||
+                                                                    (o.full_name || '').toLowerCase().includes(formData.email.toLowerCase())
+                                                            )
+                                                            .map((owner) => (
+                                                                <div
+                                                                    key={owner.owner_id}
+                                                                    className="dropdown-item"
+                                                                    onClick={() => handleSelectUnlinkedOwner(owner)}
+                                                                >
+                                                                    <div className="item-main">
+                                                                        <span className="item-name">{owner.full_name}</span>
+                                                                        <span className="item-email font-mono">
+                                                                            {owner.email_address || 'No Email on file'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="item-sub font-mono">
+                                                                        <span>{owner.owner_id}</span>
+                                                                        <span>•</span>
+                                                                        <span>{owner.phone_number}</span>
+                                                                        {owner.primary_vehicle && (
+                                                                            <>
+                                                                                <span>•</span>
+                                                                                <span>🚗 {owner.primary_vehicle}</span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="owner_name">
                                                 Owner Full Name (car_owners.full_name) *
@@ -792,6 +1024,31 @@ export default function UserManagement() {
                                             />
                                         </div>
 
+                                        <div className="form-group grid-full">
+                                            <label className="form-label" htmlFor="password">
+                                                <KeyIcon className="label-icon" fontSize="inherit" /> Portal Password *
+                                            </label>
+                                            <div className="password-input-wrapper">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    id="password"
+                                                    name="password"
+                                                    placeholder="Customer portal password"
+                                                    value={formData.password}
+                                                    onChange={handleFormChange}
+                                                    required
+                                                    className="form-input password-input-field"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="password-toggle-btn"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                >
+                                                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <div className="form-checkbox-row grid-full">
                                             <label className="checkbox-label">
                                                 <input
@@ -805,85 +1062,89 @@ export default function UserManagement() {
                                                 </span>
                                             </label>
                                         </div>
+
+                                        <div className="form-checkbox-row grid-full">
+                                            <label className="checkbox-label">
+                                                <input
+                                                    type="checkbox"
+                                                    name="is_active"
+                                                    checked={formData.is_active}
+                                                    onChange={handleFormChange}
+                                                />
+                                                <span>Enable account login immediately (<code>is_active = TRUE</code>)</span>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* ========================================================= */}
-                            {/* 3. USER ACCOUNT CREDENTIALS (users table)                 */}
+                            {/* 3. ADMIN SPECIFIC SECTION                                 */}
                             {/* ========================================================= */}
-                            <div className="credentials-section-box">
-                                <div className="section-title">
-                                    <KeyIcon fontSize="small" />
-                                    <span>Account Authentication Details (users table)</span>
-                                </div>
-
-                                <div className="subform-grid">
-                                    {/* Email Address */}
-                                    <div className="form-group">
-                                        <label className="form-label" htmlFor="email">
-                                            <span className="material-symbols-outlined label-icon">mail</span>
-                                            Login Email (users.email) *
-                                        </label>
-                                        <input
-                                            type="email"
-                                            id="email"
-                                            name="email"
-                                            placeholder="user@precision.garage"
-                                            value={formData.email}
-                                            onChange={handleFormChange}
-                                            required
-                                            className="form-input"
-                                        />
+                            {formData.role === 'admin' && (
+                                <div className="credentials-section-box">
+                                    <div className="section-title">
+                                        <KeyIcon fontSize="small" />
+                                        <span>Admin Superuser Credentials</span>
                                     </div>
 
-                                    {/* Password with Visibility Toggle */}
-                                    <div className="form-group">
-                                        <label className="form-label" htmlFor="password">
-                                            <KeyIcon className="label-icon" fontSize="inherit" />
-                                            Password / Passcode *
-                                        </label>
-                                        <div className="password-input-wrapper">
+                                    <div className="subform-grid">
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="email">
+                                                <span className="material-symbols-outlined label-icon">mail</span>
+                                                Admin Email Address *
+                                            </label>
                                             <input
-                                                type={showPassword ? 'text' : 'password'}
-                                                id="password"
-                                                name="password"
-                                                placeholder={showPassword ? 'Enter account password' : '••••••••••••'}
-                                                value={formData.password}
+                                                type="email"
+                                                id="email"
+                                                name="email"
+                                                placeholder="admin@precision.garage"
+                                                value={formData.email}
                                                 onChange={handleFormChange}
                                                 required
-                                                className="form-input password-input-field"
+                                                className="form-input"
                                             />
-                                            <button
-                                                type="button"
-                                                className="password-toggle-btn"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                title={showPassword ? 'Hide password' : 'Show password'}
-                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                            >
-                                                {showPassword ? (
-                                                    <VisibilityOffIcon fontSize="small" />
-                                                ) : (
-                                                    <VisibilityIcon fontSize="small" />
-                                                )}
-                                            </button>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="password">
+                                                <KeyIcon className="label-icon" fontSize="inherit" /> Password *
+                                            </label>
+                                            <div className="password-input-wrapper">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    id="password"
+                                                    name="password"
+                                                    placeholder="Secure admin password"
+                                                    value={formData.password}
+                                                    onChange={handleFormChange}
+                                                    required
+                                                    className="form-input password-input-field"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="password-toggle-btn"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                >
+                                                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="form-checkbox-row grid-full">
+                                            <label className="checkbox-label">
+                                                <input
+                                                    type="checkbox"
+                                                    name="is_active"
+                                                    checked={formData.is_active}
+                                                    onChange={handleFormChange}
+                                                />
+                                                <span>Enable account immediately (<code>is_active = TRUE</code>)</span>
+                                            </label>
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Active Status Checkbox */}
-                                <div className="form-checkbox-row" style={{ marginTop: '8px' }}>
-                                    <label className="checkbox-label">
-                                        <input
-                                            type="checkbox"
-                                            name="is_active"
-                                            checked={formData.is_active}
-                                            onChange={handleFormChange}
-                                        />
-                                        <span>Enable account login immediately (<code>is_active = TRUE</code>)</span>
-                                    </label>
-                                </div>
-                            </div>
+                            )}
 
                             {/* Action Buttons */}
                             <div className="modal-actions">
@@ -898,6 +1159,8 @@ export default function UserManagement() {
                                         ? 'CREATE ADMIN ACCOUNT'
                                         : formData.role === 'staff'
                                         ? 'CREATE STAFF & USER'
+                                        : formData.existing_owner_id
+                                        ? 'LINK & CREATE OWNER ACCOUNT'
                                         : 'CREATE OWNER & USER'}
                                 </button>
                             </div>

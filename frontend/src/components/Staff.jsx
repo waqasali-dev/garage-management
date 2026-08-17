@@ -132,6 +132,11 @@ export default function Staff() {
     };
 
     const filteredStaff = staffList.filter((member) => {
+        // Only show active staff who have active user accounts
+        if (member.is_active === false || member.has_user_account === false || member.account_active === false) {
+            return false;
+        }
+
         const search = searchTerm.toLowerCase();
         return (
             (member.name || '').toLowerCase().includes(search) ||
