@@ -64,9 +64,11 @@ export default function Dashboard() {
             if (invRes.ok) {
                 const invJson = await invRes.json();
                 if (invJson.success && Array.isArray(invJson.data)) {
-                    const lowStock = invJson.data.filter(
-                        (item) => item.stock_quantity <= (item.reorder_threshold || 5)
-                    );
+                    const lowStock = invJson.data.filter((item) => {
+                        const currentStock = item.stock_quantity !== undefined ? item.stock_quantity : (item.stock !== undefined ? item.stock : 0);
+                        const threshold = item.reorder_threshold !== undefined ? item.reorder_threshold : 5;
+                        return currentStock <= threshold || item.statusType === 'warning' || item.statusType === 'error';
+                    });
                     setLowStockParts(lowStock);
                 }
             }
@@ -436,23 +438,29 @@ export default function Dashboard() {
                                         ✓ All spare parts stock levels are optimal.
                                     </div>
                                 ) : (
-                                    lowStockParts.slice(0, 4).map((part) => (
-                                        <div
-                                            key={part.part_id}
-                                            className="stock-row"
-                                            onClick={() => navigate('/inventory')}
-                                            style={{ cursor: 'pointer' }}
-                                        >
-                                            <div>
-                                                <span className="sku-tag font-mono">SKU: {part.sku}</span>
-                                                <p className="stock-name">{part.part_name}</p>
+                                    lowStockParts.slice(0, 5).map((part) => {
+                                        const currentStock = part.stock_quantity !== undefined ? part.stock_quantity : (part.stock !== undefined ? part.stock : 0);
+                                        const partName = part.part_name || part.name || 'Part';
+                                        const threshold = part.reorder_threshold !== undefined ? part.reorder_threshold : 5;
+
+                                        return (
+                                            <div
+                                                key={part.part_id}
+                                                className="stock-row"
+                                                onClick={() => navigate('/inventory')}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <div>
+                                                    <span className="sku-tag font-mono">SKU: {part.sku}</span>
+                                                    <p className="stock-name">{partName}</p>
+                                                </div>
+                                                <div className="stock-count text-error font-mono">
+                                                    <strong>{currentStock} left</strong>
+                                                    <span className="reorder-sub">Reorder at {threshold}</span>
+                                                </div>
                                             </div>
-                                            <div className="stock-count text-error font-mono">
-                                                <strong>{part.stock_quantity} left</strong>
-                                                <span className="reorder-sub">Reorder at {part.reorder_threshold || 5}</span>
-                                            </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
 
