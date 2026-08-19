@@ -296,7 +296,7 @@ export default function WorkOrderDetails() {
                                     </Link>
                                     <h2 className="order-id">{order.work_order_id}</h2>
                                     <span className={`badge badge-${order.status === 'in_progress' ? 'warning' : order.status === 'completed' ? 'success' : 'info'} font-mono`}>
-                                        {order.status.replace('_', ' ').toUpperCase()}
+                                        {(order.status || 'received').replace('_', ' ').toUpperCase()}
                                     </span>
                                 </div>
                                 <p className="order-meta-desc">
@@ -606,8 +606,8 @@ export default function WorkOrderDetails() {
                                     <label>{itemType === 'part' ? 'QUANTITY' : 'HOURS'} *</label>
                                     <input
                                         type="number"
-                                        step="0.25"
-                                        min="0.1"
+                                        step={itemType === 'part' ? '1' : 'any'}
+                                        min={itemType === 'part' ? '1' : '0.1'}
                                         value={itemFormData.quantity_or_hours}
                                         onChange={(e) => setItemFormData({ ...itemFormData, quantity_or_hours: e.target.value })}
                                         className="modal-input font-mono"
@@ -619,7 +619,7 @@ export default function WorkOrderDetails() {
                                     <label>UNIT PRICE / RATE ($) *</label>
                                     <input
                                         type="number"
-                                        step="0.50"
+                                        step="any"
                                         min="0"
                                         placeholder="0.00"
                                         value={itemFormData.unit_price}

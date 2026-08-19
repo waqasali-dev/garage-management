@@ -1069,6 +1069,20 @@ app.delete("/api/staff/work-orders/:id/items/:itemId", async (req, res) => {
             return res.status(404).json({ error: "Item not found" });
         }
 
+        const deletedItem = deleteResult.rows[0];
+
+        // If the removed item was an inventory part, restore/restock the quantity back into inventory_data
+        if (deletedItem.item_type === "part" && deletedItem.part_id) {
+            const returnQty = Math.round(parseFloat(deletedItem.quantity_or_hours) || 1);
+            await client.query(
+                `UPDATE inventory_data 
+                 SET stock_quantity = stock_quantity + $1 
+                 WHERE part_id = $2;`,
+                [returnQty, parseInt(deletedItem.part_id, 10)]
+            );
+            await deleteCachePattern("garage:cache:inventory:*");
+        }
+
         // Recalculate total
         const calcQuery = `
             UPDATE work_order_data 

@@ -208,6 +208,7 @@ export default function WorkOrderExecution() {
                 setIsAddItemModalOpen(false);
                 setItemFormData({ part_id: '', description: '', quantity_or_hours: '1', unit_price: '' });
                 fetchOrderDetails();
+                fetchSelectors();
             } else {
                 const errJson = await res.json();
                 showNotification(errJson.error || 'Failed to add item', 'error');
@@ -219,14 +220,15 @@ export default function WorkOrderExecution() {
 
     // Delete Line Item
     const handleDeleteLineItem = async (itemId) => {
-        if (!window.confirm('Are you sure you want to remove this line item?')) return;
+        if (!window.confirm('Are you sure you want to remove this line item? (Inventory parts will be restocked)')) return;
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/items/${itemId}`, {
                 method: 'DELETE',
             });
             if (res.ok) {
-                showNotification('Line item removed', 'info');
+                showNotification('Line item removed and inventory restocked', 'info');
                 fetchOrderDetails();
+                fetchSelectors();
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
@@ -638,8 +640,8 @@ export default function WorkOrderExecution() {
                                     <label>{itemType === 'part' ? 'QUANTITY' : 'HOURS'} *</label>
                                     <input
                                         type="number"
-                                        step="0.25"
-                                        min="0.1"
+                                        step={itemType === 'part' ? '1' : 'any'}
+                                        min={itemType === 'part' ? '1' : '0.1'}
                                         value={itemFormData.quantity_or_hours}
                                         onChange={(e) => setItemFormData({ ...itemFormData, quantity_or_hours: e.target.value })}
                                         required
@@ -651,7 +653,7 @@ export default function WorkOrderExecution() {
                                     <label>UNIT PRICE / RATE ($) *</label>
                                     <input
                                         type="number"
-                                        step="0.50"
+                                        step="any"
                                         min="0"
                                         placeholder="0.00"
                                         value={itemFormData.unit_price}
