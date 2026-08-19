@@ -9,7 +9,8 @@ const STATUS_STEPS = [
     { key: 'received', label: 'Received', icon: 'pending_actions' },
     { key: 'diagnosed', label: 'Diagnosed', icon: 'handyman' },
     { key: 'in_progress', label: 'In Progress', icon: 'build' },
-    { key: 'completed', label: 'Ready / Done', icon: 'check_circle' },
+    { key: 'ready', label: 'Ready for Pickup', icon: 'task_alt' },
+    { key: 'completed', label: 'Completed (Picked Up)', icon: 'check_circle' },
 ];
 
 export default function WorkOrderDetails() {
@@ -295,8 +296,8 @@ export default function WorkOrderDetails() {
                                         <span className="material-symbols-outlined">arrow_back</span>
                                     </Link>
                                     <h2 className="order-id">{order.work_order_id}</h2>
-                                    <span className={`badge badge-${order.status === 'in_progress' ? 'warning' : order.status === 'completed' ? 'success' : 'info'} font-mono`}>
-                                        {(order.status || 'received').replace('_', ' ').toUpperCase()}
+                                    <span className={`badge badge-${order.status === 'in_progress' ? 'warning' : order.status === 'ready' ? 'cyan' : order.status === 'completed' ? 'success' : 'info'} font-mono`}>
+                                        {(order.status === 'ready' ? 'READY FOR PICKUP' : order.status === 'completed' ? 'COMPLETED (PICKED UP)' : order.status || 'received').replace('_', ' ').toUpperCase()}
                                     </span>
                                 </div>
                                 <p className="order-meta-desc">
@@ -314,15 +315,35 @@ export default function WorkOrderDetails() {
                                     <span>Staff Execution Hub</span>
                                 </button>
 
-                                {order.status !== 'completed' && (
+                                {order.status !== 'ready' && order.status !== 'completed' && (
+                                    <button
+                                        type="button"
+                                        className="primary-btn"
+                                        onClick={() => handleStatusChange('ready')}
+                                        title="Mark vehicle as repaired and ready for customer pickup"
+                                    >
+                                        <span className="material-symbols-outlined">task_alt</span>
+                                        <span>Mark Ready for Pickup</span>
+                                    </button>
+                                )}
+
+                                {order.status === 'ready' && (
                                     <button
                                         type="button"
                                         className="primary-btn"
                                         onClick={() => handleStatusChange('completed')}
+                                        style={{ backgroundColor: 'var(--status-success)', color: '#000' }}
+                                        title="Confirm customer has picked up their vehicle"
                                     >
                                         <span className="material-symbols-outlined">check_circle</span>
-                                        <span>Mark Job Complete</span>
+                                        <span>Confirm Owner Pickup & Complete</span>
                                     </button>
+                                )}
+
+                                {order.status === 'completed' && (
+                                    <span className="badge badge-success font-mono" style={{ padding: '8px 14px', fontSize: '12px' }}>
+                                        ✓ VEHICLE PICKED UP & COMPLETED
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -331,14 +352,16 @@ export default function WorkOrderDetails() {
                         <section className="stepper-card">
                             <h3 className="section-title">Repair Lifecycle Status</h3>
                             <div className="stepper-track">
-                                {/* Connecting background progress line */}
-                                <div className="stepper-line-bg"></div>
-                                <div
-                                    className="stepper-line-fill"
-                                    style={{
-                                        width: currentStepIdx >= 0 ? `${(currentStepIdx / (STATUS_STEPS.length - 1)) * 100}%` : '0%',
-                                    }}
-                                ></div>
+                                {/* Connecting background and active progress line */}
+                                <div className="stepper-line-container">
+                                    <div className="stepper-line-bg"></div>
+                                    <div
+                                        className="stepper-line-fill"
+                                        style={{
+                                            width: currentStepIdx >= 0 ? `${(currentStepIdx / (STATUS_STEPS.length - 1)) * 100}%` : '0%',
+                                        }}
+                                    ></div>
+                                </div>
 
                                 {STATUS_STEPS.map((step, idx) => {
                                     const isCompleted = currentStepIdx > idx;

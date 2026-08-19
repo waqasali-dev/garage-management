@@ -19,6 +19,7 @@ import UserManagement from './components/UserManagement';
 // Staff Portal Components
 import StaffDashboard from './staff/StaffDashboard';
 import WorkOrderExecution from './staff/WorkOrderExecution';
+import StaffSchedules from './staff/StaffSchedules';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
         {/* Staff Dedicated Workspace Routes */}
         <Route path="/staff/dashboard" element={<StaffDashboard />} />
         <Route path="/staff/work-orders/:id" element={<WorkOrderExecution />} />
+        <Route path="/staff/schedules" element={<StaffSchedules />} />
 
         <Route path="/owners" element={<OwnersList />} />
         <Route path="/owners/details" element={<OwnerDetail />} />

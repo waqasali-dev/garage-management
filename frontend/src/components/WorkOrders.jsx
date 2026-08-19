@@ -7,14 +7,16 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 const getStatusBadgeInfo = (status) => {
     switch (status) {
-        case 'in_progress':
-            return { label: 'IN PROGRESS', type: 'progress', icon: 'build' };
         case 'received':
             return { label: 'RECEIVED', type: 'warning', icon: 'pending_actions' };
         case 'diagnosed':
             return { label: 'DIAGNOSED', type: 'neutral', icon: 'handyman' };
+        case 'in_progress':
+            return { label: 'IN PROGRESS', type: 'progress', icon: 'build' };
+        case 'ready':
+            return { label: 'READY FOR PICKUP', type: 'info', icon: 'task_alt' };
         case 'completed':
-            return { label: 'READY FOR PICKUP', type: 'success', icon: 'check_circle' };
+            return { label: 'COMPLETED (PICKED UP)', type: 'success', icon: 'check_circle' };
         case 'cancelled':
             return { label: 'CANCELLED', type: 'error', icon: 'cancel' };
         default:
@@ -89,7 +91,8 @@ export default function WorkOrders() {
     const inBayCount = workOrders.filter((w) => w.status === 'in_progress' || w.bay_assigned).length;
     const receivedCount = workOrders.filter((w) => w.status === 'received').length;
     const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
-    const readyPickupCount = workOrders.filter((w) => w.status === 'completed').length;
+    const readyPickupCount = workOrders.filter((w) => w.status === 'ready').length;
+    const completedCount = workOrders.filter((w) => w.status === 'completed').length;
     const totalEstRevenue = workOrders.reduce(
         (sum, w) => sum + (parseFloat(w.total_cost) || parseFloat(w.estimated_cost) || 0),
         0
@@ -116,7 +119,7 @@ export default function WorkOrders() {
                             <span className="material-symbols-outlined">menu</span>
                         </button>
 
-                        <div className="header-search">
+                        <div className="search-box">
                             <span className="material-symbols-outlined search-icon">search</span>
                             <input
                                 type="text"
@@ -195,20 +198,20 @@ export default function WorkOrders() {
                                 <span className="stat-number text-warning">{receivedCount}</span>
                             </div>
                             <div
-                                className={`stat-card ${statusFilter === 'diagnosed' ? 'stat-active' : ''}`}
-                                onClick={() => setStatusFilter(statusFilter === 'diagnosed' ? 'all' : 'diagnosed')}
+                                className={`stat-card ${statusFilter === 'ready' ? 'stat-active' : ''}`}
+                                onClick={() => setStatusFilter(statusFilter === 'ready' ? 'all' : 'ready')}
                                 style={{ cursor: 'pointer' }}
                             >
-                                <span className="stat-title">Under Diagnosis</span>
-                                <span className="stat-number" style={{ color: '#38bdf8' }}>{diagnosedCount}</span>
+                                <span className="stat-title">Ready for Pickup</span>
+                                <span className="stat-number" style={{ color: '#2dd4bf' }}>{readyPickupCount}</span>
                             </div>
                             <div
                                 className={`stat-card border-success ${statusFilter === 'completed' ? 'stat-active' : ''}`}
                                 onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
                                 style={{ cursor: 'pointer' }}
                             >
-                                <span className="stat-title">Ready for Pickup</span>
-                                <span className="stat-number text-success">{readyPickupCount}</span>
+                                <span className="stat-title">Picked Up / Done</span>
+                                <span className="stat-number text-success">{completedCount}</span>
                             </div>
                             <div className="stat-card">
                                 <span className="stat-title">Est. Revenue</span>

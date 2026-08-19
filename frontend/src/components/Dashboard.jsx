@@ -16,14 +16,16 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 const getStatusBadge = (status) => {
     switch (status) {
-        case 'in_progress':
-            return { label: 'IN PROGRESS', class: 'badge-warning', step: 3 };
         case 'received':
             return { label: 'RECEIVED QUEUE', class: 'badge-info', step: 1 };
         case 'diagnosed':
             return { label: 'DIAGNOSED', class: 'badge-neutral', step: 2 };
+        case 'in_progress':
+            return { label: 'IN PROGRESS', class: 'badge-warning', step: 3 };
+        case 'ready':
+            return { label: 'READY FOR PICKUP', class: 'badge-cyan', step: 4 };
         case 'completed':
-            return { label: 'READY FOR PICKUP', class: 'badge-success', step: 4 };
+            return { label: 'COMPLETED / PICKED UP', class: 'badge-success', step: 5 };
         case 'cancelled':
             return { label: 'CANCELLED', class: 'badge-error', step: 0 };
         default:
@@ -111,6 +113,7 @@ export default function Dashboard() {
     const inProgressCount = workOrders.filter((w) => w.status === 'in_progress').length;
     const receivedCount = workOrders.filter((w) => w.status === 'received').length;
     const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
+    const readyCount = workOrders.filter((w) => w.status === 'ready').length;
     const completedCount = workOrders.filter((w) => w.status === 'completed').length;
     const totalRevenue = workOrders.reduce(
         (sum, w) => sum + (parseFloat(w.total_cost) || parseFloat(w.estimated_cost) || 0),
@@ -195,17 +198,17 @@ export default function Dashboard() {
                             <span className="kpi-val" style={{ color: '#38bdf8' }}>{receivedCount}</span>
                         </div>
                         <div
-                            className={`kpi-card ${statusFilter === 'diagnosed' ? 'kpi-active' : ''}`}
-                            onClick={() => setStatusFilter(statusFilter === 'diagnosed' ? 'all' : 'diagnosed')}
+                            className={`kpi-card ${statusFilter === 'ready' ? 'kpi-active' : ''}`}
+                            onClick={() => setStatusFilter(statusFilter === 'ready' ? 'all' : 'ready')}
                         >
-                            <span className="kpi-label">Under Diagnosis</span>
-                            <span className="kpi-val text-muted">{diagnosedCount}</span>
+                            <span className="kpi-label">Ready for Pickup</span>
+                            <span className="kpi-val" style={{ color: '#2dd4bf' }}>{readyCount}</span>
                         </div>
                         <div
                             className={`kpi-card ${statusFilter === 'completed' ? 'kpi-active' : ''}`}
                             onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
                         >
-                            <span className="kpi-label">Ready for Pickup</span>
+                            <span className="kpi-label">Picked Up / Done</span>
                             <span className="kpi-val text-success">{completedCount}</span>
                         </div>
                         <div className="kpi-card" onClick={() => navigate('/inventory')}>
@@ -258,10 +261,16 @@ export default function Dashboard() {
                                             Received ({receivedCount})
                                         </button>
                                         <button
+                                            className={`filter-pill-btn ${statusFilter === 'ready' ? 'active' : ''}`}
+                                            onClick={() => setStatusFilter('ready')}
+                                        >
+                                            Ready ({readyCount})
+                                        </button>
+                                        <button
                                             className={`filter-pill-btn ${statusFilter === 'completed' ? 'active' : ''}`}
                                             onClick={() => setStatusFilter('completed')}
                                         >
-                                            Ready ({completedCount})
+                                            Completed ({completedCount})
                                         </button>
                                     </div>
 
@@ -324,6 +333,7 @@ export default function Dashboard() {
                                                         <span className={`step-dot ${badge.step >= 2 ? 'fill' : ''}`}></span>
                                                         <span className={`step-dot ${badge.step >= 3 ? 'fill' : ''}`}></span>
                                                         <span className={`step-dot ${badge.step >= 4 ? 'fill' : ''}`}></span>
+                                                        <span className={`step-dot ${badge.step >= 5 ? 'fill' : ''}`}></span>
                                                     </div>
                                                     <span className={`badge ${badge.class}`}>
                                                         {badge.label}

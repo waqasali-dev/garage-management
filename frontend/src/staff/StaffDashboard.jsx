@@ -159,13 +159,37 @@ export default function StaffDashboard() {
                                     Monitor incoming vehicle intakes, advance diagnostic states, allocate inventory parts, and log labor hours.
                                 </p>
                             </div>
-                            <button
-                                className="primary-btn new-intake-btn"
-                                onClick={() => navigate('/intake')}
-                            >
-                                <DirectionsCarIcon fontSize="small" />
-                                <span>NEW VEHICLE INTAKE</span>
-                            </button>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    className="secondary-btn"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: 'rgba(255, 216, 95, 0.1)',
+                                        border: '1px solid rgba(255, 216, 95, 0.3)',
+                                        color: 'var(--accent-yellow)',
+                                        padding: '10px 16px',
+                                        borderRadius: '8px',
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                    }}
+                                    onClick={() => navigate('/staff/schedules')}
+                                >
+                                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>calendar_month</span>
+                                    <span>VIEW SCHEDULES</span>
+                                </button>
+
+                                <button
+                                    className="primary-btn new-intake-btn"
+                                    onClick={() => navigate('/intake')}
+                                >
+                                    <DirectionsCarIcon fontSize="small" />
+                                    <span>NEW VEHICLE INTAKE</span>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Metric KPI Cards */}

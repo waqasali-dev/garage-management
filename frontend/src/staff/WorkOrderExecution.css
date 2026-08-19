@@ -143,8 +143,8 @@
 
 .pipeline-steps {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
 }
 
 .step-node {
@@ -588,6 +588,134 @@
     justify-content: center;
     min-height: 80vh;
     font-family: 'JetBrains Mono', monospace;
+}
+
+/* Scheduled Tasks Panel in Execution Portal */
+.scheduled-tasks-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tasks-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.task-schedule-item {
+    background-color: rgba(22, 30, 24, 0.6);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+}
+
+.task-schedule-item:hover {
+    border-color: rgba(255, 216, 95, 0.4);
+}
+
+.task-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.task-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.task-priority-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.task-heading {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.bay-badge {
+    background-color: rgba(44, 58, 47, 0.8);
+    border: 1px solid var(--border-glass);
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.task-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.task-meta-footer {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+
+.meta-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tech-pair {
+    color: #38bdf8;
+    font-weight: 600;
+}
+
+.empty-tasks-box {
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    background-color: rgba(22, 30, 24, 0.3);
+    border: 1px dashed var(--border-glass);
+    border-radius: 8px;
+}
+
+.empty-tasks-box p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.view-schedule-link-btn {
+    background: none;
+    border: none;
+    color: var(--accent-yellow);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-top: 4px;
+}
+
+.view-schedule-link-btn:hover {
+    color: #fff;
 }
 
 @media (max-width: 900px) {

@@ -817,13 +817,40 @@ app.get("/api/staff/work-orders/:id", async (req, res) => {
             WHERE a.work_order_id = $1
             ORDER BY a.created_at DESC;
         `;
-        const timelineResult = await pool.query(timelineQuery, [id]);
+        let scheduledTasks = [];
+        try {
+            const tasksQuery = `
+                SELECT 
+                    t.task_id,
+                    t.task_title,
+                    t.task_description,
+                    t.priority,
+                    t.status,
+                    t.bay_assigned,
+                    TO_CHAR(t.scheduled_date, 'YYYY-MM-DD') AS scheduled_date,
+                    TO_CHAR(t.start_time, 'HH24:MI') AS start_time,
+                    TO_CHAR(t.end_time, 'HH24:MI') AS end_time,
+                    t.duration_hours,
+                    s.full_name AS assigned_staff_name
+                FROM scheduled_tasks t
+                LEFT JOIN staff_data s ON t.assigned_staff_id = s.staff_id
+                WHERE t.work_order_id = $1 OR t.vehicle_id = $2
+                ORDER BY t.scheduled_date ASC, t.start_time ASC;
+            `;
+            const tasksResult = await pool.query(tasksQuery, [id, mainResult.rows[0].vehicle_id]);
+            scheduledTasks = tasksResult.rows;
+        } catch (taskErr) {
+            // If table doesn't exist yet, fallback gracefully
+            console.warn("Scheduled tasks query notice for work order:", taskErr.message);
+            scheduledTasks = [];
+        }
 
         const fullData = {
             ...mainResult.rows[0],
             items: itemsResult.rows,
             media: mediaResult.rows,
             timeline: timelineResult.rows,
+            scheduled_tasks: scheduledTasks,
         };
 
         await setCache(cacheKey, fullData, 300);
@@ -884,7 +911,7 @@ app.patch("/api/staff/work-orders/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status, staff_id, notes } = req.body;
 
-    const validStatuses = ["received", "diagnosed", "in_progress", "completed", "cancelled"];
+    const validStatuses = ["received", "diagnosed", "in_progress", "ready", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
     }

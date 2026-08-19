@@ -15,6 +15,9 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import EventNoteIcon from '@mui/icons-material/EventNote';
 import './WorkOrderExecution.css';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -23,7 +26,8 @@ const STATUS_STEPS = [
     { key: 'received', label: '1. RECEIVED', icon: 'pending_actions' },
     { key: 'diagnosed', label: '2. DIAGNOSED', icon: 'handyman' },
     { key: 'in_progress', label: '3. IN PROGRESS', icon: 'build' },
-    { key: 'completed', label: '4. COMPLETED', icon: 'check_circle' },
+    { key: 'ready', label: '4. READY FOR PICKUP', icon: 'task_alt' },
+    { key: 'completed', label: '5. COMPLETED (PICKED UP)', icon: 'check_circle' },
 ];
 
 const BAY_OPTIONS = [
@@ -325,11 +329,11 @@ export default function WorkOrderExecution() {
 
                             <div className="pipeline-steps">
                                 {STATUS_STEPS.map((step, idx) => {
+                                    const stepOrder = ['received', 'diagnosed', 'in_progress', 'ready', 'completed'];
+                                    const currentIdx = stepOrder.indexOf(order.status);
+                                    const stepIdx = stepOrder.indexOf(step.key);
                                     const isCurrent = order.status === step.key;
-                                    const isPast =
-                                        (step.key === 'received' && ['diagnosed', 'in_progress', 'completed'].includes(order.status)) ||
-                                        (step.key === 'diagnosed' && ['in_progress', 'completed'].includes(order.status)) ||
-                                        (step.key === 'in_progress' && order.status === 'completed');
+                                    const isPast = currentIdx !== -1 && stepIdx < currentIdx;
 
                                     return (
                                         <button
@@ -587,6 +591,80 @@ export default function WorkOrderExecution() {
                                             <div className="empty-media-box">
                                                 <AddPhotoAlternateIcon style={{ fontSize: '36px', color: 'var(--text-muted)' }} />
                                                 <p>No photos attached for this work order.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Scheduled Tasks for this Vehicle Card */}
+                                <div className="exec-card">
+                                    <div className="card-header-with-actions">
+                                        <div className="card-header-title">
+                                            <CalendarMonthIcon className="card-icon" />
+                                            <h3>Scheduled Tasks & Bay Appointments</h3>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="secondary-btn-small"
+                                            onClick={() => navigate('/staff/schedules')}
+                                            title="Open Workshop Schedule"
+                                        >
+                                            <CalendarMonthIcon fontSize="small" />
+                                            <span>All Schedules</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="scheduled-tasks-wrap">
+                                        {order.scheduled_tasks && order.scheduled_tasks.length > 0 ? (
+                                            <div className="tasks-cards-list">
+                                                {order.scheduled_tasks.map((task) => (
+                                                    <div key={task.task_id} className={`task-schedule-item priority-${task.priority || 'standard'}`}>
+                                                        <div className="task-top-row">
+                                                            <div className="task-title-group">
+                                                                <span className={`task-priority-pill priority-${task.priority || 'standard'}`}>
+                                                                    {(task.priority || 'STANDARD').toUpperCase()}
+                                                                </span>
+                                                                <h4 className="task-heading">{task.task_title}</h4>
+                                                            </div>
+                                                            {task.bay_assigned && (
+                                                                <span className="bay-badge font-mono">📍 {task.bay_assigned}</span>
+                                                            )}
+                                                        </div>
+
+                                                        {task.task_description && (
+                                                            <p className="task-desc">{task.task_description}</p>
+                                                        )}
+
+                                                        <div className="task-meta-footer font-mono">
+                                                            <div className="meta-pair">
+                                                                <CalendarMonthIcon fontSize="inherit" />
+                                                                <span>{task.scheduled_date || 'Today'}</span>
+                                                            </div>
+                                                            <div className="meta-pair">
+                                                                <AccessTimeIcon fontSize="inherit" />
+                                                                <span>{task.start_time} - {task.end_time} ({task.duration_hours || '1.0'}h)</span>
+                                                            </div>
+                                                            {task.assigned_staff_name && (
+                                                                <div className="meta-pair tech-pair">
+                                                                    <PersonIcon fontSize="inherit" />
+                                                                    <span>Tech: {task.assigned_staff_name}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="empty-tasks-box">
+                                                <CalendarMonthIcon style={{ fontSize: '36px', color: 'var(--text-muted)' }} />
+                                                <p>No scheduled tasks or bay appointments booked for this vehicle yet.</p>
+                                                <button
+                                                    type="button"
+                                                    className="view-schedule-link-btn font-mono"
+                                                    onClick={() => navigate('/staff/schedules')}
+                                                >
+                                                    Open Workshop Schedule →
+                                                </button>
                                             </div>
                                         )}
                                     </div>

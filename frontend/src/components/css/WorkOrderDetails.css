@@ -234,26 +234,35 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 24px;
+    padding: 0 30px;
+}
+
+.stepper-line-container {
+    position: absolute;
+    left: 50px;
+    right: 50px;
+    top: 20px;
+    height: 2px;
+    z-index: 1;
+    pointer-events: none;
 }
 
 .stepper-line-bg {
     position: absolute;
-    left: 48px;
-    right: 48px;
-    top: 20px;
+    left: 0;
+    right: 0;
+    top: 0;
     height: 2px;
     background-color: var(--bg-olive);
-    z-index: 1;
 }
 
 .stepper-line-fill {
     position: absolute;
-    left: 48px;
-    top: 20px;
+    left: 0;
+    top: 0;
     height: 2px;
     background-color: var(--accent-yellow);
-    z-index: 1;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .step-item {
@@ -792,6 +801,7 @@
         overflow-x: auto;
     }
 
+    .stepper-line-container,
     .stepper-line-bg,
     .stepper-line-fill {
         display: none;
