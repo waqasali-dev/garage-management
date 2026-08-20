@@ -127,10 +127,6 @@ export default function WorkOrders() {
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
-                            <div className="keyboard-shortcut">
-                                <span>⌘</span>
-                                <span>K</span>
-                            </div>
                         </div>
                     </div>
 

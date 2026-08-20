@@ -683,9 +683,9 @@ app.post("/api/intake", async (req, res) => {
 });
 
 // ==========================================
-// 4. STAFF WORK ORDERS LIST & METRICS
+// 4. WORK ORDERS LIST & METRICS (DIRECT HANDLER)
 // ==========================================
-app.get("/api/staff/work-orders", async (req, res) => {
+const handleGetWorkOrdersList = async (req, res) => {
     const cacheKey = "garage:cache:workorders:list";
 
     try {
@@ -734,8 +734,9 @@ app.get("/api/staff/work-orders", async (req, res) => {
                     WHEN w.status = 'in_progress' THEN 1
                     WHEN w.status = 'received' THEN 2
                     WHEN w.status = 'diagnosed' THEN 3
-                    WHEN w.status = 'completed' THEN 4
-                    ELSE 5 
+                    WHEN w.status = 'ready' THEN 4
+                    WHEN w.status = 'completed' THEN 5
+                    ELSE 6 
                 END,
                 w.created_at DESC;
         `;
@@ -745,17 +746,21 @@ app.get("/api/staff/work-orders", async (req, res) => {
 
         res.json({ success: true, source: "postgres", data: result.rows });
     } catch (err) {
-        console.error("Error fetching staff work orders:", err);
+        console.error("Error fetching work orders list:", err);
         res.status(500).json({ error: "Failed to fetch work orders", details: err.message });
     }
-});
+};
+
+app.get("/api/staff/work-orders", handleGetWorkOrdersList);
+app.get("/api/work-orders", handleGetWorkOrdersList);
 
 // ==========================================
-// 5. SINGLE WORK ORDER EXECUTION DETAILS
+// 5. SINGLE WORK ORDER EXECUTION DETAILS (DIRECT HANDLER)
 // ==========================================
-app.get("/api/staff/work-orders/:id", async (req, res) => {
-    const { id } = req.params;
-    const cacheKey = `garage:cache:workorder:details:${id}`;
+const handleGetSingleWorkOrder = async (req, res) => {
+    const rawId = req.params.id;
+    const cleanId = (rawId || "").trim();
+    const cacheKey = `garage:cache:workorder:details:${cleanId.toUpperCase()}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -775,13 +780,16 @@ app.get("/api/staff/work-orders/:id", async (req, res) => {
             JOIN car_owners o ON v.owner_id = o.owner_id
             LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
             LEFT JOIN staff_data sa ON w.service_advisor_id = sa.staff_id
-            WHERE w.work_order_id = $1;
+            WHERE UPPER(TRIM(w.work_order_id)) = UPPER(TRIM($1));
         `;
-        const mainResult = await pool.query(mainQuery, [id]);
+        const mainResult = await pool.query(mainQuery, [cleanId]);
 
         if (mainResult.rows.length === 0) {
             return res.status(404).json({ error: "Work order not found" });
         }
+
+        const workOrder = mainResult.rows[0];
+        const canonicalId = workOrder.work_order_id;
 
         const itemsQuery = `
             SELECT 
@@ -792,17 +800,17 @@ app.get("/api/staff/work-orders/:id", async (req, res) => {
                 i.stock_quantity
             FROM work_order_items wi
             LEFT JOIN inventory_data i ON wi.part_id = i.part_id
-            WHERE wi.work_order_id = $1
+            WHERE UPPER(TRIM(wi.work_order_id)) = UPPER(TRIM($1))
             ORDER BY wi.item_id ASC;
         `;
-        const itemsResult = await pool.query(itemsQuery, [id]);
+        const itemsResult = await pool.query(itemsQuery, [canonicalId]);
 
         const mediaQuery = `
             SELECT * FROM work_order_media 
-            WHERE work_order_id = $1 
+            WHERE UPPER(TRIM(work_order_id)) = UPPER(TRIM($1)) 
             ORDER BY uploaded_at DESC;
         `;
-        const mediaResult = await pool.query(mediaQuery, [id]);
+        const mediaResult = await pool.query(mediaQuery, [canonicalId]);
 
         const timelineQuery = `
             SELECT 
@@ -814,9 +822,11 @@ app.get("/api/staff/work-orders/:id", async (req, res) => {
                 s.full_name AS staff_name
             FROM audit_logs a
             LEFT JOIN staff_data s ON a.staff_id = s.staff_id
-            WHERE a.work_order_id = $1
+            WHERE UPPER(TRIM(a.work_order_id)) = UPPER(TRIM($1))
             ORDER BY a.created_at DESC;
         `;
+        const timelineResult = await pool.query(timelineQuery, [canonicalId]);
+
         let scheduledTasks = [];
         try {
             const tasksQuery = `
@@ -834,19 +844,17 @@ app.get("/api/staff/work-orders/:id", async (req, res) => {
                     s.full_name AS assigned_staff_name
                 FROM scheduled_tasks t
                 LEFT JOIN staff_data s ON t.assigned_staff_id = s.staff_id
-                WHERE t.work_order_id = $1 OR t.vehicle_id = $2
+                WHERE UPPER(TRIM(t.work_order_id)) = UPPER(TRIM($1)) OR t.vehicle_id = $2
                 ORDER BY t.scheduled_date ASC, t.start_time ASC;
             `;
-            const tasksResult = await pool.query(tasksQuery, [id, mainResult.rows[0].vehicle_id]);
+            const tasksResult = await pool.query(tasksQuery, [canonicalId, workOrder.vehicle_id]);
             scheduledTasks = tasksResult.rows;
         } catch (taskErr) {
-            // If table doesn't exist yet, fallback gracefully
-            console.warn("Scheduled tasks query notice for work order:", taskErr.message);
             scheduledTasks = [];
         }
 
         const fullData = {
-            ...mainResult.rows[0],
+            ...workOrder,
             items: itemsResult.rows,
             media: mediaResult.rows,
             timeline: timelineResult.rows,
@@ -860,18 +868,10 @@ app.get("/api/staff/work-orders/:id", async (req, res) => {
         console.error("Error fetching work order details:", err);
         res.status(500).json({ error: "Failed to fetch work order details", details: err.message });
     }
-});
+};
 
-// Aliases for /api/work-orders
-app.get("/api/work-orders", (req, res, next) => {
-    req.url = "/api/staff/work-orders";
-    app.handle(req, res, next);
-});
-
-app.get("/api/work-orders/:id", (req, res, next) => {
-    req.url = `/api/staff/work-orders/${req.params.id}`;
-    app.handle(req, res, next);
-});
+app.get("/api/staff/work-orders/:id", handleGetSingleWorkOrder);
+app.get("/api/work-orders/:id", handleGetSingleWorkOrder);
 
 // POST /api/work-orders/:id/notes - Add note / activity log
 app.post("/api/work-orders/:id/notes", async (req, res) => {
@@ -1592,6 +1592,240 @@ app.get("/api/owners/:id", async (req, res) => {
     } catch (err) {
         console.error("Error fetching single owner details:", err);
         res.status(500).json({ error: "Failed to fetch owner details", details: err.message });
+    }
+});
+
+// GET /api/owner/vehicles - List all vehicles with owner, active work order, and service metrics
+app.get("/api/owner/vehicles", async (req, res) => {
+    const { owner_id, search } = req.query;
+    const cacheKey = `garage:cache:owner:vehicles:${owner_id || "all"}:${(search || "").trim().toLowerCase()}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        let whereClause = "1=1";
+        const queryParams = [];
+
+        if (owner_id && owner_id.trim()) {
+            queryParams.push(owner_id.trim());
+            whereClause += ` AND v.owner_id = $${queryParams.length}`;
+        }
+
+        if (search && search.trim()) {
+            queryParams.push(`%${search.trim()}%`);
+            const sIdx = queryParams.length;
+            whereClause += ` AND (
+                v.vin ILIKE $${sIdx} OR
+                v.make ILIKE $${sIdx} OR
+                v.model ILIKE $${sIdx} OR
+                v.license_plate ILIKE $${sIdx} OR
+                o.full_name ILIKE $${sIdx}
+            )`;
+        }
+
+        const query = `
+            SELECT 
+                v.vehicle_id,
+                v.vin,
+                v.make,
+                v.model,
+                v.year,
+                v.license_plate,
+                v.created_at,
+                o.owner_id,
+                o.full_name AS owner_name,
+                o.phone_number AS owner_phone,
+                o.email_address AS owner_email,
+                o.is_vip,
+                (
+                    SELECT w.work_order_id 
+                    FROM work_order_data w 
+                    WHERE w.vehicle_id = v.vehicle_id 
+                      AND w.status IN ('received', 'diagnosed', 'in_progress', 'ready')
+                    ORDER BY w.created_at DESC 
+                    LIMIT 1
+                ) AS active_work_order_id,
+                (
+                    SELECT w.status 
+                    FROM work_order_data w 
+                    WHERE w.vehicle_id = v.vehicle_id 
+                      AND w.status IN ('received', 'diagnosed', 'in_progress', 'ready')
+                    ORDER BY w.created_at DESC 
+                    LIMIT 1
+                ) AS active_status,
+                (
+                    SELECT COUNT(*) 
+                    FROM work_order_data w 
+                    WHERE w.vehicle_id = v.vehicle_id
+                ) AS total_services_count,
+                (
+                    SELECT COALESCE(SUM(w.total_cost), 0.00) 
+                    FROM work_order_data w 
+                    WHERE w.vehicle_id = v.vehicle_id
+                ) AS total_spent,
+                (
+                    SELECT TO_CHAR(MAX(w.created_at), 'YYYY-MM-DD') 
+                    FROM work_order_data w 
+                    WHERE w.vehicle_id = v.vehicle_id
+                ) AS last_service_date
+            FROM vehicles v
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            WHERE ${whereClause}
+            ORDER BY v.created_at DESC, v.make ASC;
+        `;
+        const result = await pool.query(query, queryParams);
+
+        const formatted = result.rows.map((row) => ({
+            ...row,
+            total_services_count: parseInt(row.total_services_count, 10) || 0,
+            total_spent: parseFloat(row.total_spent) || 0.0,
+            has_active_order: Boolean(row.active_work_order_id),
+        }));
+
+        await setCache(cacheKey, formatted, 180);
+
+        res.json({ success: true, source: "postgres", count: formatted.length, data: formatted });
+    } catch (err) {
+        console.error("Error fetching owner vehicles:", err);
+        res.status(500).json({ error: "Failed to fetch vehicles", details: err.message });
+    }
+});
+
+// GET /api/vehicles/vin/:vin/history - Complete service history matched with VIN number
+app.get("/api/vehicles/vin/:vin/history", async (req, res) => {
+    const { vin } = req.params;
+    const cleanVin = vin.trim().toUpperCase();
+    const cacheKey = `garage:cache:vehicle:vin:history:${cleanVin}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        // 1. Fetch Vehicle & Owner Information
+        const vehicleQuery = `
+            SELECT 
+                v.*,
+                o.owner_id,
+                o.full_name AS owner_name,
+                o.phone_number AS owner_phone,
+                o.email_address AS owner_email,
+                o.billing_address AS owner_address,
+                o.is_vip
+            FROM vehicles v
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            WHERE UPPER(TRIM(v.vin)) = $1;
+        `;
+        const vehicleResult = await pool.query(vehicleQuery, [cleanVin]);
+
+        if (vehicleResult.rows.length === 0) {
+            return res.status(404).json({ error: `Vehicle with VIN ${cleanVin} not found in precision database.` });
+        }
+
+        const vehicle = vehicleResult.rows[0];
+
+        // 2. Fetch all Work Orders for this vehicle
+        const workOrdersQuery = `
+            SELECT 
+                w.*,
+                s.full_name AS assigned_staff_name,
+                s.role AS assigned_staff_role,
+                sa.full_name AS service_advisor_name
+            FROM work_order_data w
+            LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
+            LEFT JOIN staff_data sa ON w.service_advisor_id = sa.staff_id
+            WHERE w.vehicle_id = $1
+            ORDER BY w.created_at DESC;
+        `;
+        const workOrdersResult = await pool.query(workOrdersQuery, [vehicle.vehicle_id]);
+        const workOrders = workOrdersResult.rows;
+
+        // 3. For each work order, fetch items, media, and scheduled tasks
+        const enhancedWorkOrders = await Promise.all(
+            workOrders.map(async (wo) => {
+                // Line items
+                const itemsRes = await pool.query(
+                    `SELECT wi.*, i.part_name, i.sku, i.category AS part_category 
+                     FROM work_order_items wi 
+                     LEFT JOIN inventory_data i ON wi.part_id = i.part_id 
+                     WHERE wi.work_order_id = $1 
+                     ORDER BY wi.item_id ASC;`,
+                    [wo.work_order_id]
+                );
+
+                // Media photos
+                const mediaRes = await pool.query(
+                    `SELECT * FROM work_order_media 
+                     WHERE work_order_id = $1 
+                     ORDER BY uploaded_at DESC;`,
+                    [wo.work_order_id]
+                );
+
+                // Scheduled tasks
+                let tasks = [];
+                try {
+                    const tasksRes = await pool.query(
+                        `SELECT t.*, s.full_name AS assigned_staff_name 
+                         FROM scheduled_tasks t 
+                         LEFT JOIN staff_data s ON t.assigned_staff_id = s.staff_id 
+                         WHERE t.work_order_id = $1 OR t.vehicle_id = $2 
+                         ORDER BY t.scheduled_date DESC;`,
+                        [wo.work_order_id, vehicle.vehicle_id]
+                    );
+                    tasks = tasksRes.rows;
+                } catch (tErr) {
+                    tasks = [];
+                }
+
+                return {
+                    ...wo,
+                    items: itemsRes.rows,
+                    media: mediaRes.rows,
+                    scheduled_tasks: tasks,
+                    partsTotal: itemsRes.rows
+                        .filter((i) => i.item_type === "part")
+                        .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0),
+                    laborTotal: itemsRes.rows
+                        .filter((i) => i.item_type === "labor")
+                        .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0),
+                };
+            })
+        );
+
+        // 4. Compute High-Level Metrics
+        const totalSpent = enhancedWorkOrders.reduce(
+            (sum, wo) => sum + (parseFloat(wo.total_cost) || parseFloat(wo.estimated_cost) || 0),
+            0
+        );
+        const totalPartsReplaced = enhancedWorkOrders.reduce(
+            (sum, wo) => sum + wo.items.filter((i) => i.item_type === "part").length,
+            0
+        );
+        const activeOrder = enhancedWorkOrders.find((wo) =>
+            ["received", "diagnosed", "in_progress", "ready"].includes(wo.status)
+        );
+
+        const historyPayload = {
+            vehicle,
+            totalVisits: enhancedWorkOrders.length,
+            totalSpent,
+            totalPartsReplaced,
+            hasActiveOrder: Boolean(activeOrder),
+            activeStatus: activeOrder ? activeOrder.status : "completed",
+            lastServiceDate: enhancedWorkOrders[0]?.created_at || vehicle.created_at,
+            workOrders: enhancedWorkOrders,
+        };
+
+        await setCache(cacheKey, historyPayload, 300);
+
+        res.json({ success: true, source: "postgres", data: historyPayload });
+    } catch (err) {
+        console.error("Error fetching VIN service history:", err);
+        res.status(500).json({ error: "Failed to fetch vehicle history", details: err.message });
     }
 });
 
@@ -2579,7 +2813,34 @@ app.post("/api/auth/login", async (req, res) => {
 
         await deleteCachePattern("garage:cache:users:*");
 
-        const { password: _, ...safeUser } = user;
+        const detailsResult = await pool.query(
+            `SELECT 
+                u.user_id,
+                u.email,
+                u.role,
+                u.staff_id,
+                u.owner_id,
+                u.is_active,
+                u.created_at,
+                u.last_login,
+                COALESCE(s.full_name, o.full_name, 'System Administrator') AS full_name
+             FROM users u
+             LEFT JOIN staff_data s ON u.staff_id = s.staff_id
+             LEFT JOIN car_owners o ON u.owner_id = o.owner_id
+             WHERE u.user_id = $1;`,
+            [user.user_id]
+        );
+
+        const safeUser = detailsResult.rows[0] || {
+            user_id: user.user_id,
+            email: user.email,
+            role: user.role,
+            staff_id: user.staff_id,
+            owner_id: user.owner_id,
+            is_active: user.is_active,
+            full_name: user.email,
+        };
+
         return res.json({
             success: true,
             message: "Login successful.",
@@ -2588,6 +2849,288 @@ app.post("/api/auth/login", async (req, res) => {
     } catch (err) {
         console.error("Login database error:", err);
         res.status(500).json({ error: "Internal authentication error.", details: err.message });
+    }
+});
+
+// ==========================================
+// 16. INVOICES & TAX INVOICE MANAGEMENT
+// ==========================================
+
+// GET /api/invoices - List all invoices with owner and vehicle details
+app.get("/api/invoices", async (req, res) => {
+    const cacheKey = "garage:cache:invoices:list";
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const query = `
+            SELECT 
+                i.invoice_id,
+                i.work_order_id,
+                i.owner_id,
+                i.subtotal,
+                i.tax_amount,
+                i.total_amount,
+                i.status,
+                TO_CHAR(i.date_issued, 'YYYY-MM-DD') AS date_issued,
+                TO_CHAR(i.date_due, 'YYYY-MM-DD') AS date_due,
+                TO_CHAR(i.date_paid, 'YYYY-MM-DD') AS date_paid,
+                o.full_name AS owner_name,
+                o.phone_number AS owner_phone,
+                o.email_address AS owner_email,
+                o.is_vip AS owner_is_vip,
+                v.vehicle_id,
+                v.vin,
+                v.make,
+                v.model,
+                v.year,
+                v.license_plate,
+                w.status AS work_order_status
+            FROM invoice_data i
+            JOIN car_owners o ON i.owner_id = o.owner_id
+            JOIN work_order_data w ON i.work_order_id = w.work_order_id
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            ORDER BY i.date_issued DESC, i.invoice_id DESC;
+        `;
+        const result = await pool.query(query);
+
+        await setCache(cacheKey, result.rows, 300);
+
+        res.json({ success: true, source: "postgres", data: result.rows });
+    } catch (err) {
+        console.error("Error fetching invoices list:", err);
+        res.status(500).json({ error: "Failed to fetch invoices", details: err.message });
+    }
+});
+
+// GET /api/invoices/:id - Get complete Tax Invoice details with line items
+app.get("/api/invoices/:id", async (req, res) => {
+    const { id } = req.params;
+    const cleanId = (id || "").trim();
+    const cacheKey = `garage:cache:invoice:details:${cleanId.toUpperCase()}`;
+
+    try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        const invoiceQuery = `
+            SELECT 
+                i.invoice_id,
+                i.work_order_id,
+                i.owner_id,
+                i.subtotal,
+                i.tax_amount,
+                i.total_amount,
+                i.status,
+                TO_CHAR(i.date_issued, 'YYYY-MM-DD') AS date_issued,
+                TO_CHAR(i.date_due, 'YYYY-MM-DD') AS date_due,
+                TO_CHAR(i.date_paid, 'YYYY-MM-DD') AS date_paid,
+                o.full_name AS owner_name,
+                o.phone_number AS owner_phone,
+                o.email_address AS owner_email,
+                o.billing_address AS owner_address,
+                o.is_vip AS owner_is_vip,
+                v.vehicle_id,
+                v.vin,
+                v.make,
+                v.model,
+                v.year,
+                v.license_plate,
+                w.status AS work_order_status,
+                w.initial_observations,
+                s.full_name AS lead_technician_name
+            FROM invoice_data i
+            JOIN car_owners o ON i.owner_id = o.owner_id
+            JOIN work_order_data w ON i.work_order_id = w.work_order_id
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
+            WHERE UPPER(TRIM(i.invoice_id)) = UPPER(TRIM($1))
+               OR UPPER(TRIM(i.work_order_id)) = UPPER(TRIM($1));
+        `;
+        const invoiceResult = await pool.query(invoiceQuery, [cleanId]);
+
+        if (invoiceResult.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        const invoice = invoiceResult.rows[0];
+
+        // Fetch line items for this work order
+        const itemsQuery = `
+            SELECT 
+                wi.item_id,
+                wi.item_type,
+                wi.description,
+                wi.quantity_or_hours,
+                wi.unit_price,
+                wi.total_price,
+                i.sku,
+                i.part_name
+            FROM work_order_items wi
+            LEFT JOIN inventory_data i ON wi.part_id = i.part_id
+            WHERE UPPER(TRIM(wi.work_order_id)) = UPPER(TRIM($1))
+            ORDER BY wi.item_id ASC;
+        `;
+        const itemsResult = await pool.query(itemsQuery, [invoice.work_order_id]);
+
+        const fullInvoice = {
+            ...invoice,
+            items: itemsResult.rows,
+        };
+
+        await setCache(cacheKey, fullInvoice, 300);
+
+        res.json({ success: true, source: "postgres", data: fullInvoice });
+    } catch (err) {
+        console.error("Error fetching invoice details:", err);
+        res.status(500).json({ error: "Failed to fetch invoice details", details: err.message });
+    }
+});
+
+// POST /api/invoices/generate - Create or refresh Tax Invoice from a Work Order
+app.post("/api/invoices/generate", async (req, res) => {
+    const { work_order_id, tax_rate = 0.05 } = req.body;
+
+    if (!work_order_id) {
+        return res.status(400).json({ error: "Work order ID is required to generate invoice." });
+    }
+
+    try {
+        // 1. Fetch work order & vehicle & owner details
+        const woQuery = `
+            SELECT 
+                w.work_order_id,
+                w.vehicle_id,
+                w.status,
+                w.total_cost,
+                v.owner_id
+            FROM work_order_data w
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            WHERE UPPER(TRIM(w.work_order_id)) = UPPER(TRIM($1));
+        `;
+        const woResult = await pool.query(woQuery, [work_order_id.trim()]);
+
+        if (woResult.rows.length === 0) {
+            return res.status(404).json({ error: `Work order '${work_order_id}' was not found.` });
+        }
+
+        const wo = woResult.rows[0];
+
+        // 2. Calculate subtotal from items
+        const itemsQuery = `
+            SELECT COALESCE(SUM(total_price), 0) AS calculated_subtotal
+            FROM work_order_items
+            WHERE UPPER(TRIM(work_order_id)) = UPPER(TRIM($1));
+        `;
+        const itemsResult = await pool.query(itemsQuery, [wo.work_order_id]);
+        let subtotal = parseFloat(itemsResult.rows[0].calculated_subtotal || 0);
+
+        if (subtotal === 0 && parseFloat(wo.total_cost || 0) > 0) {
+            subtotal = parseFloat(wo.total_cost);
+        }
+
+        const taxRateNum = parseFloat(tax_rate) || 0.05;
+        const taxAmount = parseFloat((subtotal * taxRateNum).toFixed(2));
+        const initialStatus = wo.status === 'completed' ? 'paid' : 'pending';
+
+        // 3. Upsert invoice record
+        const upsertQuery = `
+            INSERT INTO invoice_data (
+                work_order_id,
+                owner_id,
+                subtotal,
+                tax_amount,
+                status,
+                date_issued,
+                date_due
+            )
+            VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
+            ON CONFLICT (work_order_id) DO UPDATE SET
+                subtotal = EXCLUDED.subtotal,
+                tax_amount = EXCLUDED.tax_amount,
+                status = CASE WHEN invoice_data.status = 'paid' THEN 'paid' ELSE EXCLUDED.status END
+            RETURNING *;
+        `;
+        const invoiceResult = await pool.query(upsertQuery, [
+            wo.work_order_id,
+            wo.owner_id,
+            subtotal,
+            taxAmount,
+            initialStatus,
+        ]);
+
+        const invoice = invoiceResult.rows[0];
+
+        // Log audit event
+        try {
+            await pool.query(`
+                INSERT INTO audit_logs (work_order_id, event_type, description, payload_json)
+                VALUES ($1, 'INVOICE_GENERATED', $2, $3);
+            `, [
+                wo.work_order_id,
+                `Tax Invoice ${invoice.invoice_id} generated for total $${(subtotal + taxAmount).toFixed(2)}.`,
+                JSON.stringify({ invoice_id: invoice.invoice_id, subtotal, tax_amount: taxAmount }),
+            ]);
+        } catch (auditErr) {
+            console.warn("Notice: Audit log for invoice failed:", auditErr.message);
+        }
+
+        // Flush caches
+        await deleteCachePattern("garage:cache:invoice*");
+        await deleteCachePattern("garage:cache:workorder*");
+
+        res.status(201).json({
+            success: true,
+            message: `Tax Invoice ${invoice.invoice_id} created successfully!`,
+            data: invoice,
+        });
+    } catch (err) {
+        console.error("Error generating invoice:", err);
+        res.status(500).json({ error: "Failed to generate invoice", details: err.message });
+    }
+});
+
+// PATCH /api/invoices/:id/status - Update invoice payment status
+app.patch("/api/invoices/:id/status", async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['pending', 'paid', 'overdue', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    try {
+        const query = `
+            UPDATE invoice_data
+            SET 
+                status = $1,
+                date_paid = CASE WHEN $1 = 'paid' THEN CURRENT_DATE ELSE NULL END
+            WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($2))
+               OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($2))
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [status, id.trim()]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found" });
+        }
+
+        await deleteCachePattern("garage:cache:invoice*");
+
+        res.json({
+            success: true,
+            message: `Invoice status updated to ${status}.`,
+            data: result.rows[0],
+        });
+    } catch (err) {
+        console.error("Error updating invoice status:", err);
+        res.status(500).json({ error: "Failed to update invoice status", details: err.message });
     }
 });
 

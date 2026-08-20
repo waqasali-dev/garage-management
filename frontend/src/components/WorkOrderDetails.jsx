@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import TaxInvoiceModal from './TaxInvoiceModal';
 import './css/WorkOrderDetails.css';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -23,6 +24,14 @@ export default function WorkOrderDetails() {
     const [isSubmittingNote, setIsSubmittingNote] = useState(false);
     const [notification, setNotification] = useState(null);
 
+    // Invoice State
+    const [invoiceData, setInvoiceData] = useState(null);
+    const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+    const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+
+    // Full Activity Log Modal State
+    const [isFullLogOpen, setIsFullLogOpen] = useState(false);
+
     // Modal state for adding Part/Labor
     const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
     const [itemType, setItemType] = useState('part');
@@ -40,22 +49,60 @@ export default function WorkOrderDetails() {
         setTimeout(() => setNotification(null), 4000);
     };
 
+    const fetchInvoiceDetails = async (targetId) => {
+        if (!targetId) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(targetId)}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    setInvoiceData(json.data);
+                } else {
+                    setInvoiceData(null);
+                }
+            } else {
+                setInvoiceData(null);
+            }
+        } catch (err) {
+            setInvoiceData(null);
+        }
+    };
+
     const fetchOrderDetails = async () => {
         setIsLoading(true);
         try {
-            const cleanId = id ? id.replace('#', '') : '';
-            const res = await fetch(`${API_BASE_URL}/work-orders/${cleanId}`);
+            const cleanId = id ? id.replace('#', '').trim() : '';
+            if (!cleanId || cleanId.toLowerCase() === 'details') {
+                const listRes = await fetch(`${API_BASE_URL}/work-orders`);
+                if (listRes.ok) {
+                    const listJson = await listRes.json();
+                    if (listJson.success && Array.isArray(listJson.data) && listJson.data.length > 0) {
+                        navigate(`/work-orders/${listJson.data[0].work_order_id}`, { replace: true });
+                        return;
+                    }
+                }
+                setIsLoading(false);
+                setOrder(null);
+                return;
+            }
+
+            const res = await fetch(`${API_BASE_URL}/work-orders/${encodeURIComponent(cleanId)}`);
             if (!res.ok) {
-                showNotification('Work order not found', 'error');
+                showNotification(`Work order '${cleanId}' not found`, 'error');
+                setOrder(null);
                 return;
             }
             const json = await res.json();
             if (json.success && json.data) {
                 setOrder(json.data);
+                fetchInvoiceDetails(json.data.work_order_id);
+            } else {
+                setOrder(null);
             }
         } catch (err) {
             console.error('Error fetching work order details:', err);
             showNotification(`Error: ${err.message}`, 'error');
+            setOrder(null);
         } finally {
             setIsLoading(false);
         }
@@ -74,10 +121,8 @@ export default function WorkOrderDetails() {
     };
 
     useEffect(() => {
-        if (id) {
-            fetchOrderDetails();
-            fetchInventoryForPicker();
-        }
+        fetchOrderDetails();
+        fetchInventoryForPicker();
     }, [id]);
 
     // Handle Status Change
@@ -144,6 +189,61 @@ export default function WorkOrderDetails() {
                 description: `${selected.part_name} (${selected.sku})`,
                 unit_price: String(selected.selling_price || '0.00'),
             }));
+        }
+    };
+
+    // Invoice Handlers
+    const handleCreateInvoice = async () => {
+        if (!order) return;
+        setIsGeneratingInvoice(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ work_order_id: order.work_order_id }),
+            });
+            const json = await res.json();
+            if (res.ok && json.success) {
+                showNotification('Tax Invoice created successfully!', 'success');
+                // Fetch full invoice details
+                const invRes = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(json.data.invoice_id)}`);
+                if (invRes.ok) {
+                    const invJson = await invRes.json();
+                    setInvoiceData(invJson.data);
+                } else {
+                    setInvoiceData(json.data);
+                }
+                setIsInvoiceModalOpen(true);
+            } else {
+                showNotification(json.error || 'Failed to generate invoice', 'error');
+            }
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsGeneratingInvoice(false);
+        }
+    };
+
+    const handleOpenInvoice = async () => {
+        if (invoiceData) {
+            setIsInvoiceModalOpen(true);
+            return;
+        }
+        if (!order) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(order.work_order_id)}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    setInvoiceData(json.data);
+                    setIsInvoiceModalOpen(true);
+                    return;
+                }
+            }
+            // If not existing yet, create it
+            handleCreateInvoice();
+        } catch (err) {
+            handleCreateInvoice();
         }
     };
 
@@ -314,6 +414,32 @@ export default function WorkOrderDetails() {
                                     <span className="material-symbols-outlined">engineering</span>
                                     <span>Staff Execution Hub</span>
                                 </button>
+
+                                {/* Tax Invoice Button: ONLY AVAILABLE WHEN STATUS IS READY FOR PICKUP OR COMPLETED */}
+                                {(order.status === 'ready' || order.status === 'completed' || invoiceData) && (
+                                    <button
+                                        type="button"
+                                        className="primary-btn"
+                                        onClick={invoiceData ? handleOpenInvoice : handleCreateInvoice}
+                                        disabled={isGeneratingInvoice}
+                                        style={{
+                                            backgroundColor: invoiceData ? 'rgba(255, 216, 95, 0.15)' : 'var(--accent-yellow)',
+                                            color: invoiceData ? 'var(--accent-yellow)' : 'var(--bg-olive-dark)',
+                                            border: invoiceData ? '1px solid var(--accent-yellow)' : 'none',
+                                            fontWeight: 700,
+                                        }}
+                                        title="Create or print official Tax Invoice"
+                                    >
+                                        <span className="material-symbols-outlined">receipt_long</span>
+                                        <span>
+                                            {isGeneratingInvoice
+                                                ? 'Creating Invoice...'
+                                                : invoiceData
+                                                ? '📄 View Tax Invoice'
+                                                : '➕ Create Tax Invoice'}
+                                        </span>
+                                    </button>
+                                )}
 
                                 {order.status !== 'ready' && order.status !== 'completed' && (
                                     <button
@@ -514,18 +640,31 @@ export default function WorkOrderDetails() {
                                 </article>
                             </div>
 
-                            {/* Right Column (Activity Timeline & Notes) */}
+                            {/* Right Column (Activity Timeline & Notes - Constrained Height) */}
                             <div className="right-column">
                                 <article className="info-card timeline-card">
-                                    <h3>Activity Log & Audit Trail</h3>
+                                    <div className="card-header-row">
+                                        <h3>Activity Log & Audit Trail</h3>
+                                        {timelineList.length > 0 && (
+                                            <button
+                                                type="button"
+                                                className="see-full-log-btn"
+                                                onClick={() => setIsFullLogOpen(true)}
+                                                title="View complete activity history"
+                                            >
+                                                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>history</span>
+                                                <span>See Full Log ({timelineList.length})</span>
+                                            </button>
+                                        )}
+                                    </div>
 
-                                    <div className="timeline-wrapper">
+                                    <div className="timeline-wrapper-contained">
                                         {timelineList.length === 0 ? (
                                             <p style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '16px 0', fontFamily: 'JetBrains Mono' }}>
                                                 No activity logs recorded yet.
                                             </p>
                                         ) : (
-                                            timelineList.map((entry, idx) => {
+                                            timelineList.slice(0, 4).map((entry, idx) => {
                                                 const timeStr = entry.created_at
                                                     ? new Date(entry.created_at).toLocaleDateString('en-US', {
                                                           month: 'short',
@@ -552,6 +691,18 @@ export default function WorkOrderDetails() {
                                                 );
                                             })
                                         )}
+
+                                        {timelineList.length > 4 && (
+                                            <div style={{ textAlign: 'center', padding: '4px 0' }}>
+                                                <button
+                                                    type="button"
+                                                    className="expand-log-pill-btn"
+                                                    onClick={() => setIsFullLogOpen(true)}
+                                                >
+                                                    + {timelineList.length - 4} older activity entries... View Full Log
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <form onSubmit={handleAddNote} className="note-form">
@@ -572,6 +723,82 @@ export default function WorkOrderDetails() {
                     </div>
                 </main>
             </div>
+
+            {/* Modal: Full Activity Log List */}
+            {isFullLogOpen && (
+                <div className="wo-modal-overlay" onClick={() => setIsFullLogOpen(false)}>
+                    <div className="wo-modal-content" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header-row">
+                            <div className="modal-title-wrap">
+                                <span className="material-symbols-outlined modal-icon">history</span>
+                                <h3>Complete Activity Log ({timelineList.length} Events)</h3>
+                            </div>
+                            <button
+                                type="button"
+                                className="modal-close-icon"
+                                onClick={() => setIsFullLogOpen(false)}
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div style={{ maxHeight: '480px', overflowY: 'auto', paddingRight: '8px' }}>
+                            <div className="timeline-wrapper" style={{ margin: '16px 0 16px 12px' }}>
+                                {timelineList.map((entry, idx) => {
+                                    const timeStr = entry.created_at
+                                        ? new Date(entry.created_at).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                          })
+                                        : 'Recent';
+
+                                    return (
+                                        <div
+                                            key={entry.log_id || idx}
+                                            className={`timeline-row ${idx === 0 ? 'is-latest' : ''}`}
+                                        >
+                                            <span className="timeline-node"></span>
+                                            <span className="timeline-timestamp font-mono">{timeStr}</span>
+                                            <div className="timeline-box">
+                                                <p className="timeline-text">{entry.description}</p>
+                                                {entry.staff_name && (
+                                                    <span className="timeline-author">By: {entry.staff_name}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="modal-footer-row">
+                            <button
+                                type="button"
+                                className="primary-btn"
+                                onClick={() => setIsFullLogOpen(false)}
+                            >
+                                Close Log
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Official Tax Invoice PDF & Print */}
+            {isInvoiceModalOpen && (
+                <TaxInvoiceModal
+                    invoice={invoiceData || {
+                        ...order,
+                        subtotal: total,
+                        total_amount: total * 1.05,
+                        tax_amount: total * 0.05,
+                        date_issued: new Date().toISOString().split('T')[0],
+                    }}
+                    onClose={() => setIsInvoiceModalOpen(false)}
+                />
+            )}
 
             {/* Modal Overlay: Add Part / Labor Line Item */}
             {isAddItemModalOpen && (

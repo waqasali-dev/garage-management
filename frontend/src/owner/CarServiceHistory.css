@@ -1,0 +1,542 @@
+/* Car Service History Matched with VIN Portal */
+
+.vin-history-layout {
+    display: flex;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background-color: var(--bg-olive-dark);
+    color: var(--text-main);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.vin-history-wrapper {
+    flex: 1;
+    margin-left: 260px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 100vh;
+}
+
+/* Header */
+.vin-history-header {
+    height: 64px;
+    background-color: var(--bg-olive-card);
+    border-bottom: 1px solid var(--border-glass);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(12px);
+}
+
+.vin-history-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-title-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    letter-spacing: 0.04em;
+}
+
+.vin-search-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: rgba(22, 30, 24, 0.8);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+
+.vin-search-form input {
+    background: none;
+    border: none;
+    color: var(--text-main);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    width: 260px;
+    padding: 4px 6px;
+    text-transform: uppercase;
+}
+
+.vin-search-form input:focus {
+    outline: none;
+}
+
+.vin-search-submit-btn {
+    background-color: var(--accent-yellow);
+    color: var(--bg-olive-dark);
+    border: none;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.vin-search-submit-btn:hover {
+    background-color: #ffe48a;
+}
+
+.vin-history-header .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: rgba(255, 216, 95, 0.1);
+    border: 1px solid rgba(255, 216, 95, 0.3);
+    color: var(--accent-yellow);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.nav-link-btn:hover {
+    background-color: var(--accent-yellow);
+    color: var(--bg-olive-dark);
+}
+
+/* Main */
+.vin-history-main {
+    padding: 24px;
+    flex: 1;
+}
+
+.vin-history-container {
+    max-width: 1440px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+/* Hero Vehicle Profile Card */
+
+/* Hero Vehicle Profile Card */
+.vehicle-hero-card {
+    background-color: var(--bg-olive-card);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.hero-top-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.hero-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hero-main-title {
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--text-main);
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.hero-meta-pills {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.hero-vin-badge {
+    background-color: rgba(15, 20, 16, 0.9);
+    border: 1px solid rgba(255, 216, 95, 0.3);
+    color: var(--accent-yellow);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+}
+
+.hero-plate-badge {
+    background-color: rgba(44, 58, 47, 0.8);
+    border: 1px solid var(--border-glass);
+    color: var(--text-main);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.hero-owner-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background-color: rgba(22, 30, 24, 0.6);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+}
+
+.owner-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.owner-name-val {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.owner-contact-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Hero Stats Bar */
+.hero-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    background-color: rgba(15, 20, 16, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 16px 20px;
+}
+
+.hero-stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hero-stat-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.hero-stat-val {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* Timeline Section */
+.timeline-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.timeline-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.timeline-section-title h2 {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.events-count-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent-yellow);
+    background-color: rgba(255, 216, 95, 0.1);
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+/* Timeline Cards */
+.timeline-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+}
+
+.timeline-cards-list::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 20px;
+    bottom: 20px;
+    width: 2px;
+    background-color: rgba(255, 216, 95, 0.2);
+    z-index: 1;
+}
+
+.timeline-card {
+    position: relative;
+    background-color: var(--bg-olive-card);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 20px 24px 20px 60px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.timeline-marker-dot {
+    position: absolute;
+    left: 17px;
+    top: 24px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: var(--accent-yellow);
+    border: 3px solid var(--bg-olive-dark);
+    z-index: 2;
+    box-shadow: 0 0 10px rgba(255, 216, 95, 0.5);
+}
+
+.t-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-glass);
+}
+
+.t-header-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.t-wo-id {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--accent-yellow);
+    text-decoration: none;
+}
+
+.t-wo-id:hover {
+    text-decoration: underline;
+}
+
+.t-date-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.t-status-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.status-completed {
+    background-color: rgba(16, 185, 129, 0.15);
+    border: 1px solid #10b981;
+    color: #86efac;
+}
+
+.status-ready {
+    background-color: rgba(45, 212, 191, 0.15);
+    border: 1px solid #2dd4bf;
+    color: #5eead4;
+}
+
+.status-in-progress {
+    background-color: rgba(251, 191, 36, 0.15);
+    border: 1px solid #fbbf24;
+    color: #fde047;
+}
+
+.status-received {
+    background-color: rgba(56, 189, 248, 0.15);
+    border: 1px solid #38bdf8;
+    color: #7dd3fc;
+}
+
+.t-complaint-box {
+    background-color: rgba(22, 30, 24, 0.6);
+    border-left: 3px solid var(--accent-yellow);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+}
+
+.t-complaint-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.t-complaint-txt {
+    font-size: 13px;
+    color: var(--text-main);
+    margin: 2px 0 0 0;
+}
+
+/* Bill of Materials Table in Timeline */
+.t-items-table-wrap {
+    overflow-x: auto;
+}
+
+.t-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.t-items-table th {
+    text-align: left;
+    padding: 8px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    background-color: rgba(22, 30, 24, 0.8);
+    border-bottom: 1px solid var(--border-glass);
+    text-transform: uppercase;
+}
+
+.t-items-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+
+.t-item-type-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+
+.tag-part {
+    background-color: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.tag-labor {
+    background-color: rgba(255, 216, 95, 0.15);
+    color: var(--accent-yellow);
+    border: 1px solid rgba(255, 216, 95, 0.3);
+}
+
+/* Timeline Card Footer */
+.t-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-glass);
+}
+
+.t-footer-tech {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.t-cost-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--accent-yellow);
+}
+
+/* Empty State */
+.empty-history-box {
+    background-color: var(--bg-olive-card);
+    border: 1px dashed var(--border-glass);
+    border-radius: 12px;
+    padding: 60px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.empty-history-box h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.empty-history-box p {
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 500px;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .vin-history-wrapper {
+        margin-left: 0;
+    }
+    .hero-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .hero-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    .timeline-card {
+        padding: 16px 16px 16px 48px;
+    }
+    .timeline-cards-list::before {
+        left: 16px;
+    }
+    .timeline-marker-dot {
+        left: 9px;
+    }
+}

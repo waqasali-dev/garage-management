@@ -149,9 +149,6 @@ export default function Dashboard() {
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
-                            <div className="search-shortcut-badge">
-                                <span>⌘K</span>
-                            </div>
                         </div>
                     </div>
 
