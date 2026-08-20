@@ -45,12 +45,30 @@ export default function Inventory() {
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Restock Modal
+    // Restock Modal State
     const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
     const [restockTarget, setRestockTarget] = useState(null);
     const [restockQty, setRestockQty] = useState('10');
     const [restockUnitCost, setRestockUnitCost] = useState('');
     const [isRestocking, setIsRestocking] = useState(false);
+
+    // Edit Part Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState(null);
+    const [editFormData, setEditFormData] = useState({
+        sku: '',
+        part_name: '',
+        category: 'General Hardware',
+        stock_quantity: '0',
+        reorder_threshold: '5',
+        unit_cost: '0.00',
+        selling_price: '0.00',
+    });
+    const [isEditing, setIsEditing] = useState(false);
+
+    // Delete Confirmation Modal State
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Toast Notification
     const [notification, setNotification] = useState(null);
@@ -84,6 +102,7 @@ export default function Inventory() {
 
     useEffect(() => {
         loadInventoryData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleFormChange = (e) => {
@@ -202,18 +221,62 @@ export default function Inventory() {
         }
     };
 
-    const handleDeletePart = async (partId, sku, partName) => {
-        if (!window.confirm(`Are you sure you want to delete part "${sku} - ${partName}" from inventory?`)) {
-            return;
-        }
+    // Edit Part Modal Handlers
+    const handleOpenEditModal = (item) => {
+        setEditTarget(item);
+        setEditFormData({
+            sku: item.sku || '',
+            part_name: item.name || item.part_name || '',
+            category: item.category || 'General Hardware',
+            stock_quantity: String(item.stock ?? item.stock_quantity ?? 0),
+            reorder_threshold: String(item.reorder_threshold ?? 5),
+            unit_cost: String(item.unit_cost ?? '0.00'),
+            selling_price: String(item.selling_price ?? '0.00'),
+        });
+        setIsEditModalOpen(true);
+    };
 
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        if (!editTarget) return;
+
+        setIsEditing(true);
         try {
+            const partId = editTarget.part_id || editTarget.id;
+            const res = await fetch(`${API_BASE_URL}/inventory/${partId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editFormData),
+            });
+
+            if (res.ok) {
+                showNotification(`Part [${editFormData.sku}] updated successfully!`, 'success');
+                setIsEditModalOpen(false);
+                setEditTarget(null);
+                loadInventoryData();
+            } else {
+                const errData = await res.json();
+                showNotification(errData.error || 'Failed to update part details.', 'error');
+            }
+        } catch (err) {
+            showNotification(`Update error: ${err.message}`, 'error');
+        } finally {
+            setIsEditing(false);
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        try {
+            const partId = deleteTarget.part_id || deleteTarget.id;
             const res = await fetch(`${API_BASE_URL}/inventory/${partId}`, {
                 method: 'DELETE',
             });
 
             if (res.ok) {
-                showNotification(`Part [${sku}] removed from inventory database.`, 'info');
+                showNotification(`Part [${deleteTarget.sku}] removed from inventory database.`, 'info');
+                setDeleteTarget(null);
                 loadInventoryData();
             } else {
                 const errData = await res.json();
@@ -221,6 +284,8 @@ export default function Inventory() {
             }
         } catch (err) {
             showNotification(`Delete failed: ${err.message}`, 'error');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -446,9 +511,18 @@ export default function Inventory() {
 
                                                             <button
                                                                 type="button"
+                                                                className="action-edit-btn"
+                                                                title="Edit Part Details & Selling Price"
+                                                                onClick={() => handleOpenEditModal(item)}
+                                                            >
+                                                                <span className="material-symbols-outlined">edit</span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
                                                                 className="action-delete-btn"
                                                                 title="Delete part from inventory"
-                                                                onClick={() => handleDeletePart(item.part_id, item.sku, item.name)}
+                                                                onClick={() => setDeleteTarget(item)}
                                                             >
                                                                 <span className="material-symbols-outlined">delete</span>
                                                             </button>
@@ -689,6 +763,220 @@ export default function Inventory() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Overlay: Edit Existing Part */}
+            {isEditModalOpen && editTarget && (
+                <div className="inventory-modal-overlay" onClick={() => !isEditing && setIsEditModalOpen(false)}>
+                    <div className="inventory-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div className="modal-title-group">
+                                <span className="material-symbols-outlined modal-header-icon" style={{ color: '#38bdf8' }}>edit_note</span>
+                                <div>
+                                    <h3 className="modal-title">Edit Inventory Part</h3>
+                                    <p className="modal-subtitle">Update pricing and catalog details for <code>{editTarget.sku}</code></p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="modal-close-btn"
+                                onClick={() => setIsEditModalOpen(false)}
+                                disabled={isEditing}
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleEditSubmit} className="inventory-modal-form">
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="edit_sku">SKU (Part Code) *</label>
+                                    <input
+                                        type="text"
+                                        id="edit_sku"
+                                        name="sku"
+                                        value={editFormData.sku}
+                                        onChange={(e) => setEditFormData({ ...editFormData, sku: e.target.value })}
+                                        className="uppercase-input font-mono"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_category">Category *</label>
+                                    <select
+                                        id="edit_category"
+                                        name="category"
+                                        value={editFormData.category}
+                                        onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                                        required
+                                    >
+                                        {DEFAULT_CATEGORIES.map((c) => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group grid-full">
+                                    <label htmlFor="edit_part_name">Part Name / Description *</label>
+                                    <input
+                                        type="text"
+                                        id="edit_part_name"
+                                        name="part_name"
+                                        value={editFormData.part_name}
+                                        onChange={(e) => setEditFormData({ ...editFormData, part_name: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_selling_price" style={{ color: 'var(--accent-yellow)', fontWeight: 800 }}>
+                                        Selling Price ($) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        id="edit_selling_price"
+                                        name="selling_price"
+                                        value={editFormData.selling_price}
+                                        onChange={(e) => setEditFormData({ ...editFormData, selling_price: e.target.value })}
+                                        className="font-mono"
+                                        style={{ borderColor: 'rgba(255, 216, 95, 0.5)', backgroundColor: 'rgba(255, 216, 95, 0.06)' }}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_unit_cost">Unit Cost ($) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        id="edit_unit_cost"
+                                        name="unit_cost"
+                                        value={editFormData.unit_cost}
+                                        onChange={(e) => setEditFormData({ ...editFormData, unit_cost: e.target.value })}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_stock_quantity">Current Stock Quantity *</label>
+                                    <input
+                                        type="number"
+                                        id="edit_stock_quantity"
+                                        name="stock_quantity"
+                                        min="0"
+                                        value={editFormData.stock_quantity}
+                                        onChange={(e) => setEditFormData({ ...editFormData, stock_quantity: e.target.value })}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_reorder_threshold">Reorder Threshold *</label>
+                                    <input
+                                        type="number"
+                                        id="edit_reorder_threshold"
+                                        name="reorder_threshold"
+                                        min="0"
+                                        value={editFormData.reorder_threshold}
+                                        onChange={(e) => setEditFormData({ ...editFormData, reorder_threshold: e.target.value })}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="modal-footer-actions">
+                                <button
+                                    type="button"
+                                    className="btn-modal-cancel"
+                                    onClick={() => setIsEditModalOpen(false)}
+                                    disabled={isEditing}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-modal-submit"
+                                    disabled={isEditing}
+                                >
+                                    {isEditing ? 'Updating...' : 'Save Changes'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Overlay: Delete Confirmation */}
+            {deleteTarget && (
+                <div className="inventory-modal-overlay" onClick={() => !isDeleting && setDeleteTarget(null)}>
+                    <div className="inventory-modal-content delete-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div className="modal-title-group">
+                                <span className="material-symbols-outlined modal-header-icon delete-icon">warning</span>
+                                <div>
+                                    <h3 className="modal-title">Delete Inventory Part</h3>
+                                    <p className="modal-subtitle">Confirm removal of part catalog record</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="modal-close-btn"
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        {/* Part Summary Card */}
+                        <div className="delete-summary-box">
+                            <div className="restock-part-info">
+                                <span className="restock-sku font-mono">{deleteTarget.sku}</span>
+                                <span className="restock-name">{deleteTarget.name}</span>
+                                <span className="restock-category text-muted">Category: {deleteTarget.category}</span>
+                            </div>
+                            <div className="restock-current-badge">
+                                <span className="badge-label">CURRENT STOCK</span>
+                                <span className="badge-val font-mono">{deleteTarget.stock} units</span>
+                            </div>
+                        </div>
+
+                        <div className="delete-warning-message">
+                            <p>
+                                Are you sure you want to delete <strong>{deleteTarget.name}</strong> (<code>{deleteTarget.sku}</code>) from the inventory database?
+                            </p>
+                            <p className="delete-note">
+                                🛡️ <strong>Data Integrity Note:</strong> Any existing work orders or tax invoices that used this part will safely preserve their billed line items and repair history.
+                            </p>
+                        </div>
+
+                        <div className="modal-footer-actions">
+                            <button
+                                type="button"
+                                className="btn-modal-cancel"
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-modal-delete"
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete Part'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

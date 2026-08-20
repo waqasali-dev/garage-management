@@ -6,10 +6,8 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SearchIcon from '@mui/icons-material/Search';
-import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -23,7 +21,6 @@ export default function Invoices() {
     // Selected Invoice for PDF Modal
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-    const [isLoadingPdf, setIsLoadingPdf] = useState(false);
 
     const fetchInvoices = async () => {
         setIsLoading(true);
@@ -47,7 +44,6 @@ export default function Invoices() {
     }, []);
 
     const handleViewPdf = async (inv) => {
-        setIsLoadingPdf(true);
         try {
             const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(inv.invoice_id)}`);
             if (res.ok) {
@@ -63,8 +59,30 @@ export default function Invoices() {
         } catch (err) {
             setSelectedInvoice(inv);
             setIsPdfModalOpen(true);
-        } finally {
-            setIsLoadingPdf(false);
+        }
+    };
+
+    // Update invoice status (Admin action)
+    const handleUpdateStatus = async (invoiceId, newStatus, e) => {
+        if (e) e.stopPropagation();
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(invoiceId)}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            const json = await res.json();
+            if (res.ok && json.success) {
+                setInvoicesList((prev) =>
+                    prev.map((inv) =>
+                        inv.invoice_id === invoiceId ? { ...inv, status: newStatus } : inv
+                    )
+                );
+            } else {
+                alert(json.error || 'Failed to update invoice status');
+            }
+        } catch (err) {
+            console.error('Error updating status:', err);
         }
     };
 
@@ -267,16 +285,13 @@ export default function Invoices() {
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredInvoices.map((inv) => {
-                                                const statusType = inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'error' : 'pending';
-
-                                                return (
-                                                    <tr
-                                                        key={inv.invoice_id}
-                                                        className="table-row"
-                                                        style={{ cursor: 'pointer' }}
-                                                        onClick={() => handleViewPdf(inv)}
-                                                    >
+                                            filteredInvoices.map((inv) => (
+                                                <tr
+                                                    key={inv.invoice_id}
+                                                    className="table-row"
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => handleViewPdf(inv)}
+                                                >
                                                         <td className="font-mono inv-id">{inv.invoice_id}</td>
                                                         <td className="font-mono" style={{ color: 'var(--accent-yellow)' }}>
                                                             {inv.work_order_id}
@@ -301,14 +316,32 @@ export default function Invoices() {
                                                             ${parseFloat(inv.total_amount || 0).toFixed(2)}
                                                         </td>
                                                         <td className="text-muted font-mono">{inv.date_issued}</td>
-                                                        <td>
-                                                            <span className={`status-pill status-${statusType}`}>
-                                                                <span className={`status-dot ${statusType === 'error' ? 'animate-pulse' : ''}`}></span>
-                                                                {(inv.status || 'PENDING').toUpperCase()}
-                                                            </span>
+                                                        <td onClick={(e) => e.stopPropagation()}>
+                                                            <select
+                                                                className={`status-dropdown-select status-${(inv.status || 'pending').toLowerCase()}`}
+                                                                value={(inv.status || 'pending').toLowerCase()}
+                                                                onChange={(e) => handleUpdateStatus(inv.invoice_id, e.target.value, e)}
+                                                                title="Admin: Change invoice payment status"
+                                                            >
+                                                                <option value="pending">● PENDING</option>
+                                                                <option value="paid">● PAID</option>
+                                                                <option value="overdue">● OVERDUE</option>
+                                                                <option value="cancelled">● CANCELLED</option>
+                                                            </select>
                                                         </td>
                                                         <td className="text-right">
                                                             <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                                                                {inv.status !== 'paid' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="action-icon-btn"
+                                                                        style={{ color: 'var(--status-success)', borderColor: 'rgba(16, 185, 129, 0.3)' }}
+                                                                        title="Mark as Paid"
+                                                                        onClick={(e) => handleUpdateStatus(inv.invoice_id, 'paid', e)}
+                                                                    >
+                                                                        <CheckCircleIcon fontSize="small" />
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     className="action-icon-btn"
@@ -320,9 +353,8 @@ export default function Invoices() {
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                );
-                                            })
-                                        )}
+                                                ))
+                                            )}
                                     </tbody>
                                 </table>
                             </div>

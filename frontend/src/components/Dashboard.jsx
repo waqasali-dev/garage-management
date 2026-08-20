@@ -45,7 +45,14 @@ export default function Dashboard() {
     const [lowStockParts, setLowStockParts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const getLocalDateString = (d = new Date()) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const todayStr = getLocalDateString(new Date());
 
     const fetchDashboardData = async () => {
         setIsLoading(true);
@@ -78,8 +85,14 @@ export default function Dashboard() {
             if (schedRes.ok) {
                 const schedJson = await schedRes.json();
                 if (schedJson.success && Array.isArray(schedJson.data)) {
-                    const todaySched = schedJson.data.filter((t) => t.scheduled_date === todayStr);
-                    setTodayTasks(todaySched.length > 0 ? todaySched : schedJson.data.slice(0, 4));
+                    // Strictly filter tasks scheduled for today only
+                    const todaySched = schedJson.data.filter((t) => {
+                        const taskDate = (t.scheduled_date || '').split('T')[0];
+                        return taskDate === todayStr;
+                    });
+                    // Sort today's tasks chronologically by start time
+                    todaySched.sort((a, b) => (a.start_time || '00:00').localeCompare(b.start_time || '00:00'));
+                    setTodayTasks(todaySched);
                 }
             }
         } catch (err) {
@@ -91,6 +104,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchDashboardData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Filter work orders
@@ -376,7 +390,9 @@ export default function Dashboard() {
                                     </div>
                                     <div>
                                         <h3 className="card-heading-title">Today's Scheduled Tasks</h3>
-                                        <p className="card-heading-sub">Workshop bay assignments and technician tasks</p>
+                                        <p className="card-heading-sub">
+                                            {todayTasks.length} {todayTasks.length === 1 ? 'task' : 'tasks'} scheduled for today ({new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})
+                                        </p>
                                     </div>
                                 </div>
                                 <button

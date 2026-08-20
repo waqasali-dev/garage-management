@@ -379,51 +379,11 @@
     position: relative;
 }
 
-/* Workshop Stamp Seal */
-.stamp-seal-circle {
-    width: 88px;
-    height: 88px;
-    border: 2px solid #a34e56 !important;
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #a34e56 !important;
-    position: relative;
-    padding: 4px;
-    box-sizing: border-box;
-    transform: rotate(-6deg);
-    opacity: 0.95;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-}
-
-.stamp-inner-border {
-    position: absolute;
-    inset: 3px;
-    border: 1px dashed #a34e56 !important;
-    border-radius: 50%;
-}
-
-.stamp-text-top {
-    font-size: 7.5px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    color: #a34e56 !important;
-}
-
-.stamp-sig-line {
-    font-family: 'Brush Script MT', cursive, sans-serif;
-    font-size: 18px;
-    color: #1d3557 !important;
-    margin: -2px 0;
-}
-
-.stamp-text-bottom {
-    font-size: 6.5px;
-    font-weight: 700;
-    color: #a34e56 !important;
+.seal-sign-space {
+    width: 140px;
+    height: 50px;
+    border-bottom: 1px dashed #cccccc;
+    margin-bottom: 6px;
 }
 
 /* ========================================================================== */

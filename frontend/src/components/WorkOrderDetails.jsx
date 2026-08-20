@@ -123,6 +123,7 @@ export default function WorkOrderDetails() {
     useEffect(() => {
         fetchOrderDetails();
         fetchInventoryForPicker();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     // Handle Status Change
@@ -240,10 +241,35 @@ export default function WorkOrderDetails() {
                     return;
                 }
             }
-            // If not existing yet, create it
-            handleCreateInvoice();
+            // If not existing yet and status is ready, create it
+            if (order.status === 'ready') {
+                handleCreateInvoice();
+            }
         } catch (err) {
-            handleCreateInvoice();
+            if (order.status === 'ready') {
+                handleCreateInvoice();
+            }
+        }
+    };
+
+    // Mark Invoice as Paid (Admin / Staff action)
+    const handleMarkInvoicePaid = async () => {
+        if (!invoiceData) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(invoiceData.invoice_id)}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'paid' }),
+            });
+            const json = await res.json();
+            if (res.ok && json.success) {
+                showNotification('Invoice successfully marked as PAID!', 'success');
+                fetchInvoiceDetails(order.work_order_id);
+            } else {
+                showNotification(json.error || 'Failed to update invoice status', 'error');
+            }
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
         }
     };
 
@@ -415,30 +441,57 @@ export default function WorkOrderDetails() {
                                     <span>Staff Execution Hub</span>
                                 </button>
 
-                                {/* Tax Invoice Button: ONLY AVAILABLE WHEN STATUS IS READY FOR PICKUP OR COMPLETED */}
-                                {(order.status === 'ready' || order.status === 'completed' || invoiceData) && (
+                                {/* Invoice Creation Button: ONLY AVAILABLE WHEN STATUS IS READY FOR PICKUP */}
+                                {order.status === 'ready' && !invoiceData && (
                                     <button
                                         type="button"
                                         className="primary-btn"
-                                        onClick={invoiceData ? handleOpenInvoice : handleCreateInvoice}
+                                        onClick={handleCreateInvoice}
                                         disabled={isGeneratingInvoice}
                                         style={{
-                                            backgroundColor: invoiceData ? 'rgba(255, 216, 95, 0.15)' : 'var(--accent-yellow)',
-                                            color: invoiceData ? 'var(--accent-yellow)' : 'var(--bg-olive-dark)',
-                                            border: invoiceData ? '1px solid var(--accent-yellow)' : 'none',
+                                            backgroundColor: 'var(--accent-yellow)',
+                                            color: 'var(--bg-olive-dark)',
                                             fontWeight: 700,
                                         }}
-                                        title="Create or print official Tax Invoice"
+                                        title="Create official Tax Invoice for this vehicle"
                                     >
                                         <span className="material-symbols-outlined">receipt_long</span>
-                                        <span>
-                                            {isGeneratingInvoice
-                                                ? 'Creating Invoice...'
-                                                : invoiceData
-                                                ? '📄 View Tax Invoice'
-                                                : '➕ Create Tax Invoice'}
-                                        </span>
+                                        <span>{isGeneratingInvoice ? 'Creating Invoice...' : '➕ Create Tax Invoice'}</span>
                                     </button>
+                                )}
+
+                                {/* View Invoice Button (When invoice already exists) */}
+                                {invoiceData && (
+                                    <button
+                                        type="button"
+                                        className="secondary-btn"
+                                        onClick={handleOpenInvoice}
+                                        title="View & Print official Tax Invoice"
+                                    >
+                                        <span className="material-symbols-outlined">receipt_long</span>
+                                        <span>📄 View Tax Invoice</span>
+                                    </button>
+                                )}
+
+                                {/* Mark Invoice as Paid Button (When invoice exists and is unpaid) */}
+                                {invoiceData && invoiceData.status !== 'paid' && (
+                                    <button
+                                        type="button"
+                                        className="primary-btn"
+                                        onClick={handleMarkInvoicePaid}
+                                        style={{ backgroundColor: 'var(--status-success)', color: '#000', fontWeight: 700 }}
+                                        title="Mark this invoice as settled and paid"
+                                    >
+                                        <span className="material-symbols-outlined">paid</span>
+                                        <span>Mark as Paid</span>
+                                    </button>
+                                )}
+
+                                {/* Invoice Paid Badge */}
+                                {invoiceData && invoiceData.status === 'paid' && (
+                                    <span className="badge badge-cyan font-mono" style={{ padding: '8px 12px', fontSize: '11px' }}>
+                                        ✓ INVOICE PAID
+                                    </span>
                                 )}
 
                                 {order.status !== 'ready' && order.status !== 'completed' && (

@@ -60,6 +60,7 @@ export default function CarServiceHistory() {
             // If no VIN in route, redirect to owner cars panel
             navigate('/owner/cars', { replace: true });
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paramVin]);
 
     const handleSearchSubmit = (e) => {

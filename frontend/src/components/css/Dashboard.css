@@ -602,6 +602,30 @@
     flex-direction: column;
     gap: 16px;
     padding-top: 6px;
+    padding-bottom: 6px;
+    padding-right: 6px;
+    max-height: 265px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 216, 95, 0.4) rgba(22, 30, 24, 0.6);
+}
+
+.timeline-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.timeline-list::-webkit-scrollbar-track {
+    background: rgba(22, 30, 24, 0.6);
+    border-radius: 4px;
+}
+
+.timeline-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 216, 95, 0.35);
+    border-radius: 4px;
+}
+
+.timeline-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-yellow);
 }
 
 .timeline-item {

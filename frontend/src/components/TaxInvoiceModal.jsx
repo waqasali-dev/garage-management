@@ -224,7 +224,7 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                         </div>
                     </section>
 
-                    {/* Signatures & Stamp Seal Section */}
+                    {/* Signatures & Seal Section */}
                     <footer className="invoice-signatures-section">
                         {/* Receiver Sign Left */}
                         <div className="sig-box-left">
@@ -238,14 +238,9 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                             <div className="sig-sub-label">ProDrive Auto Care</div>
                         </div>
 
-                        {/* Stamp Seal Right */}
+                        {/* Physical Seal & Sign Placeholder Right */}
                         <div className="sig-box-right">
-                            <div className="stamp-seal-circle">
-                                <div className="stamp-inner-border"></div>
-                                <span className="stamp-text-top">PRODRIVE AUTO CARE</span>
-                                <span className="stamp-sig-line">Official</span>
-                                <span className="stamp-text-bottom">★ RUSTAQ OMAN ★</span>
-                            </div>
+                            <div className="seal-sign-space"></div>
                             <div className="sig-sub-label">Workshop Seal & Sign</div>
                         </div>
                     </footer>

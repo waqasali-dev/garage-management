@@ -319,12 +319,36 @@ app.patch("/api/inventory/:id", async (req, res) => {
             return res.status(404).json({ error: "Part not found in inventory" });
         }
 
+        const updatedPart = result.rows[0];
+
+        // Create Audit Log Entry for Part Edit
+        try {
+            await pool.query(
+                `INSERT INTO audit_logs (event_type, description, payload_json)
+                 VALUES ('INVENTORY_UPDATE', $1, $2);`,
+                [
+                    `Part '${updatedPart.part_name}' (${updatedPart.sku}) details updated. Selling Price: $${parseFloat(updatedPart.selling_price || 0).toFixed(2)}, Cost: $${parseFloat(updatedPart.unit_cost || 0).toFixed(2)}, Stock: ${updatedPart.stock_quantity}`,
+                    JSON.stringify({
+                        part_id: updatedPart.part_id,
+                        sku: updatedPart.sku,
+                        part_name: updatedPart.part_name,
+                        selling_price: updatedPart.selling_price,
+                        unit_cost: updatedPart.unit_cost,
+                        stock_quantity: updatedPart.stock_quantity,
+                        reorder_threshold: updatedPart.reorder_threshold,
+                    }),
+                ]
+            );
+        } catch (auditErr) {
+            console.warn("Notice: Audit log for inventory edit failed:", auditErr.message);
+        }
+
         await deleteCachePattern("garage:cache:inventory:*");
 
         res.json({
             success: true,
             message: "Part details updated successfully",
-            data: result.rows[0],
+            data: updatedPart,
         });
     } catch (err) {
         console.error("Error updating inventory part:", err);
@@ -3049,7 +3073,7 @@ app.post("/api/invoices/generate", async (req, res) => {
                 date_issued,
                 date_due
             )
-            VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
+            VALUES ($1, $2, $3, $4, $5::invoice_status, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
             ON CONFLICT (work_order_id) DO UPDATE SET
                 subtotal = EXCLUDED.subtotal,
                 tax_amount = EXCLUDED.tax_amount,
@@ -3109,8 +3133,8 @@ app.patch("/api/invoices/:id/status", async (req, res) => {
         const query = `
             UPDATE invoice_data
             SET 
-                status = $1,
-                date_paid = CASE WHEN $1 = 'paid' THEN CURRENT_DATE ELSE NULL END
+                status = $1::invoice_status,
+                date_paid = CASE WHEN $1::text = 'paid' THEN CURRENT_DATE ELSE NULL END
             WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($2))
                OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($2))
             RETURNING *;
