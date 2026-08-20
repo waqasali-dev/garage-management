@@ -423,6 +423,43 @@
     padding: 6px;
 }
 
+/* Read-Only Status Pill for Owner */
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.status-pill.pill-paid {
+    background-color: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
+.status-pill.pill-pending {
+    background-color: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    color: #fbbf24;
+}
+
+.status-pill.pill-overdue {
+    background-color: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+
+.status-pill.pill-cancelled {
+    background-color: rgba(163, 177, 166, 0.15);
+    border: 1px solid var(--border-glass);
+    color: var(--text-muted);
+}
+
 .text-muted {
     color: var(--text-muted);
 }

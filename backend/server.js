@@ -2882,12 +2882,20 @@ app.post("/api/auth/login", async (req, res) => {
 
 // GET /api/invoices - List all invoices with owner and vehicle details
 app.get("/api/invoices", async (req, res) => {
-    const cacheKey = "garage:cache:invoices:list";
+    const { owner_id } = req.query;
+    const cacheKey = `garage:cache:invoices:list:${owner_id || "all"}`;
 
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
             return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        let whereClause = "1=1";
+        const queryParams = [];
+        if (owner_id && owner_id.trim()) {
+            queryParams.push(owner_id.trim());
+            whereClause += ` AND i.owner_id = $${queryParams.length}`;
         }
 
         const query = `
@@ -2917,9 +2925,10 @@ app.get("/api/invoices", async (req, res) => {
             JOIN car_owners o ON i.owner_id = o.owner_id
             JOIN work_order_data w ON i.work_order_id = w.work_order_id
             JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            WHERE ${whereClause}
             ORDER BY i.date_issued DESC, i.invoice_id DESC;
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, queryParams);
 
         await setCache(cacheKey, result.rows, 300);
 

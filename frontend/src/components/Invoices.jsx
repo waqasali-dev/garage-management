@@ -8,10 +8,12 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
 export default function Invoices() {
+    const { user, isOwner, isAdmin } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [invoicesList, setInvoicesList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -25,11 +27,19 @@ export default function Invoices() {
     const fetchInvoices = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/invoices`);
+            const ownerId = isOwner && user?.owner_id ? user.owner_id : null;
+            const url = ownerId
+                ? `${API_BASE_URL}/invoices?owner_id=${encodeURIComponent(ownerId)}`
+                : `${API_BASE_URL}/invoices`;
+
+            const res = await fetch(url);
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && Array.isArray(json.data)) {
-                    setInvoicesList(json.data);
+                    const myInvoices = ownerId
+                        ? json.data.filter((inv) => inv.owner_id === ownerId)
+                        : json.data;
+                    setInvoicesList(myInvoices);
                 }
             }
         } catch (err) {
@@ -41,7 +51,8 @@ export default function Invoices() {
 
     useEffect(() => {
         fetchInvoices();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.owner_id]);
 
     const handleViewPdf = async (inv) => {
         try {
@@ -62,9 +73,11 @@ export default function Invoices() {
         }
     };
 
-    // Update invoice status (Admin action)
+    // Update invoice status (Admin only action)
     const handleUpdateStatus = async (invoiceId, newStatus, e) => {
         if (e) e.stopPropagation();
+        if (!isAdmin) return;
+
         try {
             const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(invoiceId)}/status`, {
                 method: 'PATCH',
@@ -140,23 +153,30 @@ export default function Invoices() {
                             <span className="material-symbols-outlined">menu</span>
                         </button>
                         <div className="title-group">
-                            <h2 className="header-title">Financial Overview & Tax Invoices</h2>
+                            <h2 className="header-title">
+                                {isOwner ? 'My Invoices & Billing Statements' : 'Financial Overview & Tax Invoices'}
+                            </h2>
                             <p className="header-subtitle">
-                                Official billing records, tax calculations (5% VAT), and printable PDF statements.
+                                {isOwner
+                                    ? 'Review your official workshop tax invoices, payments, and PDF receipts.'
+                                    : 'Official billing records, tax calculations (5% VAT), and printable PDF statements.'}
                             </p>
                         </div>
                     </div>
 
                     <div className="header-actions">
-                        <div className="search-box hide-mobile">
-                            <SearchIcon className="search-icon" />
-                            <input
-                                type="text"
-                                placeholder="Search by Invoice #, WO, Owner, Plate..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
+                        {/* Admin Global Search Bar (Hidden for Owner) */}
+                        {!isOwner && (
+                            <div className="search-box hide-mobile">
+                                <SearchIcon className="search-icon" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by Invoice #, WO, Owner, Plate..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        )}
 
                         <button className="icon-btn" onClick={fetchInvoices} title="Refresh Invoices">
                             <RefreshIcon fontSize="small" />
@@ -220,7 +240,9 @@ export default function Invoices() {
                             <div className="kpi-grid">
                                 <div className="kpi-card">
                                     <div className="kpi-top">
-                                        <span className="kpi-title">Total Pending / Outstanding</span>
+                                        <span className="kpi-title">
+                                            {isOwner ? 'Outstanding / Pending' : 'Total Pending / Outstanding'}
+                                        </span>
                                         <AccessTimeIcon className="text-warning" />
                                     </div>
                                     <span className="kpi-value font-mono">${totalPending.toFixed(2)}</span>
@@ -231,7 +253,9 @@ export default function Invoices() {
 
                                 <div className="kpi-card">
                                     <div className="kpi-top">
-                                        <span className="kpi-title">Collected Revenue</span>
+                                        <span className="kpi-title">
+                                            {isOwner ? 'Total Settled / Paid' : 'Collected Revenue'}
+                                        </span>
                                         <CheckCircleIcon className="text-success" />
                                     </div>
                                     <span className="kpi-value font-mono">${totalCollected.toFixed(2)}</span>
@@ -242,7 +266,9 @@ export default function Invoices() {
 
                                 <div className="kpi-card border-error">
                                     <div className="kpi-top">
-                                        <span className="kpi-title">Overdue Invoices</span>
+                                        <span className="kpi-title">
+                                            {isOwner ? 'Overdue Payment' : 'Overdue Invoices'}
+                                        </span>
                                         <WarningAmberIcon className="text-error" />
                                     </div>
                                     <span className="kpi-value font-mono">${totalOverdue.toFixed(2)}</span>
@@ -261,7 +287,7 @@ export default function Invoices() {
                                         <tr>
                                             <th>Tax Invoice #</th>
                                             <th>Work Order</th>
-                                            <th>Owner / Customer</th>
+                                            {!isOwner && <th>Owner / Customer</th>}
                                             <th>Vehicle [Plate]</th>
                                             <th>Subtotal</th>
                                             <th>VAT (5%)</th>
@@ -274,14 +300,16 @@ export default function Invoices() {
                                     <tbody>
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan="10" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                                                <td colSpan={isOwner ? "9" : "10"} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
                                                     Loading invoices records from database...
                                                 </td>
                                             </tr>
                                         ) : filteredInvoices.length === 0 ? (
                                             <tr>
-                                                <td colSpan="10" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                                                    No invoices found matching criteria. Invoices are generated automatically in Work Order Details once repairs are ready for pickup.
+                                                <td colSpan={isOwner ? "9" : "10"} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                                                    {isOwner
+                                                        ? 'No billing invoices found for your account. Once your vehicle service is ready for pickup, official tax invoices will be listed here.'
+                                                        : 'No invoices found matching criteria. Invoices are generated automatically in Work Order Details once repairs are ready for pickup.'}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -292,31 +320,35 @@ export default function Invoices() {
                                                     style={{ cursor: 'pointer' }}
                                                     onClick={() => handleViewPdf(inv)}
                                                 >
-                                                        <td className="font-mono inv-id">{inv.invoice_id}</td>
-                                                        <td className="font-mono" style={{ color: 'var(--accent-yellow)' }}>
-                                                            {inv.work_order_id}
-                                                        </td>
+                                                    <td className="font-mono inv-id">{inv.invoice_id}</td>
+                                                    <td className="font-mono" style={{ color: 'var(--accent-yellow)' }}>
+                                                        {inv.work_order_id}
+                                                    </td>
+                                                    {!isOwner && (
                                                         <td>
                                                             <div className="owner-name font-bold">
                                                                 {inv.owner_name} {inv.owner_is_vip && <span style={{ color: 'var(--accent-yellow)' }}>★</span>}
                                                             </div>
                                                             <div className="text-muted font-mono" style={{ fontSize: '11px' }}>{inv.owner_phone}</div>
                                                         </td>
-                                                        <td>
-                                                            <div className="vehicle-desc">
-                                                                {inv.year} {inv.make} {inv.model}
-                                                            </div>
-                                                            <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                                                🚗 {inv.license_plate}
-                                                            </div>
-                                                        </td>
-                                                        <td className="font-mono">${parseFloat(inv.subtotal || 0).toFixed(2)}</td>
-                                                        <td className="font-mono text-muted">${parseFloat(inv.tax_amount || 0).toFixed(2)}</td>
-                                                        <td className="font-mono amount-text" style={{ color: 'var(--accent-yellow)', fontWeight: 800 }}>
-                                                            ${parseFloat(inv.total_amount || 0).toFixed(2)}
-                                                        </td>
-                                                        <td className="text-muted font-mono">{inv.date_issued}</td>
-                                                        <td onClick={(e) => e.stopPropagation()}>
+                                                    )}
+                                                    <td>
+                                                        <div className="vehicle-desc">
+                                                            {inv.year} {inv.make} {inv.model}
+                                                        </div>
+                                                        <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                            🚗 {inv.license_plate}
+                                                        </div>
+                                                    </td>
+                                                    <td className="font-mono">${parseFloat(inv.subtotal || 0).toFixed(2)}</td>
+                                                    <td className="font-mono text-muted">${parseFloat(inv.tax_amount || 0).toFixed(2)}</td>
+                                                    <td className="font-mono amount-text" style={{ color: 'var(--accent-yellow)', fontWeight: 800 }}>
+                                                        ${parseFloat(inv.total_amount || 0).toFixed(2)}
+                                                    </td>
+                                                    <td className="text-muted font-mono">{inv.date_issued}</td>
+                                                    <td onClick={(e) => e.stopPropagation()}>
+                                                        {isAdmin ? (
+                                                            /* Admin: Interactive Status Dropdown */
                                                             <select
                                                                 className={`status-dropdown-select status-${(inv.status || 'pending').toLowerCase()}`}
                                                                 value={(inv.status || 'pending').toLowerCase()}
@@ -328,33 +360,39 @@ export default function Invoices() {
                                                                 <option value="overdue">● OVERDUE</option>
                                                                 <option value="cancelled">● CANCELLED</option>
                                                             </select>
-                                                        </td>
-                                                        <td className="text-right">
-                                                            <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                                                                {inv.status !== 'paid' && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="action-icon-btn"
-                                                                        style={{ color: 'var(--status-success)', borderColor: 'rgba(16, 185, 129, 0.3)' }}
-                                                                        title="Mark as Paid"
-                                                                        onClick={(e) => handleUpdateStatus(inv.invoice_id, 'paid', e)}
-                                                                    >
-                                                                        <CheckCircleIcon fontSize="small" />
-                                                                    </button>
-                                                                )}
+                                                        ) : (
+                                                            /* Owner: Read-Only Status Badge */
+                                                            <span className={`status-pill pill-${(inv.status || 'pending').toLowerCase()}`}>
+                                                                ● {(inv.status || 'pending').toUpperCase()}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="text-right">
+                                                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                                                            {isAdmin && inv.status !== 'paid' && (
                                                                 <button
                                                                     type="button"
                                                                     className="action-icon-btn"
-                                                                    title="View & Print Official Tax Invoice PDF"
-                                                                    onClick={() => handleViewPdf(inv)}
+                                                                    style={{ color: 'var(--status-success)', borderColor: 'rgba(16, 185, 129, 0.3)' }}
+                                                                    title="Mark as Paid"
+                                                                    onClick={(e) => handleUpdateStatus(inv.invoice_id, 'paid', e)}
                                                                 >
-                                                                    <PictureAsPdfIcon fontSize="small" />
+                                                                    <CheckCircleIcon fontSize="small" />
                                                                 </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            )}
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="action-icon-btn"
+                                                                title="View & Print Official Tax Invoice PDF"
+                                                                onClick={() => handleViewPdf(inv)}
+                                                            >
+                                                                <PictureAsPdfIcon fontSize="small" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
