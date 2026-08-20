@@ -51,12 +51,12 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* ==================================================== */}
                     {isAdmin && (
                         <>
-                            <NavLink to="/dashboard" className={getNavClass}>
+                            <NavLink to="/dashboard" end className={getNavClass}>
                                 <span className="material-symbols-outlined">dashboard</span>
                                 <span>Dashboard</span>
                             </NavLink>
 
-                            <NavLink to="/staff/dashboard" className={getNavClass}>
+                            <NavLink to="/staff/dashboard" end className={getNavClass}>
                                 <span className="material-symbols-outlined">engineering</span>
                                 <span>Staff Hub</span>
                             </NavLink>
@@ -66,47 +66,42 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <span>Work Orders</span>
                             </NavLink>
 
-                            <NavLink to="/invoices" className={getNavClass}>
+                            <NavLink to="/invoices" end className={getNavClass}>
                                 <span className="material-symbols-outlined">receipt_long</span>
                                 <span>Invoices</span>
                             </NavLink>
 
-                            <NavLink to="/inventory" className={getNavClass}>
+                            <NavLink to="/inventory" end className={getNavClass}>
                                 <span className="material-symbols-outlined">inventory_2</span>
                                 <span>Inventory</span>
                             </NavLink>
 
-                            <NavLink to="/scheduling" className={getNavClass}>
+                            <NavLink to="/scheduling" end className={getNavClass}>
                                 <span className="material-symbols-outlined">calendar_month</span>
                                 <span>Scheduling</span>
                             </NavLink>
 
-                            <NavLink to="/owners" className={getNavClass}>
+                            <NavLink to="/owners" end className={getNavClass}>
                                 <span className="material-symbols-outlined">group</span>
                                 <span>Owners Directory</span>
                             </NavLink>
 
-                            <NavLink to="/owner/cars" className={getNavClass}>
+                            <NavLink to="/owner/cars" end className={getNavClass}>
                                 <span className="material-symbols-outlined">directions_car</span>
                                 <span>Owner's Cars</span>
                             </NavLink>
 
-                            <NavLink to="/staff" className={getNavClass}>
+                            <NavLink to="/staff" end className={getNavClass}>
                                 <span className="material-symbols-outlined">badge</span>
                                 <span>Staff Directory</span>
                             </NavLink>
 
-                            <NavLink to="/intake" className={getNavClass}>
-                                <span className="material-symbols-outlined">add_circle</span>
-                                <span>Vehicle Intake</span>
-                            </NavLink>
-
-                            <NavLink to="/audit-log" className={getNavClass}>
+                            <NavLink to="/audit-log" end className={getNavClass}>
                                 <span className="material-symbols-outlined">assessment</span>
                                 <span>Audit Log</span>
                             </NavLink>
 
-                            <NavLink to="/users" className={getNavClass}>
+                            <NavLink to="/users" end className={getNavClass}>
                                 <span className="material-symbols-outlined">admin_panel_settings</span>
                                 <span>Users & Roles</span>
                             </NavLink>
@@ -118,22 +113,17 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* ==================================================== */}
                     {isStaff && (
                         <>
-                            <NavLink to="/staff/dashboard" className={getNavClass}>
+                            <NavLink to="/staff/dashboard" end className={getNavClass}>
                                 <span className="material-symbols-outlined">engineering</span>
                                 <span>Staff Dashboard</span>
                             </NavLink>
 
-                            <NavLink to="/staff/schedules" className={getNavClass}>
+                            <NavLink to="/staff/schedules" end className={getNavClass}>
                                 <span className="material-symbols-outlined">calendar_month</span>
                                 <span>Workshop Schedules</span>
                             </NavLink>
 
-                            <NavLink to="/intake" className={getNavClass}>
-                                <span className="material-symbols-outlined">add_circle</span>
-                                <span>Vehicle Intake</span>
-                            </NavLink>
-
-                            <NavLink to="/inventory" className={getNavClass}>
+                            <NavLink to="/inventory" end className={getNavClass}>
                                 <span className="material-symbols-outlined">inventory_2</span>
                                 <span>Inventory Parts</span>
                             </NavLink>
@@ -145,12 +135,12 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* ==================================================== */}
                     {isOwner && (
                         <>
-                            <NavLink to="/owner/cars" className={getNavClass}>
+                            <NavLink to="/owner/cars" end className={getNavClass}>
                                 <span className="material-symbols-outlined">directions_car</span>
                                 <span>My Garage / Cars</span>
                             </NavLink>
 
-                            <NavLink to="/invoices" className={getNavClass}>
+                            <NavLink to="/invoices" end className={getNavClass}>
                                 <span className="material-symbols-outlined">receipt_long</span>
                                 <span>Invoices & Billing</span>
                             </NavLink>
@@ -160,7 +150,7 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* Fallback for unauthenticated guest preview */}
                     {!user && (
                         <>
-                            <NavLink to="/login" className={getNavClass}>
+                            <NavLink to="/login" end className={getNavClass}>
                                 <span className="material-symbols-outlined">login</span>
                                 <span>Sign In</span>
                             </NavLink>
@@ -168,8 +158,16 @@ export default function Sidebar({ isOpen, onClose }) {
                     )}
                 </div>
 
-                {/* Bottom User Identity & Logout */}
+                {/* Bottom Section: Vehicle Intake Quick Action, User Identity & Logout */}
                 <div className="sidebar-footer">
+                    {/* Prominent Vehicle Intake Quick Button */}
+                    {(isAdmin || isStaff) && (
+                        <NavLink to="/intake" end className="sidebar-intake-btn" title="Intake new vehicle into workshop">
+                            <span className="material-symbols-outlined">add_circle</span>
+                            <span>Vehicle Intake</span>
+                        </NavLink>
+                    )}
+
                     {user && (
                         <div className="sidebar-user-card">
                             <div className="sidebar-user-top">

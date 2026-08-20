@@ -108,6 +108,41 @@
     gap: 8px;
 }
 
+/* Prominent Vehicle Intake Quick Button */
+.sidebar-intake-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #ffd85f 0%, #d4a827 100%);
+    color: #121913;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 10px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    letter-spacing: 0.03em;
+    box-shadow: 0 4px 12px rgba(255, 216, 95, 0.22);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-intake-btn:hover {
+    background: linear-gradient(135deg, #ffe17d 0%, #ffd85f 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(255, 216, 95, 0.38);
+    color: #0b110c;
+}
+
+.sidebar-intake-btn.active {
+    outline: 2px solid #ffd85f;
+    outline-offset: 2px;
+}
+
+.sidebar-intake-btn .material-symbols-outlined {
+    font-size: 20px;
+}
+
 .sidebar-user-card {
     background-color: rgba(22, 30, 24, 0.7);
     border: 1px solid rgba(255, 216, 95, 0.15);

@@ -72,8 +72,21 @@ export default function StaffDashboard() {
         }
     };
 
+    // Filter active in-garage orders (excluding completed/cancelled)
+    const activeGarageOrders = workOrders.filter(
+        (wo) => wo.status !== 'completed' && wo.status !== 'cancelled'
+    );
+
+    const metrics = {
+        total: activeGarageOrders.length,
+        received: activeGarageOrders.filter((w) => w.status === 'received').length,
+        diagnosed: activeGarageOrders.filter((w) => w.status === 'diagnosed').length,
+        inProgress: activeGarageOrders.filter((w) => w.status === 'in_progress').length,
+        ready: activeGarageOrders.filter((w) => w.status === 'ready').length,
+    };
+
     // Filter logic
-    const filteredOrders = workOrders.filter((wo) => {
+    const filteredOrders = activeGarageOrders.filter((wo) => {
         const query = searchTerm.toLowerCase();
         const matchesSearch =
             (wo.work_order_id || '').toLowerCase().includes(query) ||
@@ -86,14 +99,6 @@ export default function StaffDashboard() {
         const matchesStatus = statusFilter === 'all' || wo.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
-
-    const metrics = {
-        total: workOrders.length,
-        received: workOrders.filter((w) => w.status === 'received').length,
-        diagnosed: workOrders.filter((w) => w.status === 'diagnosed').length,
-        inProgress: workOrders.filter((w) => w.status === 'in_progress').length,
-        completed: workOrders.filter((w) => w.status === 'completed').length,
-    };
 
     return (
         <div className="staff-layout">
@@ -227,14 +232,14 @@ export default function StaffDashboard() {
                                 </div>
                             </div>
 
-                            <div className="metric-card card-completed" onClick={() => setStatusFilter('completed')}>
-                                <div className="metric-icon-wrap icon-completed">
+                            <div className="metric-card card-ready" onClick={() => setStatusFilter('ready')} style={{ borderColor: 'rgba(45, 212, 191, 0.3)' }}>
+                                <div className="metric-icon-wrap" style={{ color: '#2dd4bf', backgroundColor: 'rgba(45, 212, 191, 0.1)', borderColor: 'rgba(45, 212, 191, 0.3)' }}>
                                     <CheckCircleIcon />
                                 </div>
                                 <div>
-                                    <div className="metric-label">Completed Jobs</div>
-                                    <div className="metric-val text-purple">{metrics.completed}</div>
-                                    <div className="metric-hint">Ready for Invoicing</div>
+                                    <div className="metric-label">Ready for Pickup</div>
+                                    <div className="metric-val" style={{ color: '#2dd4bf' }}>{metrics.ready}</div>
+                                    <div className="metric-hint">Ready for Customer</div>
                                 </div>
                             </div>
                         </div>
@@ -247,7 +252,7 @@ export default function StaffDashboard() {
                                     className={`tab-btn ${statusFilter === 'all' ? 'active' : ''}`}
                                     onClick={() => setStatusFilter('all')}
                                 >
-                                    All Jobs ({metrics.total})
+                                    All In-Garage ({metrics.total})
                                 </button>
                                 <button
                                     className={`tab-btn tab-received ${statusFilter === 'received' ? 'active' : ''}`}
@@ -268,10 +273,11 @@ export default function StaffDashboard() {
                                     In Progress ({metrics.inProgress})
                                 </button>
                                 <button
-                                    className={`tab-btn tab-completed ${statusFilter === 'completed' ? 'active' : ''}`}
-                                    onClick={() => setStatusFilter('completed')}
+                                    className={`tab-btn ${statusFilter === 'ready' ? 'active' : ''}`}
+                                    onClick={() => setStatusFilter('ready')}
+                                    style={statusFilter === 'ready' ? { backgroundColor: 'rgba(45, 212, 191, 0.2)', color: '#2dd4bf', borderColor: '#2dd4bf' } : {}}
                                 >
-                                    Completed ({metrics.completed})
+                                    Ready ({metrics.ready})
                                 </button>
                             </div>
                         </div>

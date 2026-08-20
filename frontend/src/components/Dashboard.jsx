@@ -107,8 +107,12 @@ export default function Dashboard() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Filter work orders
-    const filteredOrders = workOrders.filter((wo) => {
+    // Filter only active in-workshop work orders (excluding completed/cancelled)
+    const activeWorkOrders = workOrders.filter(
+        (wo) => wo.status !== 'completed' && wo.status !== 'cancelled'
+    );
+
+    const filteredOrders = activeWorkOrders.filter((wo) => {
         const query = searchTerm.toLowerCase();
         const matchesSearch =
             (wo.work_order_id || '').toLowerCase().includes(query) ||
@@ -247,7 +251,7 @@ export default function Dashboard() {
                                     </div>
                                     <div>
                                         <h3 className="card-heading-title">Live Work Orders Hub</h3>
-                                        <p className="card-heading-sub">Real-time status, lead mechanics, and billing for vehicles in shop</p>
+                                        <p className="card-heading-sub">Active repairs & live vehicle queue currently inside workshop bays</p>
                                     </div>
                                 </div>
 
@@ -257,7 +261,7 @@ export default function Dashboard() {
                                             className={`filter-pill-btn ${statusFilter === 'all' ? 'active' : ''}`}
                                             onClick={() => setStatusFilter('all')}
                                         >
-                                            All ({workOrders.length})
+                                            All In-Shop ({activeWorkOrders.length})
                                         </button>
                                         <button
                                             className={`filter-pill-btn ${statusFilter === 'in_progress' ? 'active' : ''}`}
@@ -272,16 +276,16 @@ export default function Dashboard() {
                                             Received ({receivedCount})
                                         </button>
                                         <button
+                                            className={`filter-pill-btn ${statusFilter === 'diagnosed' ? 'active' : ''}`}
+                                            onClick={() => setStatusFilter('diagnosed')}
+                                        >
+                                            Diagnosed ({diagnosedCount})
+                                        </button>
+                                        <button
                                             className={`filter-pill-btn ${statusFilter === 'ready' ? 'active' : ''}`}
                                             onClick={() => setStatusFilter('ready')}
                                         >
                                             Ready ({readyCount})
-                                        </button>
-                                        <button
-                                            className={`filter-pill-btn ${statusFilter === 'completed' ? 'active' : ''}`}
-                                            onClick={() => setStatusFilter('completed')}
-                                        >
-                                            Completed ({completedCount})
                                         </button>
                                     </div>
 
@@ -303,7 +307,7 @@ export default function Dashboard() {
                                     </div>
                                 ) : filteredOrders.length === 0 ? (
                                     <div className="empty-dashboard-state">
-                                        No work orders found matching the filter. Click <Link to="/intake" style={{ color: 'var(--accent-yellow)', fontWeight: 700 }}>"New Intake Order"</Link> to create one.
+                                        No active vehicles currently in the workshop queue. Click <Link to="/intake" style={{ color: 'var(--accent-yellow)', fontWeight: 700 }}>"New Intake Order"</Link> to intake a vehicle.
                                     </div>
                                 ) : (
                                     filteredOrders.map((wo) => {
