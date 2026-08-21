@@ -396,11 +396,6 @@ export default function WorkOrderDetails() {
                         <button className="icon-btn" onClick={fetchOrderDetails} title="Refresh Live Data">
                             <span className="material-symbols-outlined">refresh</span>
                         </button>
-
-                        <button className="icon-btn" aria-label="Notifications">
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="notification-badge"></span>
-                        </button>
                     </div>
                 </header>
 

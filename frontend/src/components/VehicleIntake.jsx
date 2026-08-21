@@ -208,14 +208,6 @@ export default function VehicleIntake() {
                     </div>
 
                     <div className="header-right">
-                        <div className="intake-tag-badge">
-                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>database</span>
-                            <span>POSTGRESQL INTAKE PIPELINE</span>
-                        </div>
-                        <button className="icon-btn" aria-label="Notifications">
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="notification-badge"></span>
-                        </button>
                     </div>
                 </header>
 
@@ -239,8 +231,8 @@ export default function VehicleIntake() {
                                     directions_car
                                 </span>
                                 <div>
-                                    <h3>Vehicle Identification (vehicles table)</h3>
-                                    <p className="card-desc">Captures VIN, specifications, and assigns <code>vehicle_id</code></p>
+                                    <h3>Vehicle Identification & Specifications</h3>
+                                    <p className="card-desc">Enter vehicle VIN, year, make, model, and registration plate.</p>
                                 </div>
                             </div>
 
@@ -341,8 +333,8 @@ export default function VehicleIntake() {
                                     person
                                 </span>
                                 <div>
-                                    <h3>Owner Details (car_owners table)</h3>
-                                    <p className="card-desc">Stored with Phone, Name, and Email</p>
+                                    <h3>Customer & Owner Information</h3>
+                                    <p className="card-desc">Search existing customer or enter new contact information.</p>
                                 </div>
                             </div>
 
@@ -447,7 +439,7 @@ export default function VehicleIntake() {
                                 </span>
                                 <div>
                                     <h3>Initial Observations & Work Order Parameters</h3>
-                                    <p className="card-desc">Status set to <code>'received'</code>, Costs initialized to <code>$0.00</code>, Bay/Advisor initialized to <code>NULL</code></p>
+                                    <p className="card-desc">Record customer concerns, initial diagnostics, and intake notes.</p>
                                 </div>
                             </div>
 
@@ -486,7 +478,7 @@ export default function VehicleIntake() {
                                         </div>
                                         <div className="meta-item">
                                             <span className="meta-label">BAY / ADVISOR / STAFF:</span>
-                                            <span className="meta-val" style={{ color: 'var(--text-muted)' }}>Unassigned (NULL)</span>
+                                            <span className="meta-val" style={{ color: 'var(--text-muted)' }}>Unassigned</span>
                                         </div>
                                         <div className="meta-item">
                                             <span className="meta-label">SCHEDULE TIMESTAMPS:</span>
@@ -522,7 +514,7 @@ export default function VehicleIntake() {
                         </div>
                         <h3 className="success-modal-title">Vehicle Intake Complete!</h3>
                         <p className="success-modal-subtitle">
-                            Generated PostgreSQL Work Order, Vehicle, and Owner records:
+                            New repair work order and customer intake records created:
                         </p>
 
                         <div className="success-details-grid">

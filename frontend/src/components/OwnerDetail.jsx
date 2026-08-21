@@ -10,7 +10,6 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import MenuIcon from '@mui/icons-material/Menu';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import './css/OwnerDetail.css';
 
@@ -115,10 +114,6 @@ export default function OwnerDetail() {
                     <div className="header-actions">
                         <button className="icon-btn" onClick={fetchOwnerDetails} title="Refresh Live Data">
                             <RefreshIcon fontSize="small" />
-                        </button>
-                        <button className="icon-btn" aria-label="Notifications">
-                            <NotificationsIcon fontSize="small" />
-                            <span className="notification-badge"></span>
                         </button>
                     </div>
                 </header>

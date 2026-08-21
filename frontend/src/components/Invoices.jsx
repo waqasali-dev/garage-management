@@ -301,7 +301,7 @@ export default function Invoices() {
                                         {isLoading ? (
                                             <tr>
                                                 <td colSpan={isOwner ? "9" : "10"} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                                                    Loading invoices records from database...
+                                                    Loading invoice records...
                                                 </td>
                                             </tr>
                                         ) : filteredInvoices.length === 0 ? (

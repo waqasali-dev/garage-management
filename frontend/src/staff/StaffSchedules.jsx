@@ -266,7 +266,7 @@ export default function StaffSchedules() {
                                 <div className="daily-tasks-list">
                                     {isLoading ? (
                                         <div className="empty-sched-state">
-                                            <p>Loading scheduled appointments from database...</p>
+                                            <p>Loading scheduled appointments...</p>
                                         </div>
                                     ) : dayTasks.length === 0 ? (
                                         <div className="empty-sched-state">

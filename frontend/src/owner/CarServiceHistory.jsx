@@ -239,7 +239,7 @@ export default function CarServiceHistory() {
                                         <div className="empty-history-box">
                                             <CalendarMonthIcon style={{ fontSize: '48px', color: 'var(--text-muted)' }} />
                                             <h3>No Work Orders Recorded Yet</h3>
-                                            <p>This vehicle is registered in the precision fleet database, but has not completed any maintenance orders yet.</p>
+                                            <p>This vehicle is registered in the precision fleet system, but has not completed any maintenance orders yet.</p>
                                         </div>
                                     ) : (
                                         <div className="timeline-cards-list">

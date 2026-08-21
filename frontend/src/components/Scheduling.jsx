@@ -296,10 +296,6 @@ export default function Scheduling() {
                         <button className="icon-btn" onClick={fetchSchedules} title="Refresh Schedules">
                             <RefreshIcon fontSize="small" />
                         </button>
-                        <button className="icon-btn" aria-label="Notifications">
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="notification-badge"></span>
-                        </button>
                     </div>
                 </header>
 

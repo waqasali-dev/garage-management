@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -181,10 +180,6 @@ export default function Staff() {
                     <div className="header-actions">
                         <button className="icon-btn" onClick={fetchStaff} title="Refresh Live Data">
                             <RefreshIcon fontSize="small" />
-                        </button>
-                        <button className="icon-btn" aria-label="Notifications">
-                            <NotificationsIcon fontSize="small" />
-                            <span className="notification-badge"></span>
                         </button>
                     </div>
                 </header>

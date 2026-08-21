@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -236,9 +235,6 @@ export default function OwnersList() {
                     <div className="header-actions">
                         <button className="icon-btn" onClick={fetchOwners} title="Refresh Directory">
                             <RefreshIcon fontSize="small" />
-                        </button>
-                        <button className="icon-btn" aria-label="Notifications">
-                            <NotificationsIcon fontSize="small" />
                         </button>
                     </div>
                 </header>

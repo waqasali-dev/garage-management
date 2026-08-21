@@ -192,7 +192,7 @@ export default function Dashboard() {
                         </div>
                         <div className="status-pill">
                             <span className="pulse-dot"></span>
-                            <span>PostgreSQL & Redis Online</span>
+                            <span>Workshop Network Online</span>
                         </div>
                     </section>
 
@@ -303,7 +303,7 @@ export default function Dashboard() {
                             <div className="dashboard-orders-list">
                                 {isLoading ? (
                                     <div className="empty-dashboard-state">
-                                        Loading active work orders from PostgreSQL...
+                                        Loading active work orders...
                                     </div>
                                 ) : filteredOrders.length === 0 ? (
                                     <div className="empty-dashboard-state">

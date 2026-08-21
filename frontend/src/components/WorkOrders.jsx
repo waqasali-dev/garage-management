@@ -134,11 +134,6 @@ export default function WorkOrders() {
                         <button className="icon-btn" onClick={fetchWorkOrders} title="Refresh Work Orders">
                             <span className="material-symbols-outlined">refresh</span>
                         </button>
-
-                        <button className="icon-btn" aria-label="Notifications">
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="notification-badge"></span>
-                        </button>
                     </div>
                 </header>
 
@@ -257,7 +252,7 @@ export default function WorkOrders() {
                                         {isLoading ? (
                                             <tr>
                                                 <td colSpan="9" className="empty-table-state">
-                                                    Loading work orders from PostgreSQL database...
+                                                    Loading work orders...
                                                 </td>
                                             </tr>
                                         ) : filteredOrders.length === 0 ? (

@@ -116,7 +116,7 @@ export default function OwnerCars() {
                                 <div className="empty-vehicles-box">
                                     <DirectionsCarIcon style={{ fontSize: '48px', color: 'var(--text-muted)' }} />
                                     <h3>Loading your vehicles...</h3>
-                                    <p>Connecting with database to retrieve your registered vehicle profile.</p>
+                                    <p>Retrieving your registered vehicle profile and service records.</p>
                                 </div>
                             ) : vehicles.length === 0 ? (
                                 <div className="empty-vehicles-box">

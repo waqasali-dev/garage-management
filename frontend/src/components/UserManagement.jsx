@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SecurityIcon from '@mui/icons-material/Security';
 import KeyIcon from '@mui/icons-material/Key';
@@ -216,7 +215,7 @@ export default function UserManagement() {
             }
 
             showNotification(
-                `🎉 Success: Created ${formData.role.toUpperCase()} account for [${data.user?.email || formData.email}] in PostgreSQL!`,
+                `🎉 Success: Created ${formData.role.toUpperCase()} account for [${data.user?.email || formData.email}] successfully!`,
                 'success'
             );
             setIsModalOpen(false);
@@ -332,19 +331,9 @@ export default function UserManagement() {
                         <button
                             className="icon-btn"
                             onClick={loadDatabaseData}
-                            title="Refresh from PostgreSQL Database"
+                            title="Refresh User Directory"
                         >
                             <RefreshIcon fontSize="small" />
-                        </button>
-
-                        <div className={`admin-status-badge ${dbConnected ? '' : 'badge-disconnected'}`}>
-                            <StorageIcon fontSize="small" />
-                            <span>{dbConnected ? 'POSTGRESQL LIVE' : 'CONNECTING DB...'}</span>
-                        </div>
-
-                        <button className="icon-btn" aria-label="Notifications">
-                            <NotificationsIcon fontSize="small" />
-                            <span className="notification-badge"></span>
                         </button>
                     </div>
                 </header>
@@ -366,12 +355,12 @@ export default function UserManagement() {
                                 <div className="badge-row">
                                     <span className="security-tag">
                                         <AdminPanelSettingsIcon fontSize="inherit" />
-                                        SUPERADMIN ACCESS CONTROL
+                                        ACCESS CONTROL & PERMISSIONS
                                     </span>
                                 </div>
                                 <h2 className="page-title">User Accounts & Role Management</h2>
                                 <p className="page-subtitle">
-                                    Create and manage accounts stored in PostgreSQL <code>users</code>, <code>staff_data</code>, and <code>car_owners</code> tables.
+                                    Create, configure, and manage system roles, staff permissions, and customer accounts.
                                 </p>
                             </div>
 
@@ -425,7 +414,7 @@ export default function UserManagement() {
                                 <div>
                                     <div className="metric-title">Staff Members</div>
                                     <div className="metric-num text-emerald">{stats.staff}</div>
-                                    <div className="metric-sub">Stored in staff_data</div>
+                                    <div className="metric-sub">Technicians & Service Staff</div>
                                 </div>
                             </div>
 
@@ -436,7 +425,7 @@ export default function UserManagement() {
                                 <div>
                                     <div className="metric-title">Car Owners</div>
                                     <div className="metric-num text-blue">{stats.carOwners}</div>
-                                    <div className="metric-sub">Stored in car_owners</div>
+                                    <div className="metric-sub">Registered Vehicle Owners</div>
                                 </div>
                             </div>
 
@@ -447,7 +436,7 @@ export default function UserManagement() {
                                 <div>
                                     <div className="metric-title">Active Accounts</div>
                                     <div className="metric-num text-success">{stats.active} / {stats.total}</div>
-                                    <div className="metric-sub">Database Authorized</div>
+                                    <div className="metric-sub">Operational Accounts</div>
                                 </div>
                             </div>
                         </div>
@@ -515,13 +504,13 @@ export default function UserManagement() {
                                     {isLoading ? (
                                         <tr>
                                             <td colSpan="7" className="no-data-cell">
-                                                Loading user accounts from PostgreSQL database...
+                                                Loading user accounts...
                                             </td>
                                         </tr>
                                     ) : filteredUsers.length === 0 ? (
                                         <tr>
                                             <td colSpan="7" className="no-data-cell">
-                                                No user accounts in PostgreSQL. Click "CREATE ADMIN", "CREATE STAFF USER", or "CREATE CAR OWNER USER" above to add accounts.
+                                                No user accounts found. Click "CREATE ADMIN", "CREATE STAFF USER", or "CREATE CAR OWNER USER" above to add accounts.
                                             </td>
                                         </tr>
                                     ) : (
@@ -540,7 +529,7 @@ export default function UserManagement() {
                                                         </div>
                                                         <div>
                                                             <div className="user-email-text">{user.email}</div>
-                                                            <div className="user-id-text">USER_ID #{user.user_id}</div>
+                                                            <div className="user-id-text">Account #{user.user_id}</div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -556,12 +545,12 @@ export default function UserManagement() {
                                                         <span className="profile-name">{user.linkedName}</span>
                                                         {user.staff_id && (
                                                             <span className="foreign-key-tag">
-                                                                <code>staff_data.staff_id #{user.staff_id}</code> {user.details && `• ${user.details}`}
+                                                                <code>Staff ID: #{user.staff_id}</code> {user.details && `• ${user.details}`}
                                                             </span>
                                                         )}
                                                         {user.owner_id && (
                                                             <span className="foreign-key-tag">
-                                                                <code>car_owners.owner_id #{user.owner_id}</code> {user.details && `• ${user.details}`}
+                                                                <code>Owner ID: #{user.owner_id}</code> {user.details && `• ${user.details}`}
                                                             </span>
                                                         )}
                                                         {!user.staff_id && !user.owner_id && (
@@ -616,17 +605,6 @@ export default function UserManagement() {
                                 </tbody>
                             </table>
                         </div>
-
-                        {/* Database Constraint Banner */}
-                        <div className="schema-info-card">
-                            <div className="schema-info-header">
-                                <KeyIcon fontSize="small" />
-                                <span>Relational Integrity (staff_data & car_owners tables)</span>
-                            </div>
-                            <p className="schema-info-text">
-                                PostgreSQL <code>users</code> table enforces <code>chk_user_profile_alignment</code>: Staff records are inserted into <code>staff_data</code> and linked via <code>staff_id</code>, Car Owner records are inserted into <code>car_owners</code> and linked via <code>owner_id</code>, and Admin accounts hold root authority.
-                            </p>
-                        </div>
                     </div>
                 </main>
             </div>
@@ -649,11 +627,11 @@ export default function UserManagement() {
                                 <div>
                                     <h3 className="modal-title">
                                         {formData.role === 'admin' && 'Create Admin Account'}
-                                        {formData.role === 'staff' && 'Create Staff Member (staff_data & users)'}
-                                        {formData.role === 'car_owner' && 'Create Car Owner (car_owners & users)'}
+                                        {formData.role === 'staff' && 'Create Staff Member'}
+                                        {formData.role === 'car_owner' && 'Create Car Owner'}
                                     </h3>
                                     <p className="modal-subtitle">
-                                        Insert record directly into PostgreSQL <code>{formData.role === 'staff' ? 'staff_data & users' : formData.role === 'car_owner' ? 'car_owners & users' : 'users'}</code>
+                                        Configure account credentials, profile details, and portal access.
                                     </p>
                                 </div>
                             </div>
@@ -667,7 +645,7 @@ export default function UserManagement() {
                             <div className="form-group">
                                 <label className="form-label">
                                     <SecurityIcon className="label-icon" fontSize="inherit" />
-                                    Select Target Role (user_role_enum)
+                                    Select Account Role
                                 </label>
                                 <div className="role-selector-tabs">
                                     <button
@@ -684,7 +662,7 @@ export default function UserManagement() {
                                         <AdminPanelSettingsIcon fontSize="small" />
                                         <div>
                                             <div className="tab-title">ADMIN</div>
-                                            <div className="tab-desc">Root Authority</div>
+                                            <div className="tab-desc">Full Authority</div>
                                         </div>
                                     </button>
 
@@ -702,7 +680,7 @@ export default function UserManagement() {
                                         <EngineeringIcon fontSize="small" />
                                         <div>
                                             <div className="tab-title">STAFF</div>
-                                            <div className="tab-desc">staff_data Table</div>
+                                            <div className="tab-desc">Workshop Staff</div>
                                         </div>
                                     </button>
 
@@ -720,21 +698,21 @@ export default function UserManagement() {
                                         <DirectionsCarIcon fontSize="small" />
                                         <div>
                                             <div className="tab-title">CAR OWNER</div>
-                                            <div className="tab-desc">car_owners Table</div>
+                                            <div className="tab-desc">Vehicle Owner</div>
                                         </div>
                                     </button>
                                 </div>
                             </div>
 
                             {/* ========================================================= */}
-                            {/* 1. STAFF SPECIFIC SECTION (staff_data)                     */}
+                            {/* 1. STAFF SPECIFIC SECTION                                 */}
                             {/* ========================================================= */}
                             {formData.role === 'staff' && (
                                 <div className="profile-section-box">
                                     <div className="subform-grid">
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="staff_name">
-                                                Staff Full Name (staff_data.full_name) *
+                                                Staff Full Name *
                                             </label>
                                             <input
                                                 type="text"
@@ -772,7 +750,7 @@ export default function UserManagement() {
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="email">
                                                 <span className="material-symbols-outlined label-icon">mail</span>
-                                                Staff Work Email (users.email) *
+                                                Staff Work Email *
                                             </label>
                                             <input
                                                 type="email"
@@ -788,7 +766,7 @@ export default function UserManagement() {
 
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="staff_phone">
-                                                <PhoneIcon fontSize="inherit" /> Phone Number (staff_data.phone_number)
+                                                <PhoneIcon fontSize="inherit" /> Phone Number
                                             </label>
                                             <input
                                                 type="text"
@@ -844,7 +822,7 @@ export default function UserManagement() {
 
                                         <div className="form-group grid-full">
                                             <label className="form-label" htmlFor="staff_address">
-                                                <HomeIcon fontSize="inherit" /> Residential Address (staff_data.residential_address)
+                                                <HomeIcon fontSize="inherit" /> Residential Address
                                             </label>
                                             <input
                                                 type="text"
@@ -865,7 +843,7 @@ export default function UserManagement() {
                                                     checked={formData.is_active}
                                                     onChange={handleFormChange}
                                                 />
-                                                <span>Enable account login immediately (<code>is_active = TRUE</code>)</span>
+                                                <span>Enable account login immediately</span>
                                             </label>
                                         </div>
                                     </div>
@@ -873,7 +851,7 @@ export default function UserManagement() {
                             )}
 
                             {/* ========================================================= */}
-                            {/* 2. CAR OWNER SPECIFIC SECTION (car_owners & users)        */}
+                            {/* 2. CAR OWNER SPECIFIC SECTION                             */}
                             {/* ========================================================= */}
                             {formData.role === 'car_owner' && (
                                 <div className="profile-section-box">
@@ -887,11 +865,11 @@ export default function UserManagement() {
                                                     onChange={handleToggleAlreadyCustomer}
                                                 />
                                                 <span style={{ fontWeight: 700, color: 'var(--accent-yellow)' }}>
-                                                    Already Customer (Link Existing Intake Profile)
+                                                    Existing Customer (Link Intake Profile)
                                                 </span>
                                             </label>
                                             <span className="already-customer-hint font-mono">
-                                                Select customers created during vehicle intake without portal accounts
+                                                Select customer profiles already registered during intake
                                             </span>
                                         </div>
 
@@ -937,7 +915,7 @@ export default function UserManagement() {
                                             {isAlreadyCustomer && showEmailDropdown && unlinkedOwners.length > 0 && (
                                                 <div className="unlinked-owners-dropdown">
                                                     <div className="dropdown-header font-mono">
-                                                        Existing Intake Customers without Portal Accounts ({unlinkedOwners.length})
+                                                        Registered Customers without Portal Accounts ({unlinkedOwners.length})
                                                     </div>
                                                     <div className="dropdown-list">
                                                         {unlinkedOwners
@@ -979,7 +957,7 @@ export default function UserManagement() {
 
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="owner_name">
-                                                Owner Full Name (car_owners.full_name) *
+                                                Owner Full Name *
                                             </label>
                                             <input
                                                 type="text"
@@ -995,7 +973,7 @@ export default function UserManagement() {
 
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="owner_phone">
-                                                <PhoneIcon fontSize="inherit" /> Phone Number (car_owners.phone_number) *
+                                                <PhoneIcon fontSize="inherit" /> Phone Number *
                                             </label>
                                             <input
                                                 type="text"
@@ -1011,7 +989,7 @@ export default function UserManagement() {
 
                                         <div className="form-group grid-full">
                                             <label className="form-label" htmlFor="owner_address">
-                                                <HomeIcon fontSize="inherit" /> Billing Address (car_owners.billing_address)
+                                                <HomeIcon fontSize="inherit" /> Billing Address
                                             </label>
                                             <input
                                                 type="text"
@@ -1058,7 +1036,7 @@ export default function UserManagement() {
                                                     onChange={handleFormChange}
                                                 />
                                                 <span className="vip-text">
-                                                    <StarIcon fontSize="inherit" /> Mark as VIP Customer (<code>car_owners.is_vip = TRUE</code>)
+                                                    <StarIcon fontSize="inherit" /> Mark as VIP Customer
                                                 </span>
                                             </label>
                                         </div>
@@ -1071,7 +1049,7 @@ export default function UserManagement() {
                                                     checked={formData.is_active}
                                                     onChange={handleFormChange}
                                                 />
-                                                <span>Enable account login immediately (<code>is_active = TRUE</code>)</span>
+                                                <span>Enable account login immediately</span>
                                             </label>
                                         </div>
                                     </div>

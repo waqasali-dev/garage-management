@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import DownloadIcon from '@mui/icons-material/Download';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -133,9 +132,6 @@ export default function AuditLog() {
                     <div className="header-actions">
                         <button className="icon-btn" onClick={() => fetchLogs(0, false)} title="Refresh Stream">
                             <RefreshIcon fontSize="small" />
-                        </button>
-                        <button className="icon-btn" aria-label="Notifications">
-                            <NotificationsIcon fontSize="small" />
                         </button>
                     </div>
                 </header>
@@ -309,14 +305,14 @@ export default function AuditLog() {
                                 </div>
                                 <div className="live-status">
                                     <span className="pulse-dot"></span>
-                                    <span>PostgreSQL Connected</span>
+                                    <span>Live Event Stream</span>
                                 </div>
                             </div>
 
                             <div className="timeline-container">
                                 {isLoading && logs.length === 0 ? (
                                     <div className="empty-stream-box">
-                                        Loading audit trail from PostgreSQL...
+                                        Loading audit activity trail...
                                     </div>
                                 ) : logs.length === 0 ? (
                                     <div className="empty-stream-box">

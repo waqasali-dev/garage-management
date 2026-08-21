@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import BuildIcon from '@mui/icons-material/Build';
@@ -118,7 +117,7 @@ export default function StaffDashboard() {
                         <div className="header-title-wrap">
                             <h2 className="header-title">Staff Workshop & Repair Hub</h2>
                             <span className="live-status-pill">
-                                <span className="pulse-dot"></span> LIVE REDIS CACHED
+                                <span className="pulse-dot"></span> LIVE WORKSHOP ACTIVE
                             </span>
                         </div>
                     </div>
@@ -136,11 +135,6 @@ export default function StaffDashboard() {
 
                         <button className="icon-btn" onClick={fetchWorkOrders} title="Refresh Live Data">
                             <RefreshIcon fontSize="small" />
-                        </button>
-
-                        <button className="icon-btn" aria-label="Notifications">
-                            <NotificationsIcon fontSize="small" />
-                            <span className="notification-badge"></span>
                         </button>
                     </div>
                 </header>

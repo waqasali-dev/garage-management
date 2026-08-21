@@ -343,11 +343,6 @@ export default function Inventory() {
                             <span className="material-symbols-outlined">refresh</span>
                         </button>
 
-                        <button className="icon-btn" aria-label="Notifications">
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="notification-badge"></span>
-                        </button>
-
                         <button type="button" className="primary-btn" onClick={handleOpenModal}>
                             <span className="material-symbols-outlined">add</span>
                             <span className="btn-text">Add Part</span>
@@ -448,7 +443,7 @@ export default function Inventory() {
                                         {isLoading ? (
                                             <tr>
                                                 <td colSpan="8" className="empty-table-state">
-                                                    Loading inventory parts from database...
+                                                    Loading inventory parts catalog...
                                                 </td>
                                             </tr>
                                         ) : filteredItems.length === 0 ? (
@@ -555,7 +550,7 @@ export default function Inventory() {
                                 <span className="material-symbols-outlined modal-header-icon">inventory_2</span>
                                 <div>
                                     <h3 className="modal-title">Add Part to Inventory</h3>
-                                    <p className="modal-subtitle">Insert record into PostgreSQL <code>inventory_data</code> table</p>
+                                    <p className="modal-subtitle">Add a new replacement part or fluid into the catalog.</p>
                                 </div>
                             </div>
                             <button type="button" className="modal-close-btn" onClick={handleCloseModal}>
@@ -952,10 +947,10 @@ export default function Inventory() {
 
                         <div className="delete-warning-message">
                             <p>
-                                Are you sure you want to delete <strong>{deleteTarget.name}</strong> (<code>{deleteTarget.sku}</code>) from the inventory database?
+                                Are you sure you want to delete <strong>{deleteTarget.name}</strong> (<code>{deleteTarget.sku}</code>) from the inventory catalog?
                             </p>
                             <p className="delete-note">
-                                🛡️ <strong>Data Integrity Note:</strong> Any existing work orders or tax invoices that used this part will safely preserve their billed line items and repair history.
+                                🛡️ <strong>Preservation Note:</strong> Any existing work orders or tax invoices that used this part will safely preserve their billed line items and repair history.
                             </p>
                         </div>
 
