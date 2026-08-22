@@ -128,6 +128,7 @@
 /* Page Header */
 .badge-row {
     margin-bottom: 8px;
+    text-align: left;
 }
 
 .security-tag {
@@ -152,6 +153,7 @@
     margin-bottom: 24px;
     flex-wrap: wrap;
     gap: 16px;
+    text-align: left;
 }
 
 .page-title {
@@ -165,6 +167,7 @@
     font-size: 14px;
     color: var(--text-muted);
     margin: 4px 0 0 0;
+    text-align: left;
 }
 
 .page-subtitle code {

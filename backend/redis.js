@@ -1,4 +1,4 @@
-import { createClient } from "redis";
+import { Redis } from "@upstash/redis";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -6,80 +6,100 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
 
-const redisUrl = process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || "127.0.0.1"}:${process.env.REDIS_PORT || 6379}`;
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL || "https://on-basilisk-103918.upstash.io";
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_TOKEN || "";
 
-const redisClient = createClient({
-    url: redisUrl,
-    socket: {
-        reconnectStrategy: (retries) => {
-            if (retries > 5) {
-                console.warn("⚠️ Redis max reconnection attempts reached. Continuing in direct DB mode.");
-                return new Error("Redis connection failed");
-            }
-            return Math.min(retries * 200, 2000);
-        },
-    },
-});
+let redis = null;
+let isConfigured = false;
 
-redisClient.on("error", (err) => console.error("❌ Redis Client Error:", err.message));
-redisClient.on("connect", () => console.log("⚡ Connected to Redis In-Memory Cache"));
-redisClient.on("ready", () => console.log("🚀 Redis is Ready for Fast In-Memory Caching"));
-
-// Connect immediately
-(async () => {
+if (redisUrl && redisToken && redisToken !== "your_upstash_redis_token_here") {
     try {
-        if (!redisClient.isOpen) {
-            await redisClient.connect();
-        }
+        redis = new Redis({
+            url: redisUrl,
+            token: redisToken,
+        });
+        isConfigured = true;
+        console.log("⚡ Upstash Redis Client Initialized (Serverless REST)");
     } catch (err) {
-        console.warn("⚠️ Redis initial connection skipped:", err.message);
+        console.warn("⚠️ Failed to initialize Upstash Redis:", err.message);
+    }
+} else {
+    console.warn("⚠️ Upstash Redis token missing in .env. Continuing in Direct Database Mode.");
+}
+
+// Perform initial ping to verify connection
+(async () => {
+    if (redis && isConfigured) {
+        try {
+            const res = await redis.ping();
+            if (res === "PONG" || res) {
+                console.log("🚀 Upstash Redis is Connected and Ready for Fast Caching");
+            }
+        } catch (err) {
+            console.warn("⚠️ Upstash Redis ping check failed:", err.message);
+        }
     }
 })();
 
 // Helper Functions for Clean, Safe Caching
 export const getCache = async (key) => {
     try {
-        if (redisClient.isReady) {
-            const data = await redisClient.get(key);
-            return data ? JSON.parse(data) : null;
+        if (redis && isConfigured) {
+            const data = await redis.get(key);
+            if (data === null || data === undefined) return null;
+            if (typeof data === "string") {
+                try {
+                    return JSON.parse(data);
+                } catch {
+                    return data;
+                }
+            }
+            return data;
         }
     } catch (err) {
-        console.warn(`Redis getCache error for key [${key}]:`, err.message);
+        console.warn(`Upstash getCache error for key [${key}]:`, err.message);
     }
     return null;
 };
 
 export const setCache = async (key, value, ttlSeconds = 600) => {
     try {
-        if (redisClient.isReady) {
-            await redisClient.setEx(key, ttlSeconds, JSON.stringify(value));
+        if (redis && isConfigured) {
+            await redis.set(key, JSON.stringify(value), { ex: ttlSeconds });
         }
     } catch (err) {
-        console.warn(`Redis setCache error for key [${key}]:`, err.message);
+        console.warn(`Upstash setCache error for key [${key}]:`, err.message);
     }
 };
 
 export const deleteCache = async (key) => {
     try {
-        if (redisClient.isReady) {
-            await redisClient.del(key);
+        if (redis && isConfigured) {
+            await redis.del(key);
         }
     } catch (err) {
-        console.warn(`Redis deleteCache error for key [${key}]:`, err.message);
+        console.warn(`Upstash deleteCache error for key [${key}]:`, err.message);
     }
 };
 
 export const deleteCachePattern = async (pattern) => {
     try {
-        if (redisClient.isReady) {
-            const keys = await redisClient.keys(pattern);
-            if (keys.length > 0) {
-                await redisClient.del(keys);
+        if (redis && isConfigured) {
+            const keys = await redis.keys(pattern);
+            if (keys && keys.length > 0) {
+                await redis.del(...keys);
             }
         }
     } catch (err) {
-        console.warn(`Redis deleteCachePattern error for pattern [${pattern}]:`, err.message);
+        console.warn(`Upstash deleteCachePattern error for pattern [${pattern}]:`, err.message);
     }
+};
+
+export const redisClient = {
+    get isReady() {
+        return Boolean(redis && isConfigured);
+    },
+    client: redis,
 };
 
 export default redisClient;

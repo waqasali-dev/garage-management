@@ -163,12 +163,14 @@
     color: var(--text-main);
     margin: 0 0 4px 0;
     letter-spacing: -0.02em;
+    text-align: left;
 }
 
 .page-sub-title {
     font-size: 13px;
     color: var(--text-muted);
     margin: 0;
+    text-align: left;
 }
 
 .filter-controls-group {
