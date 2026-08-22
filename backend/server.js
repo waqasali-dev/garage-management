@@ -2,10 +2,20 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import pool from "./db.js";
-import redisClient, { getCache, setCache, deleteCache, deleteCachePattern } from "./redis.js";
+import redisClient, {
+    getCache,
+    setCache,
+    deleteCache,
+    deleteCachePattern,
+    acquireLock,
+    releaseLock,
+    getIdempotencyRecord,
+    setIdempotencyRecord,
+} from "./redis.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -15,6 +25,97 @@ const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// ==============================================================================
+// 🔒 GLOBAL IDEMPOTENCY & CONCURRENCY MUTEX MIDDLEWARE
+// ==============================================================================
+// Protects ALL mutating routes (POST, PUT, PATCH, DELETE) across the application from:
+// 1. Double-clicking / multi-clicking submit buttons on slow networks
+// 2. Duplicate line items, duplicate intakes, duplicate payments, etc.
+// 3. Race conditions and duplicated database writes
+const idempotencyMiddleware = async (req, res, next) => {
+    // Only intercept state-mutating HTTP methods
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        return next();
+    }
+
+    // Determine unique idempotency signature
+    const clientKey = req.headers["x-idempotency-key"];
+    const bodyStr = req.body ? JSON.stringify(req.body) : "";
+    const ip = req.ip || req.headers["x-forwarded-for"] || "client";
+
+    const signature = clientKey
+        ? `key:${clientKey}`
+        : `hash:${crypto.createHash("sha256").update(`${ip}:${req.method}:${req.originalUrl}:${bodyStr}`).digest("hex")}`;
+
+    const lockKey = `garage:lock:idempotency:${signature}`;
+    const resultKey = `garage:result:idempotency:${signature}`;
+
+    try {
+        // Step 1: Check if this exact request already completed and cached its response
+        const cachedResponse = await getIdempotencyRecord(resultKey);
+        if (cachedResponse && cachedResponse.status && cachedResponse.body) {
+            res.setHeader("X-Idempotent-Replay", "true");
+            return res.status(cachedResponse.status).json(cachedResponse.body);
+        }
+
+        // Step 2: Acquire atomic distributed execution lock (TTL: 15 seconds)
+        const acquired = await acquireLock(lockKey, 15);
+        if (!acquired) {
+            console.warn(`[IDEMPOTENCY] Blocked duplicate in-flight request: ${req.method} ${req.originalUrl}`);
+            return res.status(409).json({
+                success: false,
+                duplicate: true,
+                error: "A request for this operation is already being processed. Please wait.",
+            });
+        }
+
+        // Step 3: Wrap response methods to record result and safely release lock
+        const originalJson = res.json.bind(res);
+        const originalSend = res.send.bind(res);
+
+        let isCompleted = false;
+        const finalize = async (body, isJson = true) => {
+            if (isCompleted) return;
+            isCompleted = true;
+
+            try {
+                // If operation succeeded (2xx), cache idempotent result for 60s
+                if (res.statusCode >= 200 && res.statusCode < 400) {
+                    let parsedBody = body;
+                    if (typeof body === "string" && isJson) {
+                        try {
+                            parsedBody = JSON.parse(body);
+                        } catch {}
+                    }
+                    await setIdempotencyRecord(resultKey, { status: res.statusCode, body: parsedBody }, 60);
+                }
+            } catch (err) {
+                console.warn("[IDEMPOTENCY] Cache error:", err.message);
+            } finally {
+                // Always release active concurrency lock
+                await releaseLock(lockKey);
+            }
+        };
+
+        res.json = function (body) {
+            finalize(body, true);
+            return originalJson(body);
+        };
+
+        res.send = function (body) {
+            finalize(body, false);
+            return originalSend(body);
+        };
+
+        next();
+    } catch (err) {
+        console.error("[IDEMPOTENCY] Middleware exception:", err);
+        next();
+    }
+};
+
+app.use(idempotencyMiddleware);
 
 // ==========================================
 // 1. HEALTH CHECK & DATABASE / REDIS STATUS

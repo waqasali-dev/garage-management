@@ -95,6 +95,70 @@ export const deleteCachePattern = async (pattern) => {
     }
 };
 
+// In-Memory Lock Fallback Map (for offline/direct DB mode or local resiliency)
+const memoryLocks = new Map();
+
+export const acquireLock = async (key, ttlSeconds = 15) => {
+    try {
+        if (redis && isConfigured) {
+            const result = await redis.set(key, "in_progress", { nx: true, ex: ttlSeconds });
+            return result === "OK" || result === true;
+        }
+    } catch (err) {
+        console.warn(`Upstash acquireLock error for key [${key}]:`, err.message);
+    }
+
+    // Resilient In-Memory Lock Fallback
+    const now = Date.now();
+    const existing = memoryLocks.get(key);
+    if (existing && existing > now) {
+        return false;
+    }
+    memoryLocks.set(key, now + ttlSeconds * 1000);
+    return true;
+};
+
+export const releaseLock = async (key) => {
+    try {
+        if (redis && isConfigured) {
+            await redis.del(key);
+        }
+    } catch (err) {
+        console.warn(`Upstash releaseLock error for key [${key}]:`, err.message);
+    }
+    memoryLocks.delete(key);
+};
+
+export const getIdempotencyRecord = async (key) => {
+    try {
+        if (redis && isConfigured) {
+            const data = await redis.get(key);
+            if (!data) return null;
+            if (typeof data === "string") {
+                try {
+                    return JSON.parse(data);
+                } catch {
+                    return data;
+                }
+            }
+            return data;
+        }
+    } catch (err) {
+        console.warn(`Upstash getIdempotencyRecord error for key [${key}]:`, err.message);
+    }
+    return null;
+};
+
+export const setIdempotencyRecord = async (key, responseObj, ttlSeconds = 60) => {
+    try {
+        if (redis && isConfigured) {
+            await redis.set(key, JSON.stringify(responseObj), { ex: ttlSeconds });
+        }
+    } catch (err) {
+        console.warn(`Upstash setIdempotencyRecord error for key [${key}]:`, err.message);
+    }
+};
+
 export const redisClient = {
     get isReady() {
         return Boolean(redis && isConfigured);

@@ -53,6 +53,7 @@ export default function WorkOrderExecution() {
 
     // Modals
     const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+    const [isSubmittingItem, setIsSubmittingItem] = useState(false);
     const [itemType, setItemType] = useState('part'); // 'part' or 'labor'
     const [itemFormData, setItemFormData] = useState({
         part_id: '',
@@ -62,12 +63,15 @@ export default function WorkOrderExecution() {
     });
 
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+    const [isSubmittingMedia, setIsSubmittingMedia] = useState(false);
     const [mediaFormData, setMediaFormData] = useState({
         file_url: '',
         file_type: 'vehicle_condition',
     });
 
     // Editable Assignment state
+    const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
     const [assignmentData, setAssignmentData] = useState({
         bay_assigned: '',
         assigned_staff_id: '',
@@ -134,6 +138,8 @@ export default function WorkOrderExecution() {
 
     // Advance or change status
     const handleStatusChange = async (newStatus) => {
+        if (isUpdatingStatus) return;
+        setIsUpdatingStatus(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/status`, {
                 method: 'PATCH',
@@ -149,12 +155,16 @@ export default function WorkOrderExecution() {
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsUpdatingStatus(false);
         }
     };
 
     // Save assignments (Bay, Staff, Observations)
     const handleSaveAssignments = async (e) => {
         e.preventDefault();
+        if (isSavingAssignments) return;
+        setIsSavingAssignments(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/details`, {
                 method: 'PATCH',
@@ -170,6 +180,8 @@ export default function WorkOrderExecution() {
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsSavingAssignments(false);
         }
     };
 
@@ -194,6 +206,8 @@ export default function WorkOrderExecution() {
     // Add Line Item (Part or Labor)
     const handleAddLineItem = async (e) => {
         e.preventDefault();
+        if (isSubmittingItem) return;
+        setIsSubmittingItem(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/items`, {
                 method: 'POST',
@@ -219,6 +233,8 @@ export default function WorkOrderExecution() {
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsSubmittingItem(false);
         }
     };
 
@@ -242,6 +258,8 @@ export default function WorkOrderExecution() {
     // Add Media Photo
     const handleAddMedia = async (e) => {
         e.preventDefault();
+        if (isSubmittingMedia) return;
+        setIsSubmittingMedia(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/media`, {
                 method: 'POST',
@@ -256,6 +274,8 @@ export default function WorkOrderExecution() {
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsSubmittingMedia(false);
         }
     };
 
@@ -452,9 +472,13 @@ export default function WorkOrderExecution() {
                                             />
                                         </div>
 
-                                        <button type="submit" className="primary-btn save-details-btn">
+                                        <button
+                                            type="submit"
+                                            className="primary-btn save-details-btn"
+                                            disabled={isSavingAssignments}
+                                        >
                                             <SaveIcon fontSize="small" />
-                                            <span>Save Workshop Details</span>
+                                            <span>{isSavingAssignments ? 'Saving...' : 'Save Workshop Details'}</span>
                                         </button>
                                     </div>
                                 </form>
@@ -743,11 +767,20 @@ export default function WorkOrderExecution() {
                             </div>
 
                             <div className="modal-actions">
-                                <button type="button" className="btn-cancel" onClick={() => setIsAddItemModalOpen(false)}>
+                                <button
+                                    type="button"
+                                    className="btn-cancel"
+                                    onClick={() => setIsAddItemModalOpen(false)}
+                                    disabled={isSubmittingItem}
+                                >
                                     Cancel
                                 </button>
-                                <button type="submit" className="primary-btn">
-                                    Add to Work Order
+                                <button
+                                    type="submit"
+                                    className="primary-btn"
+                                    disabled={isSubmittingItem}
+                                >
+                                    {isSubmittingItem ? 'Adding to Order...' : 'Add to Work Order'}
                                 </button>
                             </div>
                         </form>
@@ -761,7 +794,11 @@ export default function WorkOrderExecution() {
                     <div className="modal-content">
                         <div className="modal-header">
                             <h3>Attach Vehicle Inspection Photo</h3>
-                            <button className="modal-close" onClick={() => setIsMediaModalOpen(false)}>
+                            <button
+                                className="modal-close"
+                                onClick={() => setIsMediaModalOpen(false)}
+                                disabled={isSubmittingMedia}
+                            >
                                 <CloseIcon />
                             </button>
                         </div>
@@ -794,11 +831,20 @@ export default function WorkOrderExecution() {
                             </div>
 
                             <div className="modal-actions">
-                                <button type="button" className="btn-cancel" onClick={() => setIsMediaModalOpen(false)}>
+                                <button
+                                    type="button"
+                                    className="btn-cancel"
+                                    onClick={() => setIsMediaModalOpen(false)}
+                                    disabled={isSubmittingMedia}
+                                >
                                     Cancel
                                 </button>
-                                <button type="submit" className="primary-btn">
-                                    Attach Media
+                                <button
+                                    type="submit"
+                                    className="primary-btn"
+                                    disabled={isSubmittingMedia}
+                                >
+                                    {isSubmittingMedia ? 'Attaching...' : 'Attach Media'}
                                 </button>
                             </div>
                         </form>
