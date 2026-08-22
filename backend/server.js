@@ -929,6 +929,84 @@ app.post("/api/work-orders/:id/notes", async (req, res) => {
 });
 
 // ==========================================
+// 5B. DELETE WORK ORDER (Received & Diagnosed Phase Only)
+// ==========================================
+app.delete("/api/work-orders/:id", async (req, res) => {
+    const { id } = req.params;
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // 1. Fetch work order to verify existence and phase
+        const checkRes = await client.query(
+            "SELECT work_order_id, status, vehicle_id FROM work_order_data WHERE work_order_id = $1 FOR UPDATE;",
+            [id]
+        );
+
+        if (checkRes.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: `Work order [${id}] not found.` });
+        }
+
+        const wo = checkRes.rows[0];
+        const allowedPhases = ["received", "diagnosed"];
+        if (!allowedPhases.includes(wo.status)) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+                error: `Cannot delete work order in '${wo.status}' state. Only orders in 'received' or 'diagnosed' phase can be deleted. Once repair progress begins, work orders are locked.`,
+            });
+        }
+
+        // 2. Restore any allocated inventory parts back to inventory_data
+        const allocatedParts = await client.query(
+            "SELECT part_id, quantity_or_hours FROM work_order_items WHERE work_order_id = $1 AND item_type = 'part' AND part_id IS NOT NULL;",
+            [id]
+        );
+
+        for (const part of allocatedParts.rows) {
+            const qty = parseFloat(part.quantity_or_hours) || 0;
+            if (qty > 0) {
+                await client.query(
+                    "UPDATE inventory_data SET stock_quantity = stock_quantity + $1 WHERE part_id = $2;",
+                    [qty, part.part_id]
+                );
+            }
+        }
+
+        // 3. Delete dependent rows
+        await client.query("DELETE FROM work_order_items WHERE work_order_id = $1;", [id]);
+        await client.query("DELETE FROM work_order_media WHERE work_order_id = $1;", [id]);
+        await client.query("DELETE FROM invoice_data WHERE work_order_id = $1;", [id]);
+        await client.query("DELETE FROM scheduled_tasks WHERE work_order_id = $1;", [id]);
+        await client.query("DELETE FROM audit_logs WHERE work_order_id = $1;", [id]);
+
+        // 4. Delete work order record
+        await client.query("DELETE FROM work_order_data WHERE work_order_id = $1;", [id]);
+
+        await client.query("COMMIT");
+
+        // 5. Invalidate all affected Redis caches
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCachePattern("garage:cache:dashboard:*");
+        await deleteCachePattern("garage:cache:inventory:*");
+        await deleteCachePattern("garage:cache:schedules:*");
+
+        res.json({
+            success: true,
+            message: `Work Order [${id}] has been completely deleted, and any allocated parts have been returned to inventory.`,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error(`Error deleting work order [${id}]:`, err);
+        res.status(500).json({ error: "Failed to delete work order", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================
 // 6. UPDATE WORK ORDER STATUS & ADVANCE PIPELINE
 // ==========================================
 app.patch("/api/staff/work-orders/:id/status", async (req, res) => {

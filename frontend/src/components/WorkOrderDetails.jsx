@@ -43,10 +43,36 @@ export default function WorkOrderDetails() {
         unit_price: '',
     });
     const [isSubmittingItem, setIsSubmittingItem] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
         setTimeout(() => setNotification(null), 4000);
+    };
+
+    const handleDeleteOrder = async () => {
+        if (!order) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/work-orders/${order.work_order_id}`, {
+                method: 'DELETE',
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                showNotification(data.error || 'Failed to delete work order.', 'error');
+                return;
+            }
+            showNotification(`🗑️ Work Order [${order.work_order_id}] was deleted successfully!`, 'success');
+            setIsDeleteModalOpen(false);
+            setTimeout(() => {
+                navigate('/work-orders');
+            }, 600);
+        } catch (err) {
+            showNotification(`Error deleting work order: ${err.message}`, 'error');
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     const fetchInvoiceDetails = async (targetId) => {
@@ -487,6 +513,33 @@ export default function WorkOrderDetails() {
                                     <span className="badge badge-cyan font-mono" style={{ padding: '8px 12px', fontSize: '11px' }}>
                                         ✓ INVOICE PAID
                                     </span>
+                                )}
+
+                                {/* Delete Work Order Button (Only allowed in Received & Diagnosed phases) */}
+                                {(order.status === 'received' || order.status === 'diagnosed') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsDeleteModalOpen(true)}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                                            color: '#f87171',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: '12px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                        title="Delete this work order completely (Available in Receive & Diagnose phases only)"
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+                                        <span>Delete Order</span>
+                                    </button>
                                 )}
 
                                 {order.status !== 'ready' && order.status !== 'completed' && (
@@ -945,6 +998,147 @@ export default function WorkOrderDetails() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Overlay: Delete Confirmation */}
+            {isDeleteModalOpen && order && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        padding: '16px',
+                    }}
+                    onClick={() => !isDeleting && setIsDeleteModalOpen(false)}
+                >
+                    <div
+                        style={{
+                            backgroundColor: 'var(--bg-olive-card, #202b22)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            borderRadius: '12px',
+                            maxWidth: '480px',
+                            width: '100%',
+                            padding: '24px',
+                            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                            <div
+                                style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '8px',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                    color: '#f87171',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>warning</span>
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-main, #f0f4f1)' }}>
+                                    Delete Work Order
+                                </h3>
+                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted, #a3b1a6)' }}>
+                                    Confirm complete removal from workshop queue
+                                </p>
+                            </div>
+                        </div>
+
+                        <div
+                            style={{
+                                backgroundColor: 'rgba(22, 30, 24, 0.8)',
+                                border: '1px solid rgba(255, 216, 95, 0.15)',
+                                borderRadius: '8px',
+                                padding: '14px',
+                                marginBottom: '16px',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Work Order ID:</span>
+                                <strong style={{ fontFamily: 'monospace', color: 'var(--accent-yellow)' }}>{order.work_order_id}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Vehicle:</span>
+                                <strong>{order.year} {order.make} {order.model}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Owner:</span>
+                                <span>{order.owner_name}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Current Phase:</span>
+                                <span
+                                    style={{
+                                        textTransform: 'uppercase',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        color: '#38bdf8',
+                                        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                    }}
+                                >
+                                    {order.status}
+                                </span>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                            Are you sure you want to delete this work order? Any allocated parts will be automatically returned back to inventory stock.
+                        </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsDeleteModalOpen(false)}
+                                disabled={isDeleting}
+                                style={{
+                                    height: '38px',
+                                    padding: '0 16px',
+                                    backgroundColor: 'transparent',
+                                    border: '1px solid var(--border-glass, rgba(255, 216, 95, 0.15))',
+                                    color: 'var(--text-muted)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteOrder}
+                                disabled={isDeleting}
+                                style={{
+                                    height: '38px',
+                                    padding: '0 18px',
+                                    backgroundColor: '#ef4444',
+                                    border: 'none',
+                                    color: '#ffffff',
+                                    borderRadius: '6px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+                                {isDeleting ? 'Deleting...' : 'Delete Work Order'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

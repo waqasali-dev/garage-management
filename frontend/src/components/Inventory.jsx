@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
+import { useAuth } from '../context/AuthContext';
 import './css/Inventory.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -28,6 +29,7 @@ const INITIAL_FORM_STATE = {
 };
 
 export default function Inventory() {
+    const { isAdmin, isStaff, role } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [items, setItems] = useState([]);
     const [kpi, setKpi] = useState({
@@ -114,6 +116,7 @@ export default function Inventory() {
     };
 
     const handleOpenModal = () => {
+        if (!isAdmin) return;
         setFormData(INITIAL_FORM_STATE);
         setIsModalOpen(true);
     };
@@ -124,6 +127,7 @@ export default function Inventory() {
 
     // Open Restock Modal for a specific part
     const handleOpenRestockModal = (item) => {
+        if (!isAdmin) return;
         setRestockTarget(item);
         setRestockQty('10');
         setRestockUnitCost(item.unit_cost ? String(item.unit_cost) : '');
@@ -223,6 +227,7 @@ export default function Inventory() {
 
     // Edit Part Modal Handlers
     const handleOpenEditModal = (item) => {
+        if (!isAdmin) return;
         setEditTarget(item);
         setEditFormData({
             sku: item.sku || '',
@@ -343,10 +348,31 @@ export default function Inventory() {
                             <span className="material-symbols-outlined">refresh</span>
                         </button>
 
-                        <button type="button" className="primary-btn" onClick={handleOpenModal}>
-                            <span className="material-symbols-outlined">add</span>
-                            <span className="btn-text">Add Part</span>
-                        </button>
+                        {isAdmin ? (
+                            <button type="button" className="primary-btn" onClick={handleOpenModal}>
+                                <span className="material-symbols-outlined">add</span>
+                                <span className="btn-text">Add Part</span>
+                            </button>
+                        ) : (
+                            <div
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    backgroundColor: 'rgba(255, 216, 95, 0.1)',
+                                    border: '1px solid rgba(255, 216, 95, 0.25)',
+                                    color: 'var(--accent-yellow)',
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>visibility</span>
+                                <span>VIEW-ONLY CATALOG</span>
+                            </div>
+                        )}
                     </div>
                 </header>
 
@@ -436,7 +462,11 @@ export default function Inventory() {
                                             <th className="text-right">Unit Cost</th>
                                             <th className="text-right">Selling Price</th>
                                             <th className="text-center">Status</th>
-                                            <th className="text-right">Actions</th>
+                                            {isAdmin ? (
+                                                <th className="text-right">Actions</th>
+                                            ) : (
+                                                <th className="text-center">Access</th>
+                                            )}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -449,7 +479,7 @@ export default function Inventory() {
                                         ) : filteredItems.length === 0 ? (
                                             <tr>
                                                 <td colSpan="8" className="empty-table-state">
-                                                    No parts found in inventory. Click <strong>"Add Part"</strong> above to register your first spare part.
+                                                    No parts found in inventory.{isAdmin ? ' Click "Add Part" above to register your first spare part.' : ''}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -492,37 +522,59 @@ export default function Inventory() {
                                                             {item.status}
                                                         </span>
                                                     </td>
-                                                    <td className="text-right">
-                                                        <div className="table-actions-group">
-                                                            <button
-                                                                type="button"
-                                                                className="action-restock-btn"
-                                                                title="Restock / Add more units of this part"
-                                                                onClick={() => handleOpenRestockModal(item)}
-                                                            >
-                                                                <span className="material-symbols-outlined">add_circle</span>
-                                                                <span className="restock-btn-label">Restock</span>
-                                                            </button>
+                                                    {isAdmin ? (
+                                                        <td className="text-right">
+                                                            <div className="table-actions-group">
+                                                                <button
+                                                                    type="button"
+                                                                    className="action-restock-btn"
+                                                                    title="Restock / Add more units of this part"
+                                                                    onClick={() => handleOpenRestockModal(item)}
+                                                                >
+                                                                    <span className="material-symbols-outlined">add_circle</span>
+                                                                    <span className="restock-btn-label">Restock</span>
+                                                                </button>
 
-                                                            <button
-                                                                type="button"
-                                                                className="action-edit-btn"
-                                                                title="Edit Part Details & Selling Price"
-                                                                onClick={() => handleOpenEditModal(item)}
-                                                            >
-                                                                <span className="material-symbols-outlined">edit</span>
-                                                            </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="action-edit-btn"
+                                                                    title="Edit Part Details & Selling Price"
+                                                                    onClick={() => handleOpenEditModal(item)}
+                                                                >
+                                                                    <span className="material-symbols-outlined">edit</span>
+                                                                </button>
 
-                                                            <button
-                                                                type="button"
-                                                                className="action-delete-btn"
-                                                                title="Delete part from inventory"
-                                                                onClick={() => setDeleteTarget(item)}
+                                                                <button
+                                                                    type="button"
+                                                                    className="action-delete-btn"
+                                                                    title="Delete part from inventory"
+                                                                    onClick={() => setDeleteTarget(item)}
+                                                                >
+                                                                    <span className="material-symbols-outlined">delete</span>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    ) : (
+                                                        <td className="text-center">
+                                                            <span
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    fontSize: '11px',
+                                                                    fontFamily: "'JetBrains Mono', monospace",
+                                                                    color: 'var(--text-muted)',
+                                                                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                                                                    padding: '3px 8px',
+                                                                    borderRadius: '4px',
+                                                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                                                }}
                                                             >
-                                                                <span className="material-symbols-outlined">delete</span>
-                                                            </button>
-                                                        </div>
-                                                    </td>
+                                                                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>visibility</span>
+                                                                Read Only
+                                                            </span>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))
                                         )}
@@ -542,7 +594,7 @@ export default function Inventory() {
             </div>
 
             {/* Modal Overlay: Add New Part to inventory_data */}
-            {isModalOpen && (
+            {isAdmin && isModalOpen && (
                 <div className="inventory-modal-overlay">
                     <div className="inventory-modal-content">
                         <div className="modal-header">
@@ -679,7 +731,7 @@ export default function Inventory() {
             )}
 
             {/* Modal Overlay: Restock Existing Part */}
-            {isRestockModalOpen && restockTarget && (
+            {isAdmin && isRestockModalOpen && restockTarget && (
                 <div className="inventory-modal-overlay">
                     <div className="inventory-modal-content restock-modal-content">
                         <div className="modal-header">
@@ -763,7 +815,7 @@ export default function Inventory() {
             )}
 
             {/* Modal Overlay: Edit Existing Part */}
-            {isEditModalOpen && editTarget && (
+            {isAdmin && isEditModalOpen && editTarget && (
                 <div className="inventory-modal-overlay" onClick={() => !isEditing && setIsEditModalOpen(false)}>
                     <div className="inventory-modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -911,7 +963,7 @@ export default function Inventory() {
             )}
 
             {/* Modal Overlay: Delete Confirmation */}
-            {deleteTarget && (
+            {isAdmin && deleteTarget && (
                 <div className="inventory-modal-overlay" onClick={() => !isDeleting && setDeleteTarget(null)}>
                     <div className="inventory-modal-content delete-modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
