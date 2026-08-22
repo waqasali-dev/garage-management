@@ -196,6 +196,8 @@ export default function Scheduling() {
     // Submit New Task
     const handleCreateTask = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+
         if (!taskForm.task_title.trim() || !taskForm.scheduled_date) {
             showNotification('Task Title and Date are required.', 'error');
             return;

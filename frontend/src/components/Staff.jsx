@@ -88,6 +88,7 @@ export default function Staff() {
 
     const handleCreateStaffAccount = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
 
         if (!formData.staff_name.trim() || !formData.email.trim() || !formData.password.trim()) {
             showNotification('Full Name, Email, and Password are required.', 'error');

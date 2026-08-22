@@ -151,6 +151,7 @@ export default function OwnersList() {
 
     const handleCreateOwnerAccount = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
 
         if (!formData.owner_name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.owner_phone.trim()) {
             showNotification('Full Name, Phone, Email, and Password are required.', 'error');

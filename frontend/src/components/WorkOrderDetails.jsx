@@ -43,6 +43,9 @@ export default function WorkOrderDetails() {
         unit_price: '',
     });
     const [isSubmittingItem, setIsSubmittingItem] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [deleteItemTarget, setDeleteItemTarget] = useState(null);
+    const [isDeletingItem, setIsDeletingItem] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -52,7 +55,7 @@ export default function WorkOrderDetails() {
     };
 
     const handleDeleteOrder = async () => {
-        if (!order) return;
+        if (!order || isDeleting) return;
         setIsDeleting(true);
         try {
             const res = await fetch(`${API_BASE_URL}/work-orders/${order.work_order_id}`, {
@@ -114,7 +117,7 @@ export default function WorkOrderDetails() {
 
             const res = await fetch(`${API_BASE_URL}/work-orders/${encodeURIComponent(cleanId)}`);
             if (!res.ok) {
-                showNotification(`Work order '${cleanId}' not found`, 'error');
+                showNotification('Failed to load work order from database', 'error');
                 setOrder(null);
                 return;
             }
@@ -122,13 +125,10 @@ export default function WorkOrderDetails() {
             if (json.success && json.data) {
                 setOrder(json.data);
                 fetchInvoiceDetails(json.data.work_order_id);
-            } else {
-                setOrder(null);
             }
         } catch (err) {
-            console.error('Error fetching work order details:', err);
-            showNotification(`Error: ${err.message}`, 'error');
-            setOrder(null);
+            console.error('Error loading work order:', err);
+            showNotification(`Database error: ${err.message}`, 'error');
         } finally {
             setIsLoading(false);
         }
@@ -139,10 +139,12 @@ export default function WorkOrderDetails() {
             const res = await fetch(`${API_BASE_URL}/inventory/items`);
             if (res.ok) {
                 const json = await res.json();
-                if (json.success) setInventoryList(json.data || []);
+                if (json.success && Array.isArray(json.data)) {
+                    setInventoryList(json.data);
+                }
             }
         } catch (err) {
-            console.warn('Inventory lookup notice:', err.message);
+            console.error('Error fetching inventory for line item picker:', err);
         }
     };
 
@@ -154,7 +156,8 @@ export default function WorkOrderDetails() {
 
     // Handle Status Change
     const handleStatusChange = async (newStatus) => {
-        if (!order) return;
+        if (!order || isUpdatingStatus) return;
+        setIsUpdatingStatus(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${order.work_order_id}/status`, {
                 method: 'PATCH',
@@ -170,6 +173,8 @@ export default function WorkOrderDetails() {
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsUpdatingStatus(false);
         }
     };
 
@@ -334,20 +339,26 @@ export default function WorkOrderDetails() {
         }
     };
 
-    // Delete Line item
-    const handleDeleteItem = async (itemId) => {
-        if (!order || !window.confirm('Are you sure you want to remove this line item?')) return;
-
+    // Delete Line item (Triggered from Modal Confirmation)
+    const handleConfirmDeleteItem = async () => {
+        if (!order || !deleteItemTarget || isDeletingItem) return;
+        setIsDeletingItem(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/staff/work-orders/${order.work_order_id}/items/${itemId}`, {
+            const res = await fetch(`${API_BASE_URL}/staff/work-orders/${order.work_order_id}/items/${deleteItemTarget.item_id}`, {
                 method: 'DELETE',
             });
             if (res.ok) {
-                showNotification('Line item removed from work order', 'info');
+                showNotification('Line item removed and inventory stock restored!', 'info');
+                setDeleteItemTarget(null);
                 fetchOrderDetails();
+            } else {
+                const errData = await res.json();
+                showNotification(errData.error || 'Failed to remove line item', 'error');
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsDeletingItem(false);
         }
     };
 
@@ -717,8 +728,8 @@ export default function WorkOrderDetails() {
                                                                 <button
                                                                     type="button"
                                                                     className="delete-item-icon-btn"
-                                                                    title="Remove Item"
-                                                                    onClick={() => handleDeleteItem(item.item_id)}
+                                                                    title="Remove Line Item from Work Order"
+                                                                    onClick={() => setDeleteItemTarget(item)}
                                                                 >
                                                                     <span className="material-symbols-outlined">delete</span>
                                                                 </button>
@@ -1137,6 +1148,159 @@ export default function WorkOrderDetails() {
                             >
                                 <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
                                 {isDeleting ? 'Deleting...' : 'Delete Work Order'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Delete Line Item Confirmation Overlay */}
+            {deleteItemTarget && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px',
+                    }}
+                    onClick={() => !isDeletingItem && setDeleteItemTarget(null)}
+                >
+                    <div
+                        style={{
+                            width: '100%',
+                            maxWidth: '460px',
+                            backgroundColor: 'var(--bg-surface, #141716)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div
+                                    style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                        color: '#f87171',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>warning</span>
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '17px', color: '#f0f4f1' }}>
+                                        Remove Line Item
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        Confirm removal from bill of materials
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                }}
+                                onClick={() => setDeleteItemTarget(null)}
+                                disabled={isDeletingItem}
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        {/* Item Details Box */}
+                        <div
+                            style={{
+                                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                                border: '1px solid rgba(255, 216, 95, 0.15)',
+                                borderRadius: '8px',
+                                padding: '14px',
+                                margin: '16px 0',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span
+                                    className={`type-tag ${
+                                        deleteItemTarget.item_type === 'part' ? 'tag-part' : 'tag-labor'
+                                    }`}
+                                >
+                                    {deleteItemTarget.item_type.toUpperCase()}
+                                </span>
+                                <span style={{ fontFamily: 'monospace', color: 'var(--accent-yellow)', fontWeight: 700, fontSize: '15px' }}>
+                                    ${parseFloat(deleteItemTarget.total_price || (deleteItemTarget.quantity_or_hours * deleteItemTarget.unit_price) || 0).toFixed(2)}
+                                </span>
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main, #f0f4f1)', marginBottom: '4px' }}>
+                                {deleteItemTarget.description}
+                            </div>
+                            {deleteItemTarget.sku && (
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: '6px' }}>
+                                    SKU: {deleteItemTarget.sku}
+                                </div>
+                            )}
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '16px', marginTop: '6px' }}>
+                                <span>Quantity / Hours: <strong style={{ color: '#fff' }}>{parseFloat(deleteItemTarget.quantity_or_hours).toFixed(2)}</strong></span>
+                                <span>Rate: <strong style={{ color: '#fff' }}>${parseFloat(deleteItemTarget.unit_price).toFixed(2)}</strong></span>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                            🛡️ <strong>Stock Restoration:</strong> If this is an inventory spare part, the allocated quantity will be automatically returned to parts inventory stock.
+                        </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setDeleteItemTarget(null)}
+                                disabled={isDeletingItem}
+                                style={{
+                                    height: '38px',
+                                    padding: '0 16px',
+                                    backgroundColor: 'transparent',
+                                    border: '1px solid var(--border-glass, rgba(255, 216, 95, 0.15))',
+                                    color: 'var(--text-muted)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDeleteItem}
+                                disabled={isDeletingItem}
+                                style={{
+                                    height: '38px',
+                                    padding: '0 18px',
+                                    backgroundColor: '#ef4444',
+                                    border: 'none',
+                                    color: '#ffffff',
+                                    borderRadius: '6px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+                                {isDeletingItem ? 'Removing Item...' : 'Remove Line Item'}
                             </button>
                         </div>
                     </div>

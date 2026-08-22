@@ -51,6 +51,7 @@ export default function UserManagement() {
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [notification, setNotification] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -200,6 +201,9 @@ export default function UserManagement() {
             return;
         }
 
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+
         try {
             const response = await fetch(`${API_BASE_URL}/admin/create-user`, {
                 method: 'POST',
@@ -222,6 +226,8 @@ export default function UserManagement() {
             loadDatabaseData(); // Reload list directly from database
         } catch (err) {
             showNotification(`Server error: ${err.message}`, 'error');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -1126,14 +1132,17 @@ export default function UserManagement() {
 
                             {/* Action Buttons */}
                             <div className="modal-actions">
-                                <button type="button" className="btn-cancel" onClick={handleCloseModal}>
+                                <button type="button" className="btn-cancel" onClick={handleCloseModal} disabled={isSubmitting}>
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     className={`btn-submit ${formData.role === 'admin' ? 'btn-submit-admin' : ''}`}
+                                    disabled={isSubmitting}
                                 >
-                                    {formData.role === 'admin'
+                                    {isSubmitting
+                                        ? 'CREATING ACCOUNT...'
+                                        : formData.role === 'admin'
                                         ? 'CREATE ADMIN ACCOUNT'
                                         : formData.role === 'staff'
                                         ? 'CREATE STAFF & USER'

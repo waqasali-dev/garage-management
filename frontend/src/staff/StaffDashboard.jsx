@@ -25,6 +25,7 @@ export default function StaffDashboard() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [isAdvancingId, setIsAdvancingId] = useState(null);
     const [notification, setNotification] = useState(null);
 
     const showNotification = (msg, type = 'success') => {
@@ -56,6 +57,8 @@ export default function StaffDashboard() {
 
     const handleQuickAdvance = async (e, orderId, nextStatus) => {
         e.stopPropagation();
+        if (isAdvancingId) return;
+        setIsAdvancingId(orderId);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${orderId}/status`, {
                 method: 'PATCH',
@@ -68,6 +71,8 @@ export default function StaffDashboard() {
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsAdvancingId(null);
         }
     };
 
@@ -354,9 +359,10 @@ export default function StaffDashboard() {
                                                     type="button"
                                                     className="quick-action-btn btn-diagnose"
                                                     onClick={(e) => handleQuickAdvance(e, order.work_order_id, 'diagnosed')}
+                                                    disabled={isAdvancingId === order.work_order_id}
                                                 >
                                                     <HandymanIcon fontSize="small" />
-                                                    <span>Start Diagnosis</span>
+                                                    <span>{isAdvancingId === order.work_order_id ? 'Starting...' : 'Start Diagnosis'}</span>
                                                 </button>
                                             )}
 
@@ -365,9 +371,10 @@ export default function StaffDashboard() {
                                                     type="button"
                                                     className="quick-action-btn btn-start-work"
                                                     onClick={(e) => handleQuickAdvance(e, order.work_order_id, 'in_progress')}
+                                                    disabled={isAdvancingId === order.work_order_id}
                                                 >
                                                     <PlayArrowIcon fontSize="small" />
-                                                    <span>Start Repair</span>
+                                                    <span>{isAdvancingId === order.work_order_id ? 'Starting...' : 'Start Repair'}</span>
                                                 </button>
                                             )}
 
@@ -376,9 +383,10 @@ export default function StaffDashboard() {
                                                     type="button"
                                                     className="quick-action-btn btn-complete-job"
                                                     onClick={(e) => handleQuickAdvance(e, order.work_order_id, 'completed')}
+                                                    disabled={isAdvancingId === order.work_order_id}
                                                 >
                                                     <CheckCircleIcon fontSize="small" />
-                                                    <span>Mark Complete</span>
+                                                    <span>{isAdvancingId === order.work_order_id ? 'Completing...' : 'Mark Complete'}</span>
                                                 </button>
                                             )}
 
