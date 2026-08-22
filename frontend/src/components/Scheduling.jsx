@@ -9,8 +9,8 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import './css/Scheduling.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 const BAYS = [
     { id: 'B1', name: 'B1', label: 'Heavy Repair', loadPercent: '80%', loadType: 'error' },

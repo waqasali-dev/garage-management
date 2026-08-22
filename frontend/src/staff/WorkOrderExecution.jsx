@@ -19,8 +19,8 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import './WorkOrderExecution.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 const STATUS_STEPS = [
     { key: 'received', label: '1. RECEIVED', icon: 'pending_actions' },

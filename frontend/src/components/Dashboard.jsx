@@ -11,8 +11,8 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import PersonIcon from '@mui/icons-material/Person';
 import './css/Dashboard.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 const getStatusBadge = (status) => {
     switch (status) {

@@ -2830,7 +2830,7 @@ app.post("/api/auth/login", async (req, res) => {
             return res.status(401).json({ error: "Invalid credentials." });
         }
 
-        await pool.query( 
+        await pool.query(
             "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1;",
             [user.user_id]
         );
@@ -2876,7 +2876,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
 });
 
-// ==========================================
+// ========================================== 
 // 16. INVOICES & TAX INVOICE MANAGEMENT
 // ==========================================
 

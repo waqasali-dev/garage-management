@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './css/StaffLogin.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 export default function StaffLogin() {
     const navigate = useNavigate();

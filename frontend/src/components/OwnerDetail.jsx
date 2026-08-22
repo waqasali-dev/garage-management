@@ -12,8 +12,8 @@ import AddIcon from '@mui/icons-material/Add';
 import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import './css/OwnerDetail.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 export default function OwnerDetail() {
     const { id } = useParams();

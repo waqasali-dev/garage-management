@@ -3,8 +3,8 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
 import './css/WorkOrderDetails.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 const STATUS_STEPS = [
     { key: 'received', label: 'Received', icon: 'pending_actions' },

@@ -9,8 +9,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useAuth } from '../context/AuthContext';
 import './OwnerCars.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 export default function OwnerCars() {
     const navigate = useNavigate();

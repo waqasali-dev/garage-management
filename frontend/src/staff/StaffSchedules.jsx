@@ -11,8 +11,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import './StaffSchedules.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 const BAYS = [
     { id: 'B1', name: 'Bay 1', label: 'Heavy Repair & Engine', loadPercent: '80%', loadType: 'high' },

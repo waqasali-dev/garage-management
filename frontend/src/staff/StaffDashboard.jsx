@@ -15,8 +15,8 @@ import StarIcon from '@mui/icons-material/Star';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import HandymanIcon from '@mui/icons-material/Handyman';
 import './StaffDashboard.css';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/api';
+// Local API URL fallback: 'http://localhost:5000/api'
 
 export default function StaffDashboard() {
     const navigate = useNavigate();
