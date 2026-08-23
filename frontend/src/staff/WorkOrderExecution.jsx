@@ -137,6 +137,7 @@ export default function WorkOrderExecution() {
             fetchOrderDetails();
             fetchSelectors();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     // Advance or change status

@@ -95,6 +95,7 @@ export default function WorkOrders() {
 
     useEffect(() => {
         fetchWorkOrders();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Filter Logic
@@ -117,7 +118,6 @@ export default function WorkOrders() {
     // KPI Metrics calculation
     const inBayCount = workOrders.filter((w) => w.status === 'in_progress' || w.bay_assigned).length;
     const receivedCount = workOrders.filter((w) => w.status === 'received').length;
-    const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
     const readyPickupCount = workOrders.filter((w) => w.status === 'ready').length;
     const completedCount = workOrders.filter((w) => w.status === 'completed').length;
     const totalEstRevenue = workOrders.reduce(

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import HistoryIcon from '@mui/icons-material/History';
@@ -10,10 +10,8 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useAuth } from '../context/AuthContext';
 import './OwnerCars.css';
 import { API_BASE_URL } from '../config/api';
-// Local API URL fallback: 'http://localhost:5000/api'
 
 export default function OwnerCars() {
-    const navigate = useNavigate();
     const { user } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [vehicles, setVehicles] = useState([]);

@@ -342,7 +342,9 @@ export default function VehicleIntake() {
                             <div className="form-group search-group" style={{ position: 'relative' }}>
                                 <label>QUICK LOOKUP EXISTING OWNER</label>
                                 <div className="search-input-wrapper">
-                                    <span className="material-symbols-outlined search-icon">search</span>
+                                    <span className={`material-symbols-outlined search-icon ${isSearchingOwners ? 'spinning-icon' : ''}`}>
+                                        {isSearchingOwners ? 'sync' : 'search'}
+                                    </span>
                                     <input
                                         type="text"
                                         name="ownerSearch"

@@ -53,6 +53,7 @@ export default function OwnerDetail() {
         if (id) {
             fetchOwnerDetails();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     if (isLoading) {

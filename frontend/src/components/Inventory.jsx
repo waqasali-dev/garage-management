@@ -29,7 +29,7 @@ const INITIAL_FORM_STATE = {
 };
 
 export default function Inventory() {
-    const { isAdmin, isStaff, role } = useAuth();
+    const { isAdmin } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [items, setItems] = useState([]);
     const [kpi, setKpi] = useState({

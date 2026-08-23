@@ -53,6 +53,7 @@ export default function StaffDashboard() {
 
     useEffect(() => {
         fetchWorkOrders();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleQuickAdvance = async (e, orderId, nextStatus) => {

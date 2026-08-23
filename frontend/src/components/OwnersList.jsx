@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -90,6 +90,7 @@ export default function OwnersList() {
 
     useEffect(() => {
         fetchOwners();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Close dropdown on outside click

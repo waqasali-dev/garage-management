@@ -141,6 +141,7 @@ export default function Scheduling() {
 
     useEffect(() => {
         fetchSchedules();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Update form date when selectedDate changes
@@ -295,8 +296,8 @@ export default function Scheduling() {
                     </div>
 
                     <div className="header-actions">
-                        <button className="icon-btn" onClick={fetchSchedules} title="Refresh Schedules">
-                            <RefreshIcon fontSize="small" />
+                        <button className="icon-btn" onClick={fetchSchedules} disabled={isLoading} title="Refresh Schedules">
+                            <RefreshIcon className={isLoading ? 'spinning-icon' : ''} fontSize="small" />
                         </button>
                     </div>
                 </header>
@@ -771,6 +772,27 @@ export default function Scheduling() {
                             </div>
                         </form>
                     </div>
+                </div>
+            )}
+
+            {/* Global Toast Notification */}
+            {notification && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: '24px',
+                        right: '24px',
+                        backgroundColor: notification.type === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(255, 216, 95, 0.95)',
+                        color: '#0d1110',
+                        fontWeight: 700,
+                        padding: '12px 20px',
+                        borderRadius: '8px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        zIndex: 99999,
+                        fontSize: '13px',
+                    }}
+                >
+                    {notification.msg}
                 </div>
             )}
         </div>

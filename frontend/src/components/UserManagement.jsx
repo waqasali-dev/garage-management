@@ -15,7 +15,6 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import StorageIcon from '@mui/icons-material/Storage';
 import PhoneIcon from '@mui/icons-material/Phone';
 import HomeIcon from '@mui/icons-material/Home';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -47,7 +46,6 @@ export default function UserManagement() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [dbConnected, setDbConnected] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -63,20 +61,13 @@ export default function UserManagement() {
 
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
-        setTimeout(() => setNotification(null), 5000);
+        setTimeout(() => setNotification(null), 4500);
     };
 
-    // Load live user data from PostgreSQL database via Express API
+    // Load users live from backend API (PostgreSQL database)
     const loadDatabaseData = async () => {
         setIsLoading(true);
         try {
-            const healthRes = await fetch(`${API_BASE_URL}/health`);
-            if (healthRes.ok) {
-                setDbConnected(true);
-            } else {
-                setDbConnected(false);
-            }
-
             const usersRes = await fetch(`${API_BASE_URL}/users`);
             if (usersRes.ok) {
                 const usersJson = await usersRes.json();
@@ -86,7 +77,6 @@ export default function UserManagement() {
             }
         } catch (err) {
             console.warn('Backend server connecting / not reachable:', err.message);
-            setDbConnected(false);
         } finally {
             setIsLoading(false);
         }
@@ -108,6 +98,7 @@ export default function UserManagement() {
 
     useEffect(() => {
         loadDatabaseData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleOpenModal = (presetRole = 'admin') => {
@@ -1143,12 +1134,12 @@ export default function UserManagement() {
                                     {isSubmitting
                                         ? 'CREATING ACCOUNT...'
                                         : formData.role === 'admin'
-                                        ? 'CREATE ADMIN ACCOUNT'
-                                        : formData.role === 'staff'
-                                        ? 'CREATE STAFF & USER'
-                                        : formData.existing_owner_id
-                                        ? 'LINK & CREATE OWNER ACCOUNT'
-                                        : 'CREATE OWNER & USER'}
+                                            ? 'CREATE ADMIN ACCOUNT'
+                                            : formData.role === 'staff'
+                                                ? 'CREATE STAFF & USER'
+                                                : formData.existing_owner_id
+                                                    ? 'LINK & CREATE OWNER ACCOUNT'
+                                                    : 'CREATE OWNER & USER'}
                                 </button>
                             </div>
                         </form>
