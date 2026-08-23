@@ -1,23 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import PersonIcon from '@mui/icons-material/Person';
 import BuildIcon from '@mui/icons-material/Build';
-// import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
-// import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HandymanIcon from '@mui/icons-material/Handyman';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import SaveIcon from '@mui/icons-material/Save';
-// import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CloseIcon from '@mui/icons-material/Close';
-// import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-// import EventNoteIcon from '@mui/icons-material/EventNote';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import LinkIcon from '@mui/icons-material/Link';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './WorkOrderExecution.css';
 import { API_BASE_URL } from '../config/api';
 
@@ -38,9 +38,38 @@ const BAY_OPTIONS = [
     'Detail & Delivery Bay',
 ];
 
+// Media Categories conforming to PostgreSQL & SQLite schema media_type_enum
+const MEDIA_TYPE_META = {
+    vehicle_condition: {
+        label: 'Vehicle Condition',
+        icon: 'directions_car',
+        desc: 'Intake inspection, bodywork, exterior / interior condition',
+        tagClass: 'media-tag-condition',
+    },
+    part_damage: {
+        label: 'Part Damage',
+        icon: 'warning',
+        desc: 'Defective parts, leaks, wear & tear, diagnostic evidence',
+        tagClass: 'media-tag-damage',
+    },
+    receipt: {
+        label: 'Receipt / Parts Slip',
+        icon: 'receipt_long',
+        desc: 'Supplier invoices, part purchase slips, warranty notes',
+        tagClass: 'media-tag-receipt',
+    },
+    other: {
+        label: 'Repair Progress & QC',
+        icon: 'build_circle',
+        desc: 'In-progress installation, final quality check, completed repair',
+        tagClass: 'media-tag-progress',
+    },
+};
+
 export default function WorkOrderExecution() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const fileInputRef = useRef(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [order, setOrder] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -61,12 +90,25 @@ export default function WorkOrderExecution() {
         unit_price: '',
     });
 
+    // Media Upload & Gallery States
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+    const [mediaUploadMode, setMediaUploadMode] = useState('file'); // 'file' or 'url'
+    const [mediaFile, setMediaFile] = useState(null);
+    const [mediaFilePreview, setMediaFilePreview] = useState('');
+    const [mediaFileSize, setMediaFileSize] = useState('');
+    const [mediaFileError, setMediaFileError] = useState('');
+    const [isCompressingImage, setIsCompressingImage] = useState(false);
     const [isSubmittingMedia, setIsSubmittingMedia] = useState(false);
+    const [isDragOver, setIsDragOver] = useState(false);
     const [mediaFormData, setMediaFormData] = useState({
         file_url: '',
         file_type: 'vehicle_condition',
     });
+
+    // Lightbox & Delete Media States
+    const [activeLightboxMedia, setActiveLightboxMedia] = useState(null);
+    const [deleteMediaTarget, setDeleteMediaTarget] = useState(null);
+    const [isDeletingMedia, setIsDeletingMedia] = useState(false);
 
     // Delete Line Item Modal State
     const [deleteItemTarget, setDeleteItemTarget] = useState(null);
@@ -266,27 +308,157 @@ export default function WorkOrderExecution() {
         }
     };
 
-    // Add Media Photo
+    // Process & Optimize Image File with HTML5 Canvas (Max 1600px, 0.85 quality)
+    const processImageFile = (file) => {
+        return new Promise((resolve, reject) => {
+            if (!file || !file.type.startsWith('image/')) {
+                reject(new Error('Please select a valid image file (JPG, PNG, WEBP, HEIC, etc.)'));
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDim = 1600;
+
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    resolve(dataUrl);
+                };
+                img.onerror = () => reject(new Error('Unable to process the selected image.'));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error('Failed to read file from storage.'));
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleSelectMediaFile = async (file) => {
+        if (!file) return;
+        setMediaFileError('');
+        setIsCompressingImage(true);
+        try {
+            const previewUrl = await processImageFile(file);
+            setMediaFile(file);
+            setMediaFilePreview(previewUrl);
+            const formattedSize =
+                file.size > 1024 * 1024
+                    ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                    : `${Math.round(file.size / 1024)} KB`;
+            setMediaFileSize(formattedSize);
+        } catch (err) {
+            setMediaFileError(err.message);
+            setMediaFile(null);
+            setMediaFilePreview('');
+        } finally {
+            setIsCompressingImage(false);
+        }
+    };
+
+    const handleFileDrop = (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleSelectMediaFile(e.dataTransfer.files[0]);
+        }
+    };
+
+    const handleCloseMediaModal = () => {
+        setIsMediaModalOpen(false);
+        setMediaUploadMode('file');
+        setMediaFile(null);
+        setMediaFilePreview('');
+        setMediaFileSize('');
+        setMediaFileError('');
+        setMediaFormData({ file_url: '', file_type: 'vehicle_condition' });
+    };
+
+    // Add Media Photo (Base64 file or image URL)
     const handleAddMedia = async (e) => {
         e.preventDefault();
         if (isSubmittingMedia) return;
+
+        let targetUrl = '';
+        if (mediaUploadMode === 'file') {
+            if (!mediaFilePreview) {
+                setMediaFileError('Please select or drag an image to upload.');
+                return;
+            }
+            targetUrl = mediaFilePreview;
+        } else {
+            if (!mediaFormData.file_url.trim()) {
+                setMediaFileError('Please enter a valid image URL.');
+                return;
+            }
+            targetUrl = mediaFormData.file_url.trim();
+        }
+
         setIsSubmittingMedia(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/media`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(mediaFormData),
+                body: JSON.stringify({
+                    file_url: targetUrl,
+                    file_type: mediaFormData.file_type,
+                }),
             });
             if (res.ok) {
-                showNotification('Media attached successfully!', 'success');
-                setIsMediaModalOpen(false);
-                setMediaFormData({ file_url: '', file_type: 'vehicle_condition' });
+                showNotification('📸 Inspection photo attached successfully!', 'success');
+                handleCloseMediaModal();
                 fetchOrderDetails();
+            } else {
+                const errData = await res.json();
+                showNotification(errData.error || 'Failed to attach image', 'error');
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
         } finally {
             setIsSubmittingMedia(false);
+        }
+    };
+
+    // Delete Media Photo (Triggered from Modal Confirmation)
+    const handleConfirmDeleteMedia = async () => {
+        if (!deleteMediaTarget || isDeletingMedia) return;
+        setIsDeletingMedia(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/media/${deleteMediaTarget.media_id}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                showNotification('🗑️ Inspection photo removed successfully', 'info');
+                setDeleteMediaTarget(null);
+                if (activeLightboxMedia?.media_id === deleteMediaTarget.media_id) {
+                    setActiveLightboxMedia(null);
+                }
+                fetchOrderDetails();
+            } else {
+                const errJson = await res.json();
+                showNotification(errJson.error || 'Failed to remove photo', 'error');
+            }
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsDeletingMedia(false);
         }
     };
 
@@ -595,37 +767,106 @@ export default function WorkOrderExecution() {
                                     </div>
                                 </div>
 
-                                {/* Vehicle Condition Media Card */}
+                                {/* Vehicle Condition & Inspection Media Card */}
                                 <div className="exec-card">
                                     <div className="card-header-with-actions">
                                         <div className="card-header-title">
                                             <AddPhotoAlternateIcon className="card-icon" />
-                                            <h3>Inspection Media & Photos</h3>
+                                            <h3>Inspection Media & Vehicle Photos</h3>
+                                            {order.media && order.media.length > 0 && (
+                                                <span className="count-pill font-mono" style={{ backgroundColor: 'rgba(255, 216, 95, 0.15)', color: 'var(--accent-yellow)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>
+                                                    {order.media.length}
+                                                </span>
+                                            )}
                                         </div>
                                         <button
                                             type="button"
                                             className="secondary-btn-small"
                                             onClick={() => setIsMediaModalOpen(true)}
+                                            title="Upload car photo or attach URL"
                                         >
-                                            <AddPhotoAlternateIcon fontSize="small" />
-                                            <span>+ Attach Photo</span>
+                                            <CloudUploadIcon fontSize="small" />
+                                            <span>+ Upload Photo</span>
                                         </button>
                                     </div>
 
                                     <div className="media-grid-wrap">
                                         {order.media && order.media.length > 0 ? (
-                                            order.media.map((m) => (
-                                                <div key={m.media_id} className="media-thumb-card">
-                                                    <img src={m.file_url} alt="Work Order media" className="media-img" />
-                                                    <div className="media-caption">
-                                                        <span className="media-type-tag">{m.file_type}</span>
+                                            order.media.map((m) => {
+                                                const meta = MEDIA_TYPE_META[m.file_type] || MEDIA_TYPE_META.vehicle_condition;
+                                                const formattedDate = m.uploaded_at
+                                                    ? new Date(m.uploaded_at).toLocaleDateString('en-US', {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                          hour: '2-digit',
+                                                          minute: '2-digit',
+                                                      })
+                                                    : 'Recently attached';
+
+                                                return (
+                                                    <div key={m.media_id} className="media-thumb-card">
+                                                        <div
+                                                            className="media-img-container"
+                                                            onClick={() => setActiveLightboxMedia(m)}
+                                                            title="Click to enlarge / inspect photo"
+                                                        >
+                                                            <img
+                                                                src={m.file_url}
+                                                                alt={`Vehicle ${meta.label}`}
+                                                                className="media-img"
+                                                                loading="lazy"
+                                                            />
+                                                            <div className="media-overlay-actions">
+                                                                <button
+                                                                    type="button"
+                                                                    className="media-action-icon-btn zoom-btn"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveLightboxMedia(m);
+                                                                    }}
+                                                                    title="Inspect / Enlarge Photo"
+                                                                >
+                                                                    <ZoomInIcon fontSize="small" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="media-action-icon-btn delete-btn"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setDeleteMediaTarget(m);
+                                                                    }}
+                                                                    title="Delete Photo"
+                                                                >
+                                                                    <DeleteIcon fontSize="small" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="media-caption">
+                                                            <span className={`media-tag-pill ${meta.tagClass}`}>
+                                                                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
+                                                                    {meta.icon}
+                                                                </span>
+                                                                <span>{meta.label}</span>
+                                                            </span>
+                                                            <span className="media-date-text">{formattedDate}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         ) : (
                                             <div className="empty-media-box">
-                                                <AddPhotoAlternateIcon style={{ fontSize: '36px', color: 'var(--text-muted)' }} />
-                                                <p>No photos attached for this work order.</p>
+                                                <AddPhotoAlternateIcon style={{ fontSize: '40px', color: 'var(--text-muted)' }} />
+                                                <p>No photos attached for this work order yet.</p>
+                                                <button
+                                                    type="button"
+                                                    className="secondary-btn-small"
+                                                    style={{ marginTop: '6px' }}
+                                                    onClick={() => setIsMediaModalOpen(true)}
+                                                >
+                                                    <CloudUploadIcon fontSize="small" />
+                                                    <span>Upload First Inspection Photo</span>
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -799,53 +1040,200 @@ export default function WorkOrderExecution() {
                 </div>
             )}
 
-            {/* Modal: Add Media Photo */}
+            {/* Modal: Upload / Attach Inspection Photo */}
             {isMediaModalOpen && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
+                <div
+                    className="modal-overlay"
+                    onClick={() => !isSubmittingMedia && handleCloseMediaModal()}
+                    style={{ zIndex: 9990 }}
+                >
+                    <div
+                        className="modal-content"
+                        style={{ maxWidth: '540px' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="modal-header">
-                            <h3>Attach Vehicle Inspection Photo</h3>
+                            <div className="modal-title-wrap">
+                                <h3>Upload Inspection & Car Photo</h3>
+                                <p className="modal-subtitle">
+                                    Capture or attach visual evidence of vehicle condition, damage diagnosis, or repair progress.
+                                </p>
+                            </div>
                             <button
+                                type="button"
                                 className="modal-close"
-                                onClick={() => setIsMediaModalOpen(false)}
+                                onClick={handleCloseMediaModal}
                                 disabled={isSubmittingMedia}
                             >
                                 <CloseIcon />
                             </button>
                         </div>
 
-                        <form onSubmit={handleAddMedia} className="modal-form">
-                            <div className="form-group">
-                                <label>PHOTO / IMAGE URL *</label>
-                                <input
-                                    type="url"
-                                    placeholder="https://images.unsplash.com/... or media path"
-                                    value={mediaFormData.file_url}
-                                    onChange={(e) => setMediaFormData({ ...mediaFormData, file_url: e.target.value })}
-                                    required
-                                    className="exec-input"
-                                />
-                            </div>
+                        {/* Upload Mode Selector (File Upload vs URL) */}
+                        <div className="upload-tabs-wrap">
+                            <button
+                                type="button"
+                                className={`upload-tab-btn ${mediaUploadMode === 'file' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setMediaUploadMode('file');
+                                    setMediaFileError('');
+                                }}
+                            >
+                                <CloudUploadIcon fontSize="small" />
+                                <span>Device / Camera File</span>
+                            </button>
+                            <button
+                                type="button"
+                                className={`upload-tab-btn ${mediaUploadMode === 'url' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setMediaUploadMode('url');
+                                    setMediaFileError('');
+                                }}
+                            >
+                                <LinkIcon fontSize="small" />
+                                <span>Image URL Link</span>
+                            </button>
+                        </div>
 
+                        <form onSubmit={handleAddMedia} className="modal-form">
+                            {/* File Upload Mode (Dropzone) */}
+                            {mediaUploadMode === 'file' ? (
+                                <div className="form-group">
+                                    <label>PHOTO FILE (CAMERA / LOCAL STORAGE) *</label>
+
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        accept="image/*"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                handleSelectMediaFile(e.target.files[0]);
+                                            }
+                                        }}
+                                    />
+
+                                    {!mediaFilePreview ? (
+                                        <div
+                                            className={`media-dropzone ${isDragOver ? 'drag-active' : ''}`}
+                                            onClick={() => fileInputRef.current?.click()}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                setIsDragOver(true);
+                                            }}
+                                            onDragLeave={() => setIsDragOver(false)}
+                                            onDrop={handleFileDrop}
+                                        >
+                                            <CloudUploadIcon className="dropzone-icon" />
+                                            <p className="dropzone-title">
+                                                {isCompressingImage
+                                                    ? 'Optimizing Image...'
+                                                    : 'Click to select photo or drag & drop here'}
+                                            </p>
+                                            <p className="dropzone-hint">
+                                                Supports JPG, PNG, WEBP, HEIC (Auto-optimized for rapid sync)
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="dropzone-preview-wrap">
+                                            <img
+                                                src={mediaFilePreview}
+                                                alt="Upload thumbnail"
+                                                className="dropzone-preview-img"
+                                            />
+                                            <div className="preview-badge-overlay">
+                                                <span>
+                                                    📸 {mediaFile?.name || 'Selected Image'} ({mediaFileSize})
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className="preview-clear-btn"
+                                                    onClick={() => {
+                                                        setMediaFile(null);
+                                                        setMediaFilePreview('');
+                                                        setMediaFileSize('');
+                                                        if (fileInputRef.current) fileInputRef.current.value = '';
+                                                    }}
+                                                >
+                                                    <CloseIcon style={{ fontSize: '14px' }} />
+                                                    <span>Change</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {mediaFileError && (
+                                        <div style={{ color: '#f87171', fontSize: '11.5px', marginTop: '6px', fontFamily: 'monospace' }}>
+                                            ⚠️ {mediaFileError}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* URL Mode */
+                                <div className="form-group">
+                                    <label>DIRECT PHOTO / IMAGE URL *</label>
+                                    <input
+                                        type="url"
+                                        placeholder="https://images.unsplash.com/... or hosted image URL"
+                                        value={mediaFormData.file_url}
+                                        onChange={(e) => {
+                                            setMediaFormData({ ...mediaFormData, file_url: e.target.value });
+                                            setMediaFileError('');
+                                        }}
+                                        required={mediaUploadMode === 'url'}
+                                        className="exec-input"
+                                    />
+                                    {mediaFormData.file_url.trim() && (
+                                        <div className="dropzone-preview-wrap" style={{ marginTop: '10px' }}>
+                                            <img
+                                                src={mediaFormData.file_url.trim()}
+                                                alt="Web source thumbnail"
+                                                className="dropzone-preview-img"
+                                                onError={() => setMediaFileError('Failed to load image from this URL. Please verify.')}
+                                            />
+                                        </div>
+                                    )}
+                                    {mediaFileError && (
+                                        <div style={{ color: '#f87171', fontSize: '11.5px', marginTop: '6px', fontFamily: 'monospace' }}>
+                                            ⚠️ {mediaFileError}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Media Category Selection */}
                             <div className="form-group">
-                                <label>MEDIA CATEGORY TAG</label>
-                                <select
-                                    value={mediaFormData.file_type}
-                                    onChange={(e) => setMediaFormData({ ...mediaFormData, file_type: e.target.value })}
-                                    className="exec-input"
-                                >
-                                    <option value="vehicle_condition">Vehicle Intake Condition</option>
-                                    <option value="part_damage">Part Damage Diagnosis</option>
-                                    <option value="repair_progress">Repair In Progress</option>
-                                    <option value="completed_job">Completed Quality Check</option>
-                                </select>
+                                <label>MEDIA CATEGORY (SELECT ONE)</label>
+                                <div className="category-picker-grid">
+                                    {Object.entries(MEDIA_TYPE_META).map(([typeKey, meta]) => {
+                                        const isSelected = mediaFormData.file_type === typeKey;
+                                        return (
+                                            <div
+                                                key={typeKey}
+                                                className={`category-radio-card ${isSelected ? 'selected' : ''}`}
+                                                onClick={() => setMediaFormData({ ...mediaFormData, file_type: typeKey })}
+                                            >
+                                                <div className="category-card-header">
+                                                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: isSelected ? 'var(--accent-yellow)' : 'var(--text-muted)' }}>
+                                                        {meta.icon}
+                                                    </span>
+                                                    <span>{meta.label}</span>
+                                                    {isSelected && (
+                                                        <CheckCircleIcon style={{ fontSize: '14px', marginLeft: 'auto', color: 'var(--accent-yellow)' }} />
+                                                    )}
+                                                </div>
+                                                <span className="category-card-desc">{meta.desc}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
                             <div className="modal-actions">
                                 <button
                                     type="button"
                                     className="btn-cancel"
-                                    onClick={() => setIsMediaModalOpen(false)}
+                                    onClick={handleCloseMediaModal}
                                     disabled={isSubmittingMedia}
                                 >
                                     Cancel
@@ -853,12 +1241,186 @@ export default function WorkOrderExecution() {
                                 <button
                                     type="submit"
                                     className="primary-btn"
-                                    disabled={isSubmittingMedia}
+                                    disabled={isSubmittingMedia || isCompressingImage || (mediaUploadMode === 'file' && !mediaFilePreview)}
                                 >
-                                    {isSubmittingMedia ? 'Attaching...' : 'Attach Media'}
+                                    <CloudUploadIcon fontSize="small" />
+                                    <span>{isSubmittingMedia ? 'Attaching Photo...' : 'Upload & Attach Photo'}</span>
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Fullscreen Image Lightbox */}
+            {activeLightboxMedia && (
+                <div
+                    className="lightbox-overlay"
+                    onClick={() => setActiveLightboxMedia(null)}
+                >
+                    <div
+                        className="lightbox-content-box"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="lightbox-header-bar">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {(() => {
+                                    const meta = MEDIA_TYPE_META[activeLightboxMedia.file_type] || MEDIA_TYPE_META.vehicle_condition;
+                                    return (
+                                        <span className={`media-tag-pill ${meta.tagClass}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{meta.icon}</span>
+                                            <span>{meta.label}</span>
+                                        </span>
+                                    );
+                                })()}
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                    {activeLightboxMedia.uploaded_at
+                                        ? new Date(activeLightboxMedia.uploaded_at).toLocaleString('en-US')
+                                        : 'Inspection Photo'}
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    className="media-action-icon-btn delete-btn"
+                                    onClick={() => setDeleteMediaTarget(activeLightboxMedia)}
+                                    title="Delete this photo"
+                                >
+                                    <DeleteIcon fontSize="small" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="modal-close"
+                                    onClick={() => setActiveLightboxMedia(null)}
+                                    style={{ color: '#fff' }}
+                                    title="Close fullscreen view"
+                                >
+                                    <CloseIcon style={{ fontSize: '24px' }} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <img
+                            src={activeLightboxMedia.file_url}
+                            alt="Inspection record"
+                            className="lightbox-img-full"
+                        />
+
+                        <div className="lightbox-footer-bar">
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                Work Order: <strong>{order?.work_order_id}</strong> • Vehicle: <strong>{order?.make} {order?.model} ({order?.license_plate})</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Delete Photo Confirmation Overlay */}
+            {deleteMediaTarget && (
+                <div
+                    className="modal-overlay"
+                    onClick={() => !isDeletingMedia && setDeleteMediaTarget(null)}
+                    style={{ zIndex: 9999 }}
+                >
+                    <div
+                        className="modal-content"
+                        style={{ maxWidth: '440px', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="modal-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div
+                                    style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                        color: '#f87171',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <WarningAmberIcon style={{ fontSize: '22px' }} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '17px', color: '#f0f4f1' }}>
+                                        Remove Attached Photo
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        Confirm photo deletion from this work order
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="modal-close"
+                                onClick={() => setDeleteMediaTarget(null)}
+                                disabled={isDeletingMedia}
+                            >
+                                <CloseIcon />
+                            </button>
+                        </div>
+
+                        <div
+                            style={{
+                                display: 'flex',
+                                gap: '12px',
+                                alignItems: 'center',
+                                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                                border: '1px solid var(--border-glass)',
+                                borderRadius: '8px',
+                                padding: '10px',
+                                margin: '14px 0',
+                            }}
+                        >
+                            <img
+                                src={deleteMediaTarget.file_url}
+                                alt="Target item"
+                                style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '6px' }}
+                            />
+                            <div style={{ flex: 1, fontSize: '12px' }}>
+                                <div style={{ color: 'var(--text-main)', fontWeight: 600, marginBottom: '4px' }}>
+                                    {MEDIA_TYPE_META[deleteMediaTarget.file_type]?.label || 'Vehicle Photo'}
+                                </div>
+                                <div style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '11px' }}>
+                                    {deleteMediaTarget.uploaded_at
+                                        ? new Date(deleteMediaTarget.uploaded_at).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                          })
+                                        : 'Photo Item'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5', margin: '0 0 18px 0' }}>
+                            Are you sure you want to remove this photo? It will be permanently removed from this vehicle's work order inspection record.
+                        </p>
+
+                        <div className="modal-actions">
+                            <button
+                                type="button"
+                                className="btn-cancel"
+                                onClick={() => setDeleteMediaTarget(null)}
+                                disabled={isDeletingMedia}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-danger-confirm"
+                                onClick={handleConfirmDeleteMedia}
+                                disabled={isDeletingMedia}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <DeleteIcon fontSize="small" />
+                                <span>{isDeletingMedia ? 'Removing...' : 'Delete Photo'}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -8,10 +8,33 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import PrintIcon from '@mui/icons-material/Print';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import CloseIcon from '@mui/icons-material/Close';
 import './CarServiceHistory.css';
 import { API_BASE_URL } from '../config/api';
-// Local API URL fallback: 'http://localhost:5000/api'
+
+const MEDIA_TYPE_META = {
+    vehicle_condition: {
+        label: 'Vehicle Condition',
+        icon: 'directions_car',
+        tagClass: 'tag-condition',
+    },
+    part_damage: {
+        label: 'Part Damage',
+        icon: 'warning',
+        tagClass: 'tag-damage',
+    },
+    receipt: {
+        label: 'Supplier Receipt',
+        icon: 'receipt_long',
+        tagClass: 'tag-receipt',
+    },
+    other: {
+        label: 'Repair Progress & QC',
+        icon: 'photo_camera',
+        tagClass: 'tag-other',
+    },
+};
 
 export default function CarServiceHistory() {
     const { vin: paramVin } = useParams();
@@ -22,6 +45,7 @@ export default function CarServiceHistory() {
     const [historyData, setHistoryData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState(null);
+    const [activeLightboxMedia, setActiveLightboxMedia] = useState(null);
 
     const fetchHistoryForVin = async (targetVin) => {
         if (!targetVin || !targetVin.trim()) {
@@ -71,10 +95,6 @@ export default function CarServiceHistory() {
         }
     };
 
-    const handlePrint = () => {
-        window.print();
-    };
-
     return (
         <div className="vin-history-layout">
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -117,18 +137,6 @@ export default function CarServiceHistory() {
                     </div>
 
                     <div className="header-right">
-                        {historyData && (
-                            <button
-                                type="button"
-                                className="nav-link-btn"
-                                onClick={handlePrint}
-                                title="Print Service History Report"
-                            >
-                                <PrintIcon fontSize="small" />
-                                <span>Print Report</span>
-                            </button>
-                        )}
-
                         <button
                             type="button"
                             className="icon-btn"
@@ -325,17 +333,44 @@ export default function CarServiceHistory() {
                                                             </div>
                                                         )}
 
-                                                        {/* Attached Photos if available */}
+                                                        {/* Attached Photos / Visual Inspection Gallery */}
                                                         {wo.media && wo.media.length > 0 && (
-                                                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                                                {wo.media.map((m) => (
-                                                                    <img
-                                                                        key={m.media_id}
-                                                                        src={m.file_url}
-                                                                        alt="Service inspection"
-                                                                        style={{ width: '90px', height: '65px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border-glass)' }}
-                                                                    />
-                                                                ))}
+                                                            <div className="t-media-section">
+                                                                <div className="t-media-header">
+                                                                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--accent-yellow)' }}>photo_camera</span>
+                                                                    <span className="t-media-title">Inspection Photos & Visual Evidence ({wo.media.length})</span>
+                                                                </div>
+                                                                <div className="t-media-grid">
+                                                                    {wo.media.map((m) => {
+                                                                        const meta = MEDIA_TYPE_META[m.file_type] || MEDIA_TYPE_META.vehicle_condition;
+                                                                        const dateFormatted = m.uploaded_at
+                                                                            ? new Date(m.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                                            : '';
+                                                                        return (
+                                                                            <div
+                                                                                key={m.media_id}
+                                                                                className="t-media-card"
+                                                                                onClick={() => setActiveLightboxMedia({ ...m, work_order_id: wo.work_order_id, vehicle: historyData.vehicle })}
+                                                                                title="Click to view full-size photo"
+                                                                            >
+                                                                                <div className="t-media-img-wrap">
+                                                                                    <img src={m.file_url} alt="Vehicle Inspection Evidence" className="t-media-img" loading="lazy" />
+                                                                                    <div className="t-media-zoom-overlay">
+                                                                                        <ZoomInIcon style={{ fontSize: '22px', color: '#fff' }} />
+                                                                                        <span>Enlarge</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="t-media-info">
+                                                                                    <span className={`t-media-pill ${meta.tagClass}`}>
+                                                                                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>{meta.icon}</span>
+                                                                                        <span>{meta.label}</span>
+                                                                                    </span>
+                                                                                    {dateFormatted && <span className="t-media-date">{dateFormatted}</span>}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
                                                             </div>
                                                         )}
 
@@ -347,8 +382,8 @@ export default function CarServiceHistory() {
                                                             </div>
 
                                                             <div className="t-cost-total">
-                                                                <span>TOTAL SERVICE INVOICE: </span>
-                                                                <span>${parseFloat(wo.total_cost || wo.estimated_cost || 0).toFixed(2)}</span>
+                                                                <span>TOTAL SERVICE INVOICE (INCL. TAX): </span>
+                                                                <span>${parseFloat(wo.total_with_tax || (parseFloat(wo.total_cost || wo.estimated_cost || 0) * 1.05)).toFixed(2)}</span>
                                                             </div>
                                                         </div>
                                                     </article>
@@ -362,6 +397,57 @@ export default function CarServiceHistory() {
                     </div>
                 </main>
             </div>
+
+            {/* Fullscreen Lightbox Modal for Owner Inspection */}
+            {activeLightboxMedia && (
+                <div className="lightbox-overlay" onClick={() => setActiveLightboxMedia(null)}>
+                    <div className="lightbox-content-box" onClick={(e) => e.stopPropagation()}>
+                        <div className="lightbox-header-bar">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {(() => {
+                                    const meta = MEDIA_TYPE_META[activeLightboxMedia.file_type] || MEDIA_TYPE_META.vehicle_condition;
+                                    return (
+                                        <span className={`t-media-pill ${meta.tagClass}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{meta.icon}</span>
+                                            <span>{meta.label}</span>
+                                        </span>
+                                    );
+                                })()}
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                    {activeLightboxMedia.uploaded_at
+                                        ? new Date(activeLightboxMedia.uploaded_at).toLocaleString('en-US')
+                                        : 'Inspection Record'}
+                                </span>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="modal-close"
+                                onClick={() => setActiveLightboxMedia(null)}
+                                style={{ color: '#fff' }}
+                                title="Close fullscreen view"
+                            >
+                                <CloseIcon style={{ fontSize: '24px' }} />
+                            </button>
+                        </div>
+
+                        <img
+                            src={activeLightboxMedia.file_url}
+                            alt="Vehicle inspection record"
+                            className="lightbox-img-full"
+                        />
+
+                        <div className="lightbox-footer-bar">
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                Work Order: <strong>{activeLightboxMedia.work_order_id}</strong>
+                                {activeLightboxMedia.vehicle && (
+                                    <span> • Vehicle: <strong>{activeLightboxMedia.vehicle.year} {activeLightboxMedia.vehicle.make} {activeLightboxMedia.vehicle.model} ({activeLightboxMedia.vehicle.license_plate})</strong></span>
+                                )}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

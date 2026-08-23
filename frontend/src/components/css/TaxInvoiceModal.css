@@ -23,33 +23,88 @@
 
 .tax-invoice-modal-toolbar {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #161e18;
-    border: 1px solid rgba(255, 216, 95, 0.2);
-    border-radius: 8px;
-    padding: 12px 20px;
+    flex-direction: column;
+    gap: 12px;
+    background: linear-gradient(180deg, #18221b 0%, #111813 100%);
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    border-radius: 10px;
+    padding: 12px 18px;
     color: #f0f4f1;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
 }
 
-.toolbar-title {
+/* Top Row: Title, Badges, Actions */
+.toolbar-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.toolbar-left-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.toolbar-main-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toolbar-icon {
+    font-size: 20px;
+    color: #ffd85f;
+}
+
+.toolbar-title-text {
     font-family: 'JetBrains Mono', monospace;
     font-size: 14px;
     font-weight: 700;
+    color: #f0f4f1;
+    letter-spacing: 0.5px;
+}
+
+.toolbar-sub-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.invoice-id-pill {
+    background: rgba(255, 216, 95, 0.12);
     color: #ffd85f;
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.currency-pill {
+    background: rgba(255, 255, 255, 0.06);
+    color: #a3b1a6;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .toolbar-actions {
     display: flex;
-    gap: 12px;
+    align-items: center;
+    gap: 10px;
 }
 
 .btn-print-invoice {
     background-color: #ffd85f;
-    color: #161e18;
+    color: #111813;
     border: none;
     border-radius: 6px;
-    padding: 8px 18px;
+    padding: 7px 16px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
     font-weight: 700;
@@ -63,16 +118,19 @@
 .btn-print-invoice:hover {
     background-color: #ffe48a;
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 216, 95, 0.3);
 }
 
 .btn-close-modal {
-    background-color: transparent;
+    background: rgba(255, 255, 255, 0.06);
     color: #a3b1a6;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
-    padding: 8px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -80,6 +138,111 @@
 .btn-close-modal:hover {
     color: #ef4444;
     border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Bottom Strip: Dedicated Tax (VAT) Settings Strip */
+.toolbar-tax-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 6px 12px;
+    flex-wrap: wrap;
+}
+
+.tax-strip-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #e2e8e4;
+    white-space: nowrap;
+}
+
+.tax-strip-presets {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tax-preset-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #a3b1a6;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tax-preset-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-color: rgba(255, 216, 95, 0.3);
+}
+
+.tax-preset-chip.active {
+    background: #ffd85f;
+    color: #111813;
+    font-weight: 700;
+    border-color: #ffd85f;
+    box-shadow: 0 0 10px rgba(255, 216, 95, 0.25);
+}
+
+.tax-custom-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.custom-input-label {
+    font-size: 11px;
+    color: #a3b1a6;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+
+.custom-input-box-inner {
+    display: flex;
+    align-items: center;
+    background: #0b100d;
+    border: 1px solid rgba(255, 216, 95, 0.35);
+    border-radius: 6px;
+    padding: 2px 8px;
+}
+
+.tax-num-field {
+    width: 44px;
+    background: transparent;
+    border: none;
+    color: #ffd85f;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-align: right;
+    outline: none;
+}
+
+.tax-num-field::-webkit-inner-spin-button,
+.tax-num-field::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.tax-percent-symbol {
+    color: #ffd85f;
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 2px;
 }
 
 /* ========================================================================== */

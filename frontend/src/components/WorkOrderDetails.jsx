@@ -4,7 +4,29 @@ import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
 import './css/WorkOrderDetails.css';
 import { API_BASE_URL } from '../config/api';
-// Local API URL fallback: 'http://localhost:5000/api'
+
+const MEDIA_TYPE_META = {
+    vehicle_condition: {
+        label: 'Vehicle Condition',
+        icon: 'directions_car',
+        tagClass: 'tag-condition',
+    },
+    part_damage: {
+        label: 'Part Damage',
+        icon: 'warning',
+        tagClass: 'tag-damage',
+    },
+    receipt: {
+        label: 'Supplier Receipt',
+        icon: 'receipt_long',
+        tagClass: 'tag-receipt',
+    },
+    other: {
+        label: 'Repair Progress & QC',
+        icon: 'photo_camera',
+        tagClass: 'tag-other',
+    },
+};
 
 const STATUS_STEPS = [
     { key: 'received', label: 'Received', icon: 'pending_actions' },
@@ -23,6 +45,7 @@ export default function WorkOrderDetails() {
     const [noteText, setNoteText] = useState('');
     const [isSubmittingNote, setIsSubmittingNote] = useState(false);
     const [notification, setNotification] = useState(null);
+    const [activeLightboxMedia, setActiveLightboxMedia] = useState(null);
 
     // Invoice State
     const [invoiceData, setInvoiceData] = useState(null);
@@ -750,6 +773,84 @@ export default function WorkOrderDetails() {
                                         </table>
                                     </div>
                                 </article>
+
+                                {/* Vehicle Condition & Inspection Photos Card */}
+                                <article className="info-card">
+                                    <div className="card-header-row">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--accent-yellow)' }}>
+                                                photo_camera
+                                            </span>
+                                            <h3>Inspection Photos & Car Media</h3>
+                                            {order.media && order.media.length > 0 && (
+                                                <span className="font-mono" style={{ backgroundColor: 'rgba(255, 216, 95, 0.15)', color: 'var(--accent-yellow)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>
+                                                    {order.media.length}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {order.media && order.media.length > 0 && (
+                                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                                Click photo to enlarge
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {order.media && order.media.length > 0 ? (
+                                        <div className="wo-media-grid">
+                                            {order.media.map((m) => {
+                                                const meta = MEDIA_TYPE_META[m.file_type] || MEDIA_TYPE_META.vehicle_condition;
+                                                const dateStr = m.uploaded_at
+                                                    ? new Date(m.uploaded_at).toLocaleDateString('en-US', {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                          hour: '2-digit',
+                                                          minute: '2-digit',
+                                                      })
+                                                    : 'Recorded photo';
+
+                                                return (
+                                                    <div
+                                                        key={m.media_id}
+                                                        className="wo-media-thumb-card"
+                                                        onClick={() => setActiveLightboxMedia(m)}
+                                                        title="Click to view fullscreen photo"
+                                                    >
+                                                        <div className="wo-media-img-container">
+                                                            <img
+                                                                src={m.file_url}
+                                                                alt="Vehicle inspection record"
+                                                                className="wo-media-img"
+                                                                loading="lazy"
+                                                            />
+                                                            <div className="wo-media-hover-overlay">
+                                                                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>zoom_in</span>
+                                                                <span>Inspect</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="wo-media-caption">
+                                                            <span className={`media-tag-pill ${meta.tagClass}`}>
+                                                                <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                                                                    {meta.icon}
+                                                                </span>
+                                                                <span>{meta.label}</span>
+                                                            </span>
+                                                            <span className="wo-media-date">{dateStr}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="empty-media-box" style={{ padding: '24px 16px', textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px dashed var(--border-glass)' }}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: '36px', color: 'var(--text-muted)' }}>
+                                                no_photography
+                                            </span>
+                                            <p style={{ margin: '6px 0 0', fontSize: '12.5px', color: 'var(--text-muted)' }}>
+                                                No vehicle inspection photos have been uploaded for this work order yet.
+                                            </p>
+                                        </div>
+                                    )}
+                                </article>
                             </div>
 
                             {/* Right Column (Activity Timeline & Notes - Constrained Height) */}
@@ -1302,6 +1403,54 @@ export default function WorkOrderDetails() {
                                 <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
                                 {isDeletingItem ? 'Removing Item...' : 'Remove Line Item'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Fullscreen Lightbox Modal for Inspection Photos */}
+            {activeLightboxMedia && (
+                <div className="lightbox-overlay" onClick={() => setActiveLightboxMedia(null)}>
+                    <div className="lightbox-content-box" onClick={(e) => e.stopPropagation()}>
+                        <div className="lightbox-header-bar">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {(() => {
+                                    const meta = MEDIA_TYPE_META[activeLightboxMedia.file_type] || MEDIA_TYPE_META.vehicle_condition;
+                                    return (
+                                        <span className={`media-tag-pill ${meta.tagClass}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{meta.icon}</span>
+                                            <span>{meta.label}</span>
+                                        </span>
+                                    );
+                                })()}
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                    {activeLightboxMedia.uploaded_at
+                                        ? new Date(activeLightboxMedia.uploaded_at).toLocaleString('en-US')
+                                        : 'Inspection Record'}
+                                </span>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="modal-close"
+                                onClick={() => setActiveLightboxMedia(null)}
+                                style={{ color: '#fff' }}
+                                title="Close fullscreen view"
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>close</span>
+                            </button>
+                        </div>
+
+                        <img
+                            src={activeLightboxMedia.file_url}
+                            alt="Vehicle inspection record"
+                            className="lightbox-img-full"
+                        />
+
+                        <div className="lightbox-footer-bar">
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                Work Order: <strong>{order?.work_order_id}</strong> • Vehicle: <strong>{order?.make} {order?.model} ({order?.license_plate})</strong>
+                            </span>
                         </div>
                     </div>
                 </div>

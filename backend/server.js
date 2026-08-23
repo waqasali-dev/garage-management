@@ -24,7 +24,8 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // ==============================================================================
 // 🔒 GLOBAL IDEMPOTENCY & CONCURRENCY MUTEX MIDDLEWARE
@@ -1359,20 +1360,50 @@ app.post("/api/staff/work-orders/:id/media", async (req, res) => {
         return res.status(400).json({ error: "file_url is required." });
     }
 
+    const validTypes = ["vehicle_condition", "part_damage", "receipt", "other"];
+    const sanitizedType = validTypes.includes(file_type) ? file_type : "vehicle_condition";
+
     try {
         const query = `
             INSERT INTO work_order_media (work_order_id, file_url, file_type)
             VALUES ($1, $2, $3)
             RETURNING *;
         `;
-        const result = await pool.query(query, [id, file_url.trim(), file_type]);
+        const result = await pool.query(query, [id, file_url.trim(), sanitizedType]);
 
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:workorders:*");
 
-        res.status(201).json({ success: true, message: "Media attached", data: result.rows[0] });
+        res.status(201).json({ success: true, message: "Media attached successfully", data: result.rows[0] });
     } catch (err) {
         console.error("Error attaching media:", err);
         res.status(500).json({ error: "Failed to attach media", details: err.message });
+    }
+});
+
+// Delete attached photo / media
+app.delete("/api/staff/work-orders/:id/media/:mediaId", async (req, res) => {
+    const { id, mediaId } = req.params;
+
+    try {
+        const query = `
+            DELETE FROM work_order_media
+            WHERE media_id = $1 AND work_order_id = $2
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [parseInt(mediaId, 10), id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Media item not found." });
+        }
+
+        await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:workorders:*");
+
+        res.json({ success: true, message: "Media removed successfully", data: result.rows[0] });
+    } catch (err) {
+        console.error("Error removing media:", err);
+        res.status(500).json({ error: "Failed to remove media", details: err.message });
     }
 });
 
@@ -1865,8 +1896,14 @@ app.get("/api/owner/vehicles", async (req, res) => {
                     WHERE w.vehicle_id = v.vehicle_id
                 ) AS total_services_count,
                 (
-                    SELECT COALESCE(SUM(w.total_cost), 0.00) 
+                    SELECT COALESCE(SUM(
+                        CASE 
+                            WHEN i.subtotal IS NOT NULL THEN (i.subtotal + COALESCE(i.tax_amount, 0))
+                            ELSE (COALESCE(w.total_cost, 0) * 1.05)
+                        END
+                    ), 0.00) 
                     FROM work_order_data w 
+                    LEFT JOIN invoice_data i ON w.work_order_id = i.work_order_id
                     WHERE w.vehicle_id = v.vehicle_id
                 ) AS total_spent,
                 (
@@ -1931,16 +1968,25 @@ app.get("/api/vehicles/vin/:vin/history", async (req, res) => {
 
         const vehicle = vehicleResult.rows[0];
 
-        // 2. Fetch all Work Orders for this vehicle
+        // 2. Fetch all Work Orders for this vehicle with invoice & tax resolution
         const workOrdersQuery = `
             SELECT 
                 w.*,
                 s.full_name AS assigned_staff_name,
                 s.role AS assigned_staff_role,
-                sa.full_name AS service_advisor_name
+                sa.full_name AS service_advisor_name,
+                i.invoice_id,
+                i.subtotal AS invoice_subtotal,
+                i.tax_amount AS invoice_tax,
+                i.status AS invoice_status,
+                CASE 
+                    WHEN i.subtotal IS NOT NULL THEN (i.subtotal + COALESCE(i.tax_amount, 0))
+                    ELSE (COALESCE(w.total_cost, 0) * 1.05)
+                END AS total_with_tax
             FROM work_order_data w
             LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
             LEFT JOIN staff_data sa ON w.service_advisor_id = sa.staff_id
+            LEFT JOIN invoice_data i ON w.work_order_id = i.work_order_id
             WHERE w.vehicle_id = $1
             ORDER BY w.created_at DESC;
         `;
@@ -1986,6 +2032,7 @@ app.get("/api/vehicles/vin/:vin/history", async (req, res) => {
 
                 return {
                     ...wo,
+                    total_with_tax: parseFloat(wo.total_with_tax) || (parseFloat(wo.total_cost || 0) * 1.05),
                     items: itemsRes.rows,
                     media: mediaRes.rows,
                     scheduled_tasks: tasks,
@@ -1999,9 +2046,9 @@ app.get("/api/vehicles/vin/:vin/history", async (req, res) => {
             })
         );
 
-        // 4. Compute High-Level Metrics
+        // 4. Compute High-Level Metrics (Total spent reflects total invoices after taxes)
         const totalSpent = enhancedWorkOrders.reduce(
-            (sum, wo) => sum + (parseFloat(wo.total_cost) || parseFloat(wo.estimated_cost) || 0),
+            (sum, wo) => sum + (parseFloat(wo.total_with_tax) || (parseFloat(wo.total_cost || 0) * 1.05)),
             0
         );
         const totalPartsReplaced = enhancedWorkOrders.reduce(
@@ -3295,6 +3342,8 @@ app.post("/api/invoices/generate", async (req, res) => {
         // Flush caches
         await deleteCachePattern("garage:cache:invoice*");
         await deleteCachePattern("garage:cache:workorder*");
+        await deleteCachePattern("garage:cache:vehicle*");
+        await deleteCachePattern("garage:cache:owner*");
 
         res.status(201).json({
             success: true,

@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PrintIcon from '@mui/icons-material/Print';
 import CloseIcon from '@mui/icons-material/Close';
+import { useAuth } from '../context/AuthContext';
 import './css/TaxInvoiceModal.css';
 
 export default function TaxInvoiceModal({ invoice, onClose }) {
+    const { isOwner } = useAuth();
+    const [taxPercentage, setTaxPercentage] = useState(() => {
+        if (invoice?.tax_percentage !== undefined && invoice?.tax_percentage !== null) {
+            return parseFloat(invoice.tax_percentage) || 0;
+        }
+        return 5; // Default is 5%
+    });
+
     if (!invoice) return null;
 
     const handlePrint = () => {
@@ -35,8 +44,9 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
         }
     ];
 
-    // Calculate line items breakdown with 5% VAT (Oman / International Tax Standard)
-    const VAT_RATE = 0.05;
+    // Calculate line items breakdown with customizable VAT rate (Default 5%)
+    // Base unit price is exclusive of tax; Tax is generated ON TOP of the base price.
+    const currentTaxRate = (parseFloat(taxPercentage) || 0) / 100;
     let totalExclVatSum = 0;
     let totalVatSum = 0;
     let totalInclVatSum = 0;
@@ -44,12 +54,15 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
 
     const tableRows = items.map((item, index) => {
         const qty = parseFloat(item.quantity_or_hours || 1);
-        const lineTotal = parseFloat(item.total_price || (qty * parseFloat(item.unit_price || 0)) || 0);
+        const unitPriceBase = parseFloat(
+            item.unit_price !== undefined && item.unit_price !== null
+                ? item.unit_price
+                : (item.total_price ? item.total_price / qty : 0)
+        );
 
-        // Calculate base price before VAT and VAT amount
-        const lineBase = lineTotal / (1 + VAT_RATE);
-        const lineVat = lineTotal - lineBase;
-        const unitPriceBase = lineBase / qty;
+        const lineBase = qty * unitPriceBase;
+        const lineVat = lineBase * currentTaxRate;
+        const lineTotal = lineBase + lineVat;
 
         totalQtySum += qty;
         totalExclVatSum += lineBase;
@@ -76,17 +89,82 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
             <div className="tax-invoice-modal-container" onClick={(e) => e.stopPropagation()}>
                 {/* On-Screen Action Toolbar */}
                 <div className="tax-invoice-modal-toolbar">
-                    <span className="toolbar-title">OFFICIAL TAX INVOICE PREVIEW</span>
-                    <div className="toolbar-actions">
-                        <button type="button" className="btn-print-invoice" onClick={handlePrint}>
-                            <PrintIcon fontSize="small" />
-                            <span>Print / Save as PDF</span>
-                        </button>
-                        <button type="button" className="btn-close-modal" onClick={onClose}>
-                            <CloseIcon fontSize="small" />
-                            <span>Close</span>
-                        </button>
+                    {/* Top Row: Title, ID Badge, Actions */}
+                    <div className="toolbar-top-row">
+                        <div className="toolbar-left-info">
+                            <div className="toolbar-main-heading">
+                                <span className="material-symbols-outlined toolbar-icon">receipt_long</span>
+                                <span className="toolbar-title-text">Official Tax Invoice</span>
+                            </div>
+                            <div className="toolbar-sub-badges">
+                                <span className="invoice-id-pill font-mono">{invoiceId}</span>
+                                <span className="currency-pill">OMR Standard</span>
+                            </div>
+                        </div>
+
+                        <div className="toolbar-actions">
+                            <button type="button" className="btn-print-invoice" onClick={handlePrint}>
+                                <PrintIcon fontSize="small" />
+                                <span>Print / Save as PDF</span>
+                            </button>
+                            <button type="button" className="btn-close-modal" onClick={onClose} title="Close Preview">
+                                <CloseIcon fontSize="small" />
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Bottom Strip: Dedicated Tax (VAT) Rate Selector (Staff & Admin Only) */}
+                    {!isOwner && (
+                        <div className="toolbar-tax-strip">
+                            <div className="tax-strip-label">
+                                <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#ffd85f' }}>tune</span>
+                                <span>VAT Tax Rate:</span>
+                            </div>
+
+                            <div className="tax-strip-presets">
+                                {[
+                                    { val: 0, label: '0% (Tax Free)' },
+                                    { val: 5, label: '5% (Standard Default)' },
+                                    { val: 10, label: '10%' },
+                                    { val: 15, label: '15%' }
+                                ].map((preset) => {
+                                    const isActive = parseFloat(taxPercentage) === preset.val;
+                                    return (
+                                        <button
+                                            key={preset.val}
+                                            type="button"
+                                            className={`tax-preset-chip ${isActive ? 'active' : ''}`}
+                                            onClick={() => setTaxPercentage(preset.val)}
+                                            title={`Set invoice VAT to ${preset.val}%`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="tax-custom-input-wrap">
+                                <span className="custom-input-label">Custom:</span>
+                                <div className="custom-input-box-inner">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="0.5"
+                                        className="tax-num-field font-mono"
+                                        value={taxPercentage}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setTaxPercentage(val === '' ? '' : Math.max(0, parseFloat(val) || 0));
+                                        }}
+                                        title="Custom VAT percentage"
+                                        placeholder="5"
+                                    />
+                                    <span className="tax-percent-symbol">%</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* ========================================================= */}
@@ -168,7 +246,9 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                                     <th style={{ width: '45px' }} className="col-center">Qty</th>
                                     <th style={{ width: '80px' }} className="col-right">Unit Price</th>
                                     <th style={{ width: '80px' }} className="col-right">Amount</th>
-                                    <th style={{ width: '70px' }} className="col-right">VAT</th>
+                                    <th style={{ width: '75px' }} className="col-right">
+                                        VAT ({parseFloat(taxPercentage) || 0}%)
+                                    </th>
                                     <th style={{ width: '85px' }} className="col-right">Amount</th>
                                 </tr>
                             </thead>
@@ -206,7 +286,7 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                                 <span>{totalExclVatSum.toFixed(3)}</span>
                             </div>
                             <div className="totals-line-row">
-                                <span>VAT</span>
+                                <span>VAT ({parseFloat(taxPercentage) || 0}%)</span>
                                 <span>{totalVatSum.toFixed(3)}</span>
                             </div>
                             <div className="totals-grand-bar">
