@@ -148,7 +148,7 @@ garage_management/
 │   ├── package.json          # Backend dependencies
 │   └── .env                  # Backend secrets (DATABASE_URL, UPSTASH_REDIS_URL, etc.)
 │
-├── frontend/
+├── frontend/ 
 │   ├── public/               # Static assets & HTML template
 │   ├── src/
 │   │   ├── components/       # Admin & Shared Components
