@@ -3,18 +3,19 @@
 // ==============================================================================
 
 // 🚀 LIVE PRODUCTION BACKEND (Render Cloud Deployment)
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://garage-management-hy5h.onrender.com/api';
+export const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // 💻 LOCAL DEVELOPMENT BACKEND (Uncomment to switch back to local development)
-//export const API_BASE_URL = 'http://localhost:5000/api';
+// export const API_BASE_URL = 'http://localhost:5000/api';
 
 // ==============================================================================
-// 🛡️ GLOBAL IN-FLIGHT MUTEX & IDEMPOTENCY INTERCEPTOR
+// 🛡️ GLOBAL IN-FLIGHT MUTEX & AUTH / IDEMPOTENCY INTERCEPTOR
 // ==============================================================================
 // Intercepts window.fetch across the entire application to guarantee:
-// 1. In-flight request deduplication (prevents rapid double-clicks from firing duplicate requests)
-// 2. Automatic X-Idempotency-Key header injection on mutating requests (POST, PUT, PATCH, DELETE)
-// 3. Response stream cloning so duplicate concurrent callers safely resolve identical responses
+// 1. Automatic Authorization Bearer token injection from localStorage
+// 2. In-flight request deduplication (prevents rapid double-clicks from firing duplicate requests)
+// 3. Automatic X-Idempotency-Key header injection on mutating requests (POST, PUT, PATCH, DELETE)
+// 4. Response stream cloning so duplicate concurrent callers safely resolve identical responses
 
 const inFlightRequests = new Map();
 
@@ -25,7 +26,22 @@ if (typeof window !== 'undefined' && window.fetch) {
         const method = (init.method || 'GET').toUpperCase();
         const url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
 
-        // Only intercept state-mutating HTTP methods
+        // Prepare enhanced headers
+        const headers = new Headers(init.headers || {});
+
+        // Automatically inject Authorization Bearer token if present and not manually provided
+        if (!headers.has('Authorization') && !headers.has('authorization')) {
+            try {
+                const token = localStorage.getItem('garage_auth_token');
+                if (token) {
+                    headers.set('Authorization', `Bearer ${token}`);
+                }
+            } catch (e) {
+                // Ignore localStorage errors
+            }
+        }
+
+        // Only intercept state-mutating HTTP methods for mutex & idempotency
         if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && url) {
             const bodyStr = typeof init.body === 'string' ? init.body : (init.body ? JSON.stringify(init.body) : '');
             const requestSignature = `${method}:${url}:${bodyStr}`;
@@ -39,7 +55,6 @@ if (typeof window !== 'undefined' && window.fetch) {
             }
 
             // Ensure Idempotency Key header is present
-            const headers = new Headers(init.headers || {});
             if (!headers.has('X-Idempotency-Key')) {
                 const uniqueKey = `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
                 headers.set('X-Idempotency-Key', uniqueKey);
@@ -66,7 +81,12 @@ if (typeof window !== 'undefined' && window.fetch) {
             return fetchPromise;
         }
 
-        return originalFetch(input, init);
+        const enhancedInit = {
+            ...init,
+            headers,
+        };
+
+        return originalFetch(input, enhancedInit);
     };
 }
 

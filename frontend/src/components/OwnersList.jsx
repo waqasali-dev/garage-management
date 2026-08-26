@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import SearchIcon from '@mui/icons-material/Search';
@@ -196,21 +196,23 @@ export default function OwnersList() {
         }
     };
 
-    const filteredOwners = owners.filter((owner) => {
+    const filteredOwners = useMemo(() => {
         const query = searchTerm.toLowerCase();
-        const matchesSearch =
-            (owner.name || '').toLowerCase().includes(query) ||
-            (owner.id || '').toLowerCase().includes(query) ||
-            (owner.phone || '').toLowerCase().includes(query) ||
-            (owner.email || '').toLowerCase().includes(query) ||
-            (owner.vehicle || '').toLowerCase().includes(query);
+        return owners.filter((owner) => {
+            const matchesSearch =
+                (owner.name || '').toLowerCase().includes(query) ||
+                (owner.id || '').toLowerCase().includes(query) ||
+                (owner.phone || '').toLowerCase().includes(query) ||
+                (owner.email || '').toLowerCase().includes(query) ||
+                (owner.vehicle || '').toLowerCase().includes(query);
 
-        if (!matchesSearch) return false;
+            if (!matchesSearch) return false;
 
-        if (activeFilter === 'active') return owner.isActive;
-        if (activeFilter === 'vip') return owner.is_vip;
-        return true;
-    });
+            if (activeFilter === 'active') return owner.isActive;
+            if (activeFilter === 'vip') return owner.is_vip;
+            return true;
+        });
+    }, [owners, searchTerm, activeFilter]);
 
     return (
         <div className="owners-layout">

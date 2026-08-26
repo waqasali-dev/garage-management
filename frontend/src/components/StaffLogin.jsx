@@ -47,8 +47,8 @@ export default function StaffLogin() {
                 return;
             }
 
-            // Save user in AuthContext & LocalStorage
-            login(json.user);
+            // Save user and token in AuthContext & LocalStorage
+            login(json.user, json.token);
 
             // Role-based Redirection
             const rawRole = (json.user.role || '').toLowerCase();

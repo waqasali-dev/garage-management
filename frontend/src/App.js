@@ -1,32 +1,68 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
-// Admin Core Components
-import Dashboard from './components/Dashboard';
-import VehicleIntake from './components/VehicleIntake';
-import WorkOrders from './components/WorkOrders';
-import WorkOrderDetails from './components/WorkOrderDetails';
-import OwnersList from './components/OwnersList';
-import OwnerDetail from './components/OwnerDetail';
-import Scheduling from './components/Scheduling';
-import Inventory from './components/Inventory';
-import Invoices from './components/Invoices';
-import Staff from './components/Staff';
-import StaffLogin from './components/StaffLogin';
-import AuditLog from './components/AuditLog';
-import UserManagement from './components/UserManagement';
+// Admin Core Components (Lazy Loaded)
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const VehicleIntake = lazy(() => import('./components/VehicleIntake'));
+const WorkOrders = lazy(() => import('./components/WorkOrders'));
+const WorkOrderDetails = lazy(() => import('./components/WorkOrderDetails'));
+const OwnersList = lazy(() => import('./components/OwnersList'));
+const OwnerDetail = lazy(() => import('./components/OwnerDetail'));
+const Scheduling = lazy(() => import('./components/Scheduling'));
+const Inventory = lazy(() => import('./components/Inventory'));
+const Invoices = lazy(() => import('./components/Invoices'));
+const Staff = lazy(() => import('./components/Staff'));
+const StaffLogin = lazy(() => import('./components/StaffLogin'));
+const AuditLog = lazy(() => import('./components/AuditLog'));
+const UserManagement = lazy(() => import('./components/UserManagement'));
 
-// Staff Portal Components
-import StaffDashboard from './staff/StaffDashboard';
-import WorkOrderExecution from './staff/WorkOrderExecution';
-import StaffSchedules from './staff/StaffSchedules';
+// Staff Portal Components (Lazy Loaded)
+const StaffDashboard = lazy(() => import('./staff/StaffDashboard'));
+const WorkOrderExecution = lazy(() => import('./staff/WorkOrderExecution'));
+const StaffSchedules = lazy(() => import('./staff/StaffSchedules'));
 
-// Owner Portal Components
-import OwnerCars from './owner/OwnerCars';
-import CarServiceHistory from './owner/CarServiceHistory';
+// Owner Portal Components (Lazy Loaded)
+const OwnerCars = lazy(() => import('./owner/OwnerCars'));
+const CarServiceHistory = lazy(() => import('./owner/CarServiceHistory'));
+
+// Branded loading spinner fallback
+function RouteLoadingFallback() {
+    return (
+        <div style={{
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#0a0d14',
+            color: '#94a3b8',
+            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+        }}>
+            <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(59, 130, 246, 0.2)',
+                borderTopColor: '#3b82f6',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+                marginBottom: '16px',
+            }} />
+            <span style={{ fontSize: '13px', letterSpacing: '0.05em', color: '#64748b' }}>
+                LOADING PRECISION GARAGE...
+            </span>
+            <style>{`
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
+        </div>
+    );
+}
 
 // Smart Root Redirect based on user role
 function RootRedirect() {
@@ -48,9 +84,12 @@ function RootRedirect() {
 
 function App() {
     return (
-        <AuthProvider>
-            <div className="App">
-                <Routes>
+        <ErrorBoundary>
+            <AuthProvider>
+                <NotificationProvider>
+                    <div className="App">
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                            <Routes>
                     {/* Public Login Route */}
                     <Route path="/login" element={<StaffLogin />} />
 
@@ -248,8 +287,11 @@ function App() {
                     {/* Catch-all Fallback */}
                     <Route path="*" element={<RootRedirect />} />
                 </Routes>
-            </div>
-        </AuthProvider>
+            </Suspense>
+        </div>
+    </NotificationProvider>
+</AuthProvider>
+</ErrorBoundary>
     );
 }
 

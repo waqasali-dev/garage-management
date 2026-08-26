@@ -27,8 +27,10 @@ async function runMigration() {
     console.log("⚡ Connected to Neon PostgreSQL cloud instance...");
 
     try {
-        // Read schema from database.db (or create directly)
-        const schemaPath = path.join(__dirname, '../frontend/database.db');
+        // Read schema from backend/schema/schema.sql (or fallback to database.db)
+        const primarySchemaPath = path.join(__dirname, 'schema/schema.sql');
+        const fallbackSchemaPath = path.join(__dirname, '../frontend/database.db');
+        const schemaPath = fs.existsSync(primarySchemaPath) ? primarySchemaPath : fallbackSchemaPath;
         const sql = fs.readFileSync(schemaPath, 'utf8');
 
         console.log("📦 Creating Tables, Types, Functions, Sequences, and Indexes on Neon...");

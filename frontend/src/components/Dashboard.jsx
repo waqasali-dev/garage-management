@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -107,35 +107,39 @@ export default function Dashboard() {
     }, []);
 
     // Filter only active in-workshop work orders (excluding completed/cancelled)
-    const activeWorkOrders = workOrders.filter(
-        (wo) => wo.status !== 'completed' && wo.status !== 'cancelled'
-    );
+    const activeWorkOrders = useMemo(() => {
+        return workOrders.filter(
+            (wo) => wo.status !== 'completed' && wo.status !== 'cancelled'
+        );
+    }, [workOrders]);
 
-    const filteredOrders = activeWorkOrders.filter((wo) => {
+    const filteredOrders = useMemo(() => {
         const query = searchTerm.toLowerCase();
-        const matchesSearch =
-            (wo.work_order_id || '').toLowerCase().includes(query) ||
-            (wo.make || '').toLowerCase().includes(query) ||
-            (wo.model || '').toLowerCase().includes(query) ||
-            (wo.license_plate || '').toLowerCase().includes(query) ||
-            (wo.vin || '').toLowerCase().includes(query) ||
-            (wo.owner_name || '').toLowerCase().includes(query) ||
-            (wo.assigned_staff_name || '').toLowerCase().includes(query);
+        return activeWorkOrders.filter((wo) => {
+            const matchesSearch =
+                (wo.work_order_id || '').toLowerCase().includes(query) ||
+                (wo.make || '').toLowerCase().includes(query) ||
+                (wo.model || '').toLowerCase().includes(query) ||
+                (wo.license_plate || '').toLowerCase().includes(query) ||
+                (wo.vin || '').toLowerCase().includes(query) ||
+                (wo.owner_name || '').toLowerCase().includes(query) ||
+                (wo.assigned_staff_name || '').toLowerCase().includes(query);
 
-        const matchesStatus = statusFilter === 'all' || wo.status === statusFilter;
-        return matchesSearch && matchesStatus;
-    });
+            const matchesStatus = statusFilter === 'all' || wo.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        });
+    }, [activeWorkOrders, searchTerm, statusFilter]);
 
     // KPI Metrics calculation
-    const inProgressCount = workOrders.filter((w) => w.status === 'in_progress').length;
-    const receivedCount = workOrders.filter((w) => w.status === 'received').length;
-    const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
-    const readyCount = workOrders.filter((w) => w.status === 'ready').length;
-    const completedCount = workOrders.filter((w) => w.status === 'completed').length;
-    const totalRevenue = workOrders.reduce(
+    const inProgressCount = useMemo(() => workOrders.filter((w) => w.status === 'in_progress').length, [workOrders]);
+    const receivedCount = useMemo(() => workOrders.filter((w) => w.status === 'received').length, [workOrders]);
+    const diagnosedCount = useMemo(() => workOrders.filter((w) => w.status === 'diagnosed').length, [workOrders]);
+    const readyCount = useMemo(() => workOrders.filter((w) => w.status === 'ready').length, [workOrders]);
+    const completedCount = useMemo(() => workOrders.filter((w) => w.status === 'completed').length, [workOrders]);
+    const totalRevenue = useMemo(() => workOrders.reduce(
         (sum, w) => sum + (parseFloat(w.total_cost) || parseFloat(w.estimated_cost) || 0),
         0
-    );
+    ), [workOrders]);
 
     return (
         <div className="dashboard-layout">

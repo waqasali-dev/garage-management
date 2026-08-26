@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
 import './css/Inventory.css';
@@ -294,14 +294,16 @@ export default function Inventory() {
         }
     };
 
-    const filteredItems = items.filter((item) => {
+    const filteredItems = useMemo(() => {
         const search = searchTerm.toLowerCase();
-        return (
-            (item.sku || '').toLowerCase().includes(search) ||
-            (item.name || '').toLowerCase().includes(search) ||
-            (item.category || '').toLowerCase().includes(search)
-        );
-    });
+        return items.filter((item) => {
+            return (
+                (item.sku || '').toLowerCase().includes(search) ||
+                (item.name || '').toLowerCase().includes(search) ||
+                (item.category || '').toLowerCase().includes(search)
+            );
+        });
+    }, [items, searchTerm]);
 
     return (
         <div className="inventory-layout">

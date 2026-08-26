@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState } from 'react';
 const AuthContext = createContext(null);
 
 export const AUTH_STORAGE_KEY = 'garage_auth_user';
+export const AUTH_TOKEN_KEY = 'garage_auth_token';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(() => {
@@ -15,21 +16,37 @@ export function AuthProvider({ children }) {
         }
     });
 
-    const login = (userData) => {
+    const [token, setToken] = useState(() => {
+        try {
+            return localStorage.getItem(AUTH_TOKEN_KEY) || null;
+        } catch (e) {
+            return null;
+        }
+    });
+
+    const login = (userData, tokenData) => {
         setUser(userData);
+        if (tokenData) {
+            setToken(tokenData);
+        }
         try {
             localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+            if (tokenData) {
+                localStorage.setItem(AUTH_TOKEN_KEY, tokenData);
+            }
         } catch (e) {
-            console.error('Error saving auth user:', e);
+            console.error('Error saving auth credentials:', e);
         }
     };
 
     const logout = () => {
         setUser(null);
+        setToken(null);
         try {
             localStorage.removeItem(AUTH_STORAGE_KEY);
+            localStorage.removeItem(AUTH_TOKEN_KEY);
         } catch (e) {
-            console.error('Error removing auth user:', e);
+            console.error('Error removing auth credentials:', e);
         }
     };
 
@@ -45,6 +62,7 @@ export function AuthProvider({ children }) {
         <AuthContext.Provider
             value={{
                 user,
+                token,
                 role,
                 rawRole,
                 isAdmin,

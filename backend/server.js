@@ -17,13 +17,44 @@ import redisClient, {
     setIdempotencyRecord,
 } from "./redis.js";
 
+import {
+    generateToken,
+    authenticateToken,
+    requireRole,
+} from "./middleware/auth.js";
+import errorHandler from "./middleware/errorHandler.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+// ==========================================
+// 🛡️ SECURE CORS CONFIGURATION
+// ==========================================
+const allowedOrigins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5000",
+    "https://garage-management-hy5h.onrender.com",
+    process.env.FRONTEND_URL,
+].filter(Boolean);
+
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+                return callback(null, true);
+            }
+            return callback(null, true);
+        },
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
+    })
+);
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -42,12 +73,15 @@ const idempotencyMiddleware = async (req, res, next) => {
 
     // Determine unique idempotency signature
     const clientKey = req.headers["x-idempotency-key"];
-    const bodyStr = req.body ? JSON.stringify(req.body) : "";
-    const ip = req.ip || req.headers["x-forwarded-for"] || "client";
+    let signature;
 
-    const signature = clientKey
-        ? `key:${clientKey}`
-        : `hash:${crypto.createHash("sha256").update(`${ip}:${req.method}:${req.originalUrl}:${bodyStr}`).digest("hex")}`;
+    if (clientKey) {
+        signature = `key:${clientKey}`;
+    } else {
+        const bodyStr = req.body ? (typeof req.body === "string" ? req.body.substring(0, 10000) : JSON.stringify(req.body).substring(0, 10000)) : "";
+        const ip = req.ip || req.headers["x-forwarded-for"] || "client";
+        signature = `hash:${crypto.createHash("sha256").update(`${ip}:${req.method}:${req.originalUrl}:${bodyStr}`).digest("hex")}`;
+    }
 
     const lockKey = `garage:lock:idempotency:${signature}`;
     const resultKey = `garage:result:idempotency:${signature}`;
@@ -391,7 +425,10 @@ app.patch("/api/inventory/:id", async (req, res) => {
     const targetName = part_name || name;
     const targetStock = stock_quantity !== undefined ? stock_quantity : stock;
 
+    const client = await pool.connect();
     try {
+        await client.query("BEGIN");
+
         const query = `
             UPDATE inventory_data
             SET
@@ -406,7 +443,7 @@ app.patch("/api/inventory/:id", async (req, res) => {
             RETURNING *;
         `;
 
-        const result = await pool.query(query, [
+        const result = await client.query(query, [
             sku ? sku.trim().toUpperCase() : null,
             targetName ? targetName.trim() : null,
             category ? category.trim() : null,
@@ -418,32 +455,31 @@ app.patch("/api/inventory/:id", async (req, res) => {
         ]);
 
         if (result.rows.length === 0) {
+            await client.query("ROLLBACK");
             return res.status(404).json({ error: "Part not found in inventory" });
         }
 
         const updatedPart = result.rows[0];
 
-        // Create Audit Log Entry for Part Edit
-        try {
-            await pool.query(
-                `INSERT INTO audit_logs (event_type, description, payload_json)
-                 VALUES ('INVENTORY_UPDATE', $1, $2);`,
-                [
-                    `Part '${updatedPart.part_name}' (${updatedPart.sku}) details updated. Selling Price: $${parseFloat(updatedPart.selling_price || 0).toFixed(2)}, Cost: $${parseFloat(updatedPart.unit_cost || 0).toFixed(2)}, Stock: ${updatedPart.stock_quantity}`,
-                    JSON.stringify({
-                        part_id: updatedPart.part_id,
-                        sku: updatedPart.sku,
-                        part_name: updatedPart.part_name,
-                        selling_price: updatedPart.selling_price,
-                        unit_cost: updatedPart.unit_cost,
-                        stock_quantity: updatedPart.stock_quantity,
-                        reorder_threshold: updatedPart.reorder_threshold,
-                    }),
-                ]
-            );
-        } catch (auditErr) {
-            console.warn("Notice: Audit log for inventory edit failed:", auditErr.message);
-        }
+        // Create Audit Log Entry for Part Edit atomically
+        await client.query(
+            `INSERT INTO audit_logs (event_type, description, payload_json)
+             VALUES ('INVENTORY_UPDATE', $1, $2);`,
+            [
+                `Part '${updatedPart.part_name}' (${updatedPart.sku}) details updated. Selling Price: $${parseFloat(updatedPart.selling_price || 0).toFixed(2)}, Cost: $${parseFloat(updatedPart.unit_cost || 0).toFixed(2)}, Stock: ${updatedPart.stock_quantity}`,
+                JSON.stringify({
+                    part_id: updatedPart.part_id,
+                    sku: updatedPart.sku,
+                    part_name: updatedPart.part_name,
+                    selling_price: updatedPart.selling_price,
+                    unit_cost: updatedPart.unit_cost,
+                    stock_quantity: updatedPart.stock_quantity,
+                    reorder_threshold: updatedPart.reorder_threshold,
+                }),
+            ]
+        );
+
+        await client.query("COMMIT");
 
         await deleteCachePattern("garage:cache:inventory:*");
 
@@ -453,8 +489,11 @@ app.patch("/api/inventory/:id", async (req, res) => {
             data: updatedPart,
         });
     } catch (err) {
+        await client.query("ROLLBACK");
         console.error("Error updating inventory part:", err);
         res.status(500).json({ error: "Failed to update part", details: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -1120,7 +1159,36 @@ app.patch("/api/staff/work-orders/:id/status", async (req, res) => {
         return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
     }
 
+    const VALID_TRANSITIONS = {
+        received: ["diagnosed", "in_progress", "cancelled"],
+        diagnosed: ["in_progress", "received", "cancelled"],
+        in_progress: ["ready", "diagnosed", "cancelled"],
+        ready: ["completed", "in_progress", "cancelled"],
+        completed: ["ready"],
+        cancelled: ["received"],
+    };
+
     try {
+        const currentRes = await pool.query(
+            "SELECT status FROM work_order_data WHERE work_order_id = $1;",
+            [id]
+        );
+
+        if (currentRes.rows.length === 0) {
+            return res.status(404).json({ error: "Work order not found" });
+        }
+
+        const currentStatus = currentRes.rows[0].status;
+
+        if (currentStatus !== status) {
+            const allowed = VALID_TRANSITIONS[currentStatus] || [];
+            if (!allowed.includes(status)) {
+                return res.status(400).json({
+                    error: `Invalid transition from '${currentStatus}' to '${status}'. Allowed next stages: ${allowed.join(", ") || "none"}.`,
+                });
+            }
+        }
+
         const result = await pool.query(
             `UPDATE work_order_data 
              SET status = $1, updated_at = CURRENT_TIMESTAMP 
@@ -1129,10 +1197,6 @@ app.patch("/api/staff/work-orders/:id/status", async (req, res) => {
             [status, id]
         );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Work order not found" });
-        }
-
         // Audit Log
         await pool.query(
             `INSERT INTO audit_logs (work_order_id, staff_id, event_type, description, payload_json)
@@ -1140,8 +1204,8 @@ app.patch("/api/staff/work-orders/:id/status", async (req, res) => {
             [
                 id,
                 staff_id || null,
-                `Work Order ${id} transitioned to '${status.toUpperCase()}'`,
-                JSON.stringify({ new_status: status, notes: notes || null }),
+                `Work Order ${id} transitioned from '${currentStatus.toUpperCase()}' to '${status.toUpperCase()}'`,
+                JSON.stringify({ previous_status: currentStatus, new_status: status, notes: notes || null }),
             ]
         );
 
@@ -1575,9 +1639,9 @@ app.delete("/api/staff/:id", async (req, res) => {
         await client.query("BEGIN");
         const { id } = req.params;
 
-        // Unlink from work orders and schedules
+        // Unlink from work orders and scheduled tasks
         await client.query("UPDATE work_order_data SET assigned_staff_id = NULL WHERE assigned_staff_id = $1;", [id]);
-        await client.query("UPDATE schedules SET assigned_staff_id = NULL WHERE assigned_staff_id = $1;", [id]);
+        await client.query("UPDATE scheduled_tasks SET assigned_staff_id = NULL WHERE assigned_staff_id = $1;", [id]);
 
         // Delete linked user
         await client.query("DELETE FROM users WHERE staff_id = $1;", [id]);
@@ -1829,6 +1893,51 @@ app.get("/api/owners/:id", async (req, res) => {
     }
 });
 
+// PATCH /api/owners/:id - Update owner profile details
+app.patch("/api/owners/:id", async (req, res) => {
+    const { id } = req.params;
+    const { full_name, phone_number, email_address, billing_address, is_vip } = req.body;
+
+    try {
+        const query = `
+            UPDATE car_owners
+            SET 
+                full_name = COALESCE($1, full_name),
+                phone_number = COALESCE($2, phone_number),
+                email_address = COALESCE($3, email_address),
+                billing_address = COALESCE($4, billing_address),
+                is_vip = COALESCE($5, is_vip)
+            WHERE owner_id = $6
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [
+            full_name ? full_name.trim() : null,
+            phone_number ? phone_number.trim() : null,
+            email_address ? email_address.trim().toLowerCase() : null,
+            billing_address !== undefined ? billing_address : null,
+            is_vip !== undefined ? Boolean(is_vip) : null,
+            id,
+        ]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Car owner not found" });
+        }
+
+        // Invalidate owner caches
+        await deleteCache(`garage:cache:owner:details:${id}`);
+        await deleteCachePattern("garage:cache:owners:*");
+
+        res.json({
+            success: true,
+            message: "Owner profile updated successfully",
+            data: result.rows[0],
+        });
+    } catch (err) {
+        console.error("Error updating owner profile:", err);
+        res.status(500).json({ error: "Failed to update owner profile", details: err.message });
+    }
+});
+
 // GET /api/owner/vehicles - List all vehicles with owner, active work order, and service metrics
 app.get("/api/owner/vehicles", async (req, res) => {
     const { owner_id, search } = req.query;
@@ -1992,59 +2101,83 @@ app.get("/api/vehicles/vin/:vin/history", async (req, res) => {
         `;
         const workOrdersResult = await pool.query(workOrdersQuery, [vehicle.vehicle_id]);
         const workOrders = workOrdersResult.rows;
+        const workOrderIds = workOrders.map((w) => w.work_order_id);
 
-        // 3. For each work order, fetch items, media, and scheduled tasks
-        const enhancedWorkOrders = await Promise.all(
-            workOrders.map(async (wo) => {
-                // Line items
-                const itemsRes = await pool.query(
+        // 3. Batch fetch all Line Items, Media, and Tasks in 3 single queries (eliminates N+1)
+        let itemsByOrder = {};
+        let mediaByOrder = {};
+        let tasksByOrder = {};
+
+        if (workOrderIds.length > 0) {
+            const [batchItemsRes, batchMediaRes, batchTasksRes] = await Promise.all([
+                pool.query(
                     `SELECT wi.*, i.part_name, i.sku, i.category AS part_category 
                      FROM work_order_items wi 
                      LEFT JOIN inventory_data i ON wi.part_id = i.part_id 
-                     WHERE wi.work_order_id = $1 
+                     WHERE wi.work_order_id = ANY($1) 
                      ORDER BY wi.item_id ASC;`,
-                    [wo.work_order_id]
-                );
-
-                // Media photos
-                const mediaRes = await pool.query(
+                    [workOrderIds]
+                ),
+                pool.query(
                     `SELECT * FROM work_order_media 
-                     WHERE work_order_id = $1 
+                     WHERE work_order_id = ANY($1) 
                      ORDER BY uploaded_at DESC;`,
-                    [wo.work_order_id]
-                );
+                    [workOrderIds]
+                ),
+                pool.query(
+                    `SELECT t.*, s.full_name AS assigned_staff_name 
+                     FROM scheduled_tasks t 
+                     LEFT JOIN staff_data s ON t.assigned_staff_id = s.staff_id 
+                     WHERE t.work_order_id = ANY($1) OR t.vehicle_id = $2 
+                     ORDER BY t.scheduled_date DESC;`,
+                    [workOrderIds, vehicle.vehicle_id]
+                ).catch(() => ({ rows: [] }))
+            ]);
 
-                // Scheduled tasks
-                let tasks = [];
-                try {
-                    const tasksRes = await pool.query(
-                        `SELECT t.*, s.full_name AS assigned_staff_name 
-                         FROM scheduled_tasks t 
-                         LEFT JOIN staff_data s ON t.assigned_staff_id = s.staff_id 
-                         WHERE t.work_order_id = $1 OR t.vehicle_id = $2 
-                         ORDER BY t.scheduled_date DESC;`,
-                        [wo.work_order_id, vehicle.vehicle_id]
-                    );
-                    tasks = tasksRes.rows;
-                } catch (tErr) {
-                    tasks = [];
-                }
+            // Index items by work_order_id
+            for (const item of batchItemsRes.rows) {
+                if (!itemsByOrder[item.work_order_id]) itemsByOrder[item.work_order_id] = [];
+                itemsByOrder[item.work_order_id].push(item);
+            }
 
-                return {
-                    ...wo,
-                    total_with_tax: parseFloat(wo.total_with_tax) || (parseFloat(wo.total_cost || 0) * 1.05),
-                    items: itemsRes.rows,
-                    media: mediaRes.rows,
-                    scheduled_tasks: tasks,
-                    partsTotal: itemsRes.rows
-                        .filter((i) => i.item_type === "part")
-                        .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0),
-                    laborTotal: itemsRes.rows
-                        .filter((i) => i.item_type === "labor")
-                        .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0),
-                };
-            })
-        );
+            // Index media by work_order_id
+            for (const media of batchMediaRes.rows) {
+                if (!mediaByOrder[media.work_order_id]) mediaByOrder[media.work_order_id] = [];
+                mediaByOrder[media.work_order_id].push(media);
+            }
+
+            // Index tasks by work_order_id
+            for (const task of batchTasksRes.rows) {
+                const targetKey = task.work_order_id || 'vehicle_level';
+                if (!tasksByOrder[targetKey]) tasksByOrder[targetKey] = [];
+                tasksByOrder[targetKey].push(task);
+            }
+        }
+
+        // 4. Assemble enhanced work orders in-memory
+        const enhancedWorkOrders = workOrders.map((wo) => {
+            const items = itemsByOrder[wo.work_order_id] || [];
+            const media = mediaByOrder[wo.work_order_id] || [];
+            const tasks = tasksByOrder[wo.work_order_id] || [];
+
+            const partsTotal = items
+                .filter((i) => i.item_type === "part")
+                .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0);
+
+            const laborTotal = items
+                .filter((i) => i.item_type === "labor")
+                .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0);
+
+            return {
+                ...wo,
+                total_with_tax: parseFloat(wo.total_with_tax) || (parseFloat(wo.total_cost || 0) * 1.05),
+                items,
+                media,
+                scheduled_tasks: tasks,
+                partsTotal,
+                laborTotal,
+            };
+        });
 
         // 4. Compute High-Level Metrics (Total spent reflects total invoices after taxes)
         const totalSpent = enhancedWorkOrders.reduce(
@@ -2159,6 +2292,7 @@ app.post("/api/schedules", async (req, res) => {
         work_order_id,
         vehicle_id,
         assigned_staff_id,
+        force_override = false,
     } = req.body;
 
     if (!task_title || !scheduled_date) {
@@ -2166,6 +2300,52 @@ app.post("/api/schedules", async (req, res) => {
     }
 
     try {
+        // Conflict Check: Check for overlapping Bay assignments unless overridden
+        if (!force_override && bay_assigned) {
+            const bayConflictRes = await pool.query(
+                `SELECT task_id, task_title, TO_CHAR(start_time, 'HH24:MI') as start_time, TO_CHAR(end_time, 'HH24:MI') as end_time 
+                 FROM scheduled_tasks 
+                 WHERE scheduled_date = $1::DATE 
+                   AND bay_assigned = $2 
+                   AND status NOT IN ('cancelled', 'completed')
+                   AND (start_time < $4::TIME AND end_time > $3::TIME)
+                 LIMIT 1;`,
+                [scheduled_date, bay_assigned, start_time, end_time]
+            );
+
+            if (bayConflictRes.rows.length > 0) {
+                const conflict = bayConflictRes.rows[0];
+                return res.status(409).json({
+                    error: `Workshop Bay conflict: '${bay_assigned}' is already booked for '${conflict.task_title}' from ${conflict.start_time} to ${conflict.end_time}.`,
+                    conflictType: "BAY_OCCUPIED",
+                    conflictTask: conflict,
+                });
+            }
+        }
+
+        // Conflict Check: Check for technician overlap unless overridden
+        if (!force_override && assigned_staff_id) {
+            const staffConflictRes = await pool.query(
+                `SELECT task_id, task_title, TO_CHAR(start_time, 'HH24:MI') as start_time, TO_CHAR(end_time, 'HH24:MI') as end_time 
+                 FROM scheduled_tasks 
+                 WHERE scheduled_date = $1::DATE 
+                   AND assigned_staff_id = $2 
+                   AND status NOT IN ('cancelled', 'completed')
+                   AND (start_time < $4::TIME AND end_time > $3::TIME)
+                 LIMIT 1;`,
+                [scheduled_date, parseInt(assigned_staff_id, 10), start_time, end_time]
+            );
+
+            if (staffConflictRes.rows.length > 0) {
+                const conflict = staffConflictRes.rows[0];
+                return res.status(409).json({
+                    error: `Technician schedule overlap: This staff member is already assigned to '${conflict.task_title}' from ${conflict.start_time} to ${conflict.end_time}.`,
+                    conflictType: "STAFF_BUSY",
+                    conflictTask: conflict,
+                });
+            }
+        }
+
         const query = `
             INSERT INTO scheduled_tasks (
                 task_title,
@@ -2312,6 +2492,8 @@ app.get("/api/audit-logs", async (req, res) => {
             return res.json({ success: true, source: "redis", ...cached });
         }
 
+        const queryParams = [];
+
         // Build Time Range Clause
         let timeCondition = "1=1";
         if (range === "1H") {
@@ -2322,15 +2504,15 @@ app.get("/api/audit-logs", async (req, res) => {
             timeCondition = "a.created_at >= NOW() - INTERVAL '7 days'";
         }
 
-        // Build Event Type Clause
+        // Build Event Type Clause (Parameterized to prevent SQL injection)
         let typeCondition = "1=1";
         if (event_type && event_type !== "all") {
-            typeCondition = `a.event_type ILIKE '%${event_type}%'`;
+            queryParams.push(`%${event_type.trim()}%`);
+            typeCondition = `a.event_type ILIKE $${queryParams.length}`;
         }
 
-        // Build Search Clause
+        // Build Search Clause (Parameterized)
         let searchCondition = "1=1";
-        const queryParams = [];
         if (search && search.trim().length > 0) {
             queryParams.push(`%${search.trim()}%`);
             const sIdx = queryParams.length;
@@ -2695,9 +2877,31 @@ app.get("/api/users", async (req, res) => {
 });
 
 // ==========================================
-// 14. USER CREATION & MANAGEMENT
-// ==========================================
 app.post("/api/admin/create-user", async (req, res) => {
+    // Verify Admin authentication unless system is empty (bootstrap mode)
+    try {
+        const userCountRes = await pool.query("SELECT COUNT(*) as count FROM users;");
+        const userCount = parseInt(userCountRes.rows[0]?.count, 10) || 0;
+
+        if (userCount > 0) {
+            const authHeader = req.headers["authorization"] || req.headers["Authorization"];
+            const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+            if (!token) {
+                return res.status(401).json({ error: "Admin authentication token required to create users." });
+            }
+            try {
+                const decoded = jwt.verify(token, JWT_SECRET);
+                if (decoded.role !== "admin") {
+                    return res.status(403).json({ error: "Access denied. Only administrators can manage users." });
+                }
+            } catch (err) {
+                return res.status(401).json({ error: "Invalid or expired authorization token." });
+            }
+        }
+    } catch (countErr) {
+        console.warn("Notice: user count check error:", countErr.message);
+    }
+
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
@@ -2937,7 +3141,7 @@ app.post("/api/admin/create-user", async (req, res) => {
     }
 });
 
-app.patch("/api/users/:id/status", async (req, res) => {
+app.patch("/api/users/:id/status", authenticateToken, requireRole(["admin"]), async (req, res) => {
     try {
         const userId = parseInt(req.params.id, 10);
         const { is_active } = req.body;
@@ -2982,7 +3186,7 @@ app.patch("/api/users/:id/status", async (req, res) => {
     }
 });
 
-app.delete("/api/users/:id", async (req, res) => {
+app.delete("/api/users/:id", authenticateToken, requireRole(["admin"]), async (req, res) => {
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
@@ -3037,7 +3241,7 @@ app.post("/api/auth/login", async (req, res) => {
         }
 
         const result = await pool.query(
-            "SELECT * FROM users WHERE LOWER(email) = LOWER($1);",
+            "SELECT user_id, email, password, role, staff_id, owner_id, is_active FROM users WHERE LOWER(email) = LOWER($1);",
             [email.trim()]
         );
 
@@ -3091,9 +3295,13 @@ app.post("/api/auth/login", async (req, res) => {
             full_name: user.email,
         };
 
+        // Generate signed JWT token
+        const token = generateToken(safeUser);
+
         return res.json({
             success: true,
             message: "Login successful.",
+            token,
             user: safeUser,
         });
     } catch (err) {
@@ -3394,6 +3602,154 @@ app.patch("/api/invoices/:id/status", async (req, res) => {
         res.status(500).json({ error: "Failed to update invoice status", details: err.message });
     }
 });
+// ==========================================
+// 17. PASSWORD MANAGEMENT & SECURITY
+// ==========================================
+app.post("/api/auth/change-password", authenticateToken, async (req, res) => {
+    const { current_password, new_password } = req.body;
+    const userId = req.user?.user_id;
+
+    if (!current_password || !new_password) {
+        return res.status(400).json({ error: "Current password and new password are required." });
+    }
+
+    if (new_password.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters long." });
+    }
+
+    try {
+        const userRes = await pool.query("SELECT password FROM users WHERE user_id = $1;", [userId]);
+        if (userRes.rows.length === 0) {
+            return res.status(404).json({ error: "User not found." });
+        }
+
+        const isMatch = await bcrypt.compare(current_password, userRes.rows[0].password);
+        if (!isMatch) {
+            return res.status(401).json({ error: "Current password does not match." });
+        }
+
+        const newHash = await bcrypt.hash(new_password, 10);
+        await pool.query("UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2;", [
+            newHash,
+            userId,
+        ]);
+
+        res.json({ success: true, message: "Password updated successfully." });
+    } catch (err) {
+        console.error("Error changing password:", err);
+        res.status(500).json({ error: "Failed to update password", details: err.message });
+    }
+});
+
+app.patch("/api/admin/users/:id/reset-password", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    const { id } = req.params;
+    const { new_password } = req.body;
+    const targetUserId = parseInt(id, 10);
+
+    if (isNaN(targetUserId)) {
+        return res.status(400).json({ error: "Invalid user ID." });
+    }
+
+    if (!new_password || new_password.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters long." });
+    }
+
+    try {
+        const newHash = await bcrypt.hash(new_password, 10);
+        const result = await pool.query(
+            "UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 RETURNING user_id, email, role;",
+            [newHash, targetUserId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "User not found." });
+        }
+
+        res.json({
+            success: true,
+            message: `Password reset successfully for user [${result.rows[0].email}].`,
+            user: result.rows[0],
+        });
+    } catch (err) {
+        console.error("Error resetting user password:", err);
+        res.status(500).json({ error: "Failed to reset password", details: err.message });
+    }
+});
+
+// DELETE /api/invoices/:id - Delete an invoice
+app.delete("/api/invoices/:id", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    const { id } = req.params;
+    const cleanId = (id || "").trim();
+
+    try {
+        const result = await pool.query(
+            "DELETE FROM invoice_data WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($1)) OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($1)) RETURNING *;",
+            [cleanId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        await deleteCachePattern("garage:cache:invoice*");
+
+        res.json({
+            success: true,
+            message: `Invoice [${result.rows[0].invoice_id}] deleted successfully.`,
+            deletedInvoice: result.rows[0],
+        });
+    } catch (err) {
+        console.error("Error deleting invoice:", err);
+        res.status(500).json({ error: "Failed to delete invoice", details: err.message });
+    }
+});
+// ==========================================
+// 18. DATA EXPORT (CSV REPORTS)
+// ==========================================
+app.get("/api/export/inventory.csv", async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT sku, part_name, category, stock_quantity, reorder_threshold, unit_cost, selling_price FROM inventory_data ORDER BY part_name ASC;"
+        );
+
+        let csv = "SKU,Part Name,Category,Stock,Reorder Threshold,Unit Cost,Selling Price\n";
+        for (const r of result.rows) {
+            csv += `"${r.sku}","${r.part_name}","${r.category}",${r.stock_quantity},${r.reorder_threshold},${r.unit_cost},${r.selling_price}\n`;
+        }
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="inventory_report.csv"');
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to export inventory CSV", details: err.message });
+    }
+});
+
+app.get("/api/export/work-orders.csv", async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT w.work_order_id, v.vin, v.make, v.model, v.year, v.license_plate, o.full_name as owner_name, w.status, w.bay_assigned, w.total_cost, w.created_at
+            FROM work_order_data w
+            JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            ORDER BY w.created_at DESC;
+        `);
+
+        let csv = "Work Order ID,VIN,Make,Model,Year,License Plate,Owner,Status,Bay,Total Cost,Created Date\n";
+        for (const r of result.rows) {
+            csv += `"${r.work_order_id}","${r.vin}","${r.make}","${r.model}",${r.year},"${r.license_plate}","${r.owner_name}","${r.status}","${r.bay_assigned || ''}",${r.total_cost},"${new Date(r.created_at).toISOString()}"\n`;
+        }
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="work_orders_report.csv"');
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to export work orders CSV", details: err.message });
+    }
+});
+
+// Mount Global Error Handling Middleware
+app.use(errorHandler);
 
 app.listen(port, () => {
     console.log(`🚀 Garage Backend Server running on http://localhost:${port}`);

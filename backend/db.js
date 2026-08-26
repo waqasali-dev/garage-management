@@ -17,6 +17,9 @@ const poolConfig = {
     ssl: {
         rejectUnauthorized: false,
     },
+    max: parseInt(process.env.PG_MAX_CONNECTIONS, 10) || 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
 };
 
 export const pool = new Pool(poolConfig);
