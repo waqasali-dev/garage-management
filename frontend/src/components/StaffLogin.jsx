@@ -3,7 +3,42 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './css/StaffLogin.css';
 import { API_BASE_URL } from '../config/api';
-// Local API URL fallback: 'http://localhost:5000/api'
+
+const DEMO_ACCOUNTS = [
+    {
+        roleKey: 'admin',
+        roleBadge: 'ADMINISTRATOR',
+        badgeColor: '#38bdf8',
+        badgeBg: 'rgba(56, 189, 248, 0.15)',
+        icon: 'admin_panel_settings',
+        name: 'System Admin',
+        email: 'admin@precision.garage',
+        password: 'admin123',
+        description: 'Full garage control, inventory, invoices, telemetry & user management.',
+    },
+    {
+        roleKey: 'staff',
+        roleBadge: 'MASTER TECHNICIAN',
+        badgeColor: '#fbbf24',
+        badgeBg: 'rgba(251, 191, 36, 0.15)',
+        icon: 'construction',
+        name: 'Marcus Vance',
+        email: 'marcus@gmail.com',
+        password: 'password123',
+        description: 'Live job cards, vehicle diagnostics, repair timers & bay tasks.',
+    },
+    {
+        roleKey: 'owner',
+        roleBadge: 'CAR OWNER',
+        badgeColor: '#34d399',
+        badgeBg: 'rgba(52, 211, 153, 0.15)',
+        icon: 'directions_car',
+        name: 'Kashif Ali (VIP)',
+        email: 'kashinat@gmail.com',
+        password: 'password123',
+        description: 'Real-time vehicle repair timeline, service history & digital receipts.',
+    },
+];
 
 export default function StaffLogin() {
     const navigate = useNavigate();
@@ -14,6 +49,7 @@ export default function StaffLogin() {
     });
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -24,8 +60,7 @@ export default function StaffLogin() {
         if (errorMsg) setErrorMsg('');
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const performLogin = async (emailToUse, passwordToUse) => {
         setIsLoading(true);
         setErrorMsg('');
 
@@ -34,8 +69,8 @@ export default function StaffLogin() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email: formData.email.trim(),
-                    password: formData.password,
+                    email: emailToUse.trim(),
+                    password: passwordToUse,
                 }),
             });
 
@@ -69,8 +104,26 @@ export default function StaffLogin() {
         }
     };
 
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        performLogin(formData.email, formData.password);
+    };
+
+    const handleSelectDemoAccount = (acc, autoSubmit = true) => {
+        setFormData({
+            email: acc.email,
+            password: acc.password,
+        });
+        setIsDemoModalOpen(false);
+
+        if (autoSubmit) {
+            performLogin(acc.email, acc.password);
+        }
+    };
+
     return (
         <div className="login-wrapper">
+            {/* Main Login Card */}
             <main className="login-card">
                 {/* Brand Header */}
                 <header className="login-header">
@@ -83,18 +136,9 @@ export default function StaffLogin() {
 
                 {/* Error Notice */}
                 {errorMsg && (
-                    <div style={{
-                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid #ef4444',
-                        color: '#fca5a5',
-                        padding: '10px 14px',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontFamily: "'JetBrains Mono', monospace",
-                        marginBottom: '16px',
-                        textAlign: 'center',
-                    }}>
-                        ⚠ {errorMsg}
+                    <div className="login-error-notice">
+                        <span className="material-symbols-outlined icon-sm">warning</span>
+                        <span>{errorMsg}</span>
                     </div>
                 )}
 
@@ -140,6 +184,9 @@ export default function StaffLogin() {
 
                     {/* Submit Action */}
                     <button type="submit" className="submit-btn" disabled={isLoading}>
+                        <span className="material-symbols-outlined icon-sm">
+                            {isLoading ? 'hourglass_top' : 'login'}
+                        </span>
                         <span>{isLoading ? 'Verifying Credentials...' : 'Sign In to Portal'}</span>
                     </button>
                 </form>
@@ -149,6 +196,81 @@ export default function StaffLogin() {
                     <p>ROLE RECOGNITION: ADMIN • STAFF • CAR OWNER</p>
                 </footer>
             </main>
+
+            {/* ==================================================== */}
+            {/* FLOATING QUICK DEMO LOGINS BUTTON & POPUP WIDGET     */}
+            {/* ==================================================== */}
+            <aside className="demo-floating-container" aria-label="Demo Quick Access">
+                <button
+                    type="button"
+                    className={`demo-fab-btn ${isDemoModalOpen ? 'active' : ''}`}
+                    onClick={() => setIsDemoModalOpen(!isDemoModalOpen)}
+                    title="Quick Demo Accounts"
+                >
+                    <span className="demo-fab-pulse"></span>
+                    <span className="material-symbols-outlined demo-fab-icon">bolt</span>
+                    <span className="demo-fab-text">Quick Demo Logins</span>
+                </button>
+
+                {isDemoModalOpen && (
+                    <div className="demo-popover animate-fade-in">
+                        <div className="demo-popover-header">
+                            <div className="demo-popover-title">
+                                <span className="material-symbols-outlined text-yellow">key</span>
+                                <div>
+                                    <h3>Demo Credentials</h3>
+                                    <p>Select any role to autofill & log in immediately</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="demo-close-btn"
+                                onClick={() => setIsDemoModalOpen(false)}
+                                aria-label="Close"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="demo-cards-list">
+                            {DEMO_ACCOUNTS.map((acc) => (
+                                <div
+                                    key={acc.roleKey}
+                                    className="demo-account-card"
+                                    onClick={() => handleSelectDemoAccount(acc, true)}
+                                >
+                                    <div className="demo-card-top">
+                                        <div
+                                            className="demo-role-badge"
+                                            style={{
+                                                color: acc.badgeColor,
+                                                backgroundColor: acc.badgeBg,
+                                                borderColor: acc.badgeColor,
+                                            }}
+                                        >
+                                            <span className="material-symbols-outlined icon-xs">{acc.icon}</span>
+                                            <span>{acc.roleBadge}</span>
+                                        </div>
+                                        <span className="demo-1click-label">
+                                            1-Click Login →
+                                        </span>
+                                    </div>
+
+                                    <div className="demo-card-body">
+                                        <div className="demo-account-name">{acc.name}</div>
+                                        <div className="demo-account-email font-mono">{acc.email}</div>
+                                        <div className="demo-account-desc">{acc.description}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="demo-popover-footer">
+                            <span>Password for all demo accounts: <code>admin123</code> / <code>password123</code></span>
+                        </div>
+                    </div>
+                )}
+            </aside>
         </div>
     );
 }
