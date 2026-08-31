@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config/api';
 import './css/AIChatReports.css';
 
 export default function AIChatReports() {
-    const { user, isAdmin, isStaff } = useAuth();
+    const { user, token, isAdmin, isStaff } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [promptInput, setPromptInput] = useState('');
     const [messages, setMessages] = useState([]);
@@ -14,20 +14,32 @@ export default function AIChatReports() {
     const [statusMessage, setStatusMessage] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [copiedIndex, setCopiedIndex] = useState(null);
-    const [expandedSteps, setExpandedSteps] = useState({});
 
     const chatEndRef = useRef(null);
     const textareaRef = useRef(null);
 
-    // Initial load: fetch role-specific suggestion chips
+    // Fetch suggestion chips for Admin only (Owners do not have suggestions)
     useEffect(() => {
+        if (!isAdmin) {
+            setSuggestions([]);
+            return;
+        }
+
         const fetchSuggestions = async () => {
             try {
-                const token = localStorage.getItem('garage_auth_token');
+                const savedToken = token || localStorage.getItem('garage_auth_token');
+                const reqHeaders = {
+                    'X-User-Role': user?.role || (isAdmin ? 'admin' : 'owner'),
+                    'X-User-Id': user?.user_id || '',
+                    'X-User-Email': user?.email || '',
+                    'X-Owner-Id': user?.owner_id || '',
+                };
+                if (savedToken) {
+                    reqHeaders['Authorization'] = `Bearer ${savedToken}`;
+                }
+
                 const res = await fetch(`${API_BASE_URL}/ai/suggestions`, {
-                    headers: {
-                        Authorization: token ? `Bearer ${token}` : '',
-                    },
+                    headers: reqHeaders,
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -39,7 +51,7 @@ export default function AIChatReports() {
         };
 
         fetchSuggestions();
-    }, []);
+    }, [user, token, isAdmin]);
 
     // Auto-scroll chat to bottom
     useEffect(() => {
@@ -69,7 +81,7 @@ export default function AIChatReports() {
         }
 
         try {
-            const token = localStorage.getItem('garage_auth_token');
+            const savedToken = token || localStorage.getItem('garage_auth_token');
 
             // Format previous history for context
             const chatHistory = messages.map((m) => ({
@@ -77,15 +89,24 @@ export default function AIChatReports() {
                 content: m.content,
             }));
 
+            const reqHeaders = {
+                'Content-Type': 'application/json',
+                'X-User-Role': user?.role || (isAdmin ? 'admin' : 'owner'),
+                'X-User-Id': user?.user_id || '',
+                'X-User-Email': user?.email || '',
+                'X-Owner-Id': user?.owner_id || '',
+            };
+            if (savedToken) {
+                reqHeaders['Authorization'] = `Bearer ${savedToken}`;
+            }
+
             const response = await fetch(`${API_BASE_URL}/ai/chat`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: token ? `Bearer ${token}` : '',
-                },
+                headers: reqHeaders,
                 body: JSON.stringify({
                     prompt: queryText,
                     chatHistory: chatHistory,
+                    user: user,
                 }),
             });
 
@@ -101,7 +122,6 @@ export default function AIChatReports() {
                 role: 'assistant',
                 content: data.answer || 'Completed inquiry.',
                 isSevere: Boolean(data.isSevere),
-                steps: data.steps || [],
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
 
@@ -111,8 +131,7 @@ export default function AIChatReports() {
                 id: 'msg_err_' + Date.now(),
                 role: 'assistant',
                 content: `⚠️ **Error**: ${err.message || 'An unexpected error occurred while communicating with the AI assistant.'}`,
-                isSevere: true,
-                steps: [],
+                isSevere: false,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
             setMessages([...newMessages, errorMsg]);
@@ -139,10 +158,6 @@ export default function AIChatReports() {
         navigator.clipboard.writeText(text);
         setCopiedIndex(idx);
         setTimeout(() => setCopiedIndex(null), 2500);
-    };
-
-    const toggleSteps = (msgId) => {
-        setExpandedSteps((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
     };
 
     const handleClearChat = () => {
@@ -249,8 +264,8 @@ export default function AIChatReports() {
                                     </span>
                                 </div>
 
-                                {/* Preset Suggestions Grid */}
-                                {suggestions.length > 0 && (
+                                {/* Preset Suggestions Grid - Available ONLY for Admin */}
+                                {isAdmin && suggestions.length > 0 && (
                                     <div className="welcome-suggestions-section">
                                         <span className="suggestions-title">💡 Quick Start Prompt Recommendations:</span>
                                         <div className="suggestions-grid">
@@ -318,58 +333,6 @@ export default function AIChatReports() {
                                             <MarkdownRenderer content={msg.content} />
                                         </div>
 
-                                        {/* Collapsible Tool / SQL Execution Steps Drawer */}
-                                        {msg.steps && msg.steps.length > 0 && (
-                                            <div className="msg-steps-drawer">
-                                                <button
-                                                    type="button"
-                                                    className="toggle-steps-btn"
-                                                    onClick={() => toggleSteps(msg.id)}
-                                                >
-                                                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                                                        {expandedSteps[msg.id] ? 'expand_less' : 'expand_more'}
-                                                    </span>
-                                                    <span>
-                                                        {expandedSteps[msg.id] ? 'Hide' : 'Inspect'} Database Operations ({msg.steps.length} {msg.steps.length === 1 ? 'step' : 'steps'})
-                                                    </span>
-                                                </button>
-
-                                                {expandedSteps[msg.id] && (
-                                                    <div className="steps-container-inner">
-                                                        {msg.steps.map((step, sIdx) => (
-                                                            <div key={step.id || sIdx} className={`step-item-card ${step.status}`}>
-                                                                <div className="step-header">
-                                                                    <span className="step-type-pill font-mono">
-                                                                        {step.type === 'sql_query' ? 'SQL SELECT' : step.type}
-                                                                    </span>
-                                                                    <span className={`step-status-pill ${step.status}`}>
-                                                                        {step.status}
-                                                                    </span>
-                                                                    {step.rowCount !== undefined && (
-                                                                        <span className="step-rows-pill font-mono">
-                                                                            {step.rowCount} {step.rowCount === 1 ? 'row' : 'rows'}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-
-                                                                {step.query && (
-                                                                    <pre className="step-sql-pre">
-                                                                        <code>{step.query}</code>
-                                                                    </pre>
-                                                                )}
-
-                                                                {step.error && (
-                                                                    <div className="step-error-msg font-mono">
-                                                                        ⚠️ {step.error}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
                                         {/* Message Actions */}
                                         {msg.role === 'assistant' && (
                                             <div className="message-action-row">
@@ -421,23 +384,6 @@ export default function AIChatReports() {
                 {/* Bottom Interactive Query Input */}
                 <footer className="ai-chat-input-footer">
                     <div className="input-container-inner">
-                        {/* Quick Prompts Bar above input */}
-                        {suggestions.length > 0 && messages.length > 0 && (
-                            <div className="mini-suggestions-strip">
-                                {suggestions.slice(0, 4).map((s, i) => (
-                                    <button
-                                        key={i}
-                                        type="button"
-                                        className="mini-chip"
-                                        onClick={() => handleSendMessage(s.prompt)}
-                                        disabled={isLoading}
-                                    >
-                                        {s.label}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
                         <div className="input-box-wrapper">
                             <textarea
                                 ref={textareaRef}

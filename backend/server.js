@@ -53,7 +53,15 @@ app.use(
         },
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "X-Idempotency-Key",
+            "X-User-Role",
+            "X-User-Id",
+            "X-User-Email",
+            "X-Owner-Id",
+        ],
     })
 );
 

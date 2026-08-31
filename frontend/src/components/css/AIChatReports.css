@@ -861,9 +861,24 @@
     to { transform: rotate(360deg); }
 }
 
+.mobile-menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-main, #f1f5f9);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .ai-chat-wrapper {
         margin-left: 0;
+    }
+    .mobile-menu-btn {
+        display: flex;
     }
 }

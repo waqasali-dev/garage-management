@@ -2,11 +2,8 @@
 // BACKEND API CONFIGURATION & GLOBAL REQUEST DEDUPLICATION
 // ==============================================================================
 
-// 🚀 LIVE PRODUCTION BACKEND (Render Cloud Deployment)
+// 🔒 SECURE BACKEND API BASE URL (Loaded strictly from environment variables)
 export const API_BASE_URL = process.env.REACT_APP_API_URL;
-
-// 💻 LOCAL DEVELOPMENT BACKEND (Uncomment to switch back to local development)
-// export const API_BASE_URL = 'http://localhost:5000/api';
 
 // ==============================================================================
 // 🛡️ GLOBAL IN-FLIGHT MUTEX & AUTH / IDEMPOTENCY INTERCEPTOR
