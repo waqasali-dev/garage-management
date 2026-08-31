@@ -24,6 +24,7 @@ import auditRoutes from "./routes/audit.routes.js";
 import usersRoutes, { handleCreateUser } from "./routes/users.routes.js";
 import invoicesRoutes from "./routes/invoices.routes.js";
 import exportRoutes from "./routes/export.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -112,6 +113,7 @@ app.use("/api/schedules", schedulesRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/invoices", invoicesRoutes);
 app.use("/api/export", exportRoutes);
+app.use("/api/ai", aiRoutes);
 
 // User Management & Admin Provisioning
 app.post("/api/admin/create-user", handleCreateUser);

@@ -105,6 +105,11 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <span className="material-symbols-outlined">admin_panel_settings</span>
                                 <span>Users & Roles</span>
                             </NavLink>
+
+                            <NavLink to="/ai-reports" end className={getNavClass}>
+                                <span className="material-symbols-outlined" style={{ color: '#ffd85f' }}>auto_awesome</span>
+                                <span style={{ color: '#ffd85f', fontWeight: '700' }}>AI Reports & Chat</span>
+                            </NavLink>
                         </>
                     )}
 
@@ -143,6 +148,11 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/invoices" end className={getNavClass}>
                                 <span className="material-symbols-outlined">receipt_long</span>
                                 <span>Invoices & Billing</span>
+                            </NavLink>
+
+                            <NavLink to="/ai-reports" end className={getNavClass}>
+                                <span className="material-symbols-outlined" style={{ color: '#ffd85f' }}>auto_awesome</span>
+                                <span style={{ color: '#ffd85f', fontWeight: '700' }}>AI Car Advisor & Reports</span>
                             </NavLink>
                         </>
                     )}

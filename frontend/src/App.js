@@ -30,6 +30,9 @@ const StaffSchedules = lazy(() => import('./staff/StaffSchedules'));
 const OwnerCars = lazy(() => import('./owner/OwnerCars'));
 const CarServiceHistory = lazy(() => import('./owner/CarServiceHistory'));
 
+// AI Reports & Intelligence Hub (Lazy Loaded)
+const AIChatReports = lazy(() => import('./components/AIChatReports'));
+
 // Branded loading spinner fallback
 function RouteLoadingFallback() {
     return (
@@ -280,6 +283,14 @@ function App() {
                         element={
                             <ProtectedRoute allowedRoles={['owner', 'admin']}>
                                 <Invoices />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/ai-reports"
+                        element={
+                            <ProtectedRoute allowedRoles={['owner', 'admin']}>
+                                <AIChatReports />
                             </ProtectedRoute>
                         }
                     />
