@@ -117,10 +117,31 @@ export default function AIChatReports() {
 
             const data = await response.json();
 
+            // Sanitize response to guarantee pure Markdown without raw JSON wrappers
+            const rawContent = data.answer || 'Completed inquiry.';
+            let cleanContent = rawContent;
+            if (typeof rawContent === 'string' && rawContent.trim().startsWith('{') && (rawContent.includes('"role"') || rawContent.includes('"answer"') || rawContent.includes('"reasoning"'))) {
+                try {
+                    const parsed = JSON.parse(rawContent.trim());
+                    if (parsed && typeof parsed.answer === 'string') cleanContent = parsed.answer.trim();
+                    else if (parsed && typeof parsed.content === 'string') cleanContent = parsed.content.trim();
+                } catch (_) {
+                    const match = rawContent.match(/"answer"\s*:\s*"([\s\S]*)"\s*\}?\s*$/);
+                    if (match) {
+                        cleanContent = match[1]
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\r/g, '')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\"/g, '"')
+                            .trim();
+                    }
+                }
+            }
+
             const aiMsg = {
                 id: 'msg_ai_' + Date.now(),
                 role: 'assistant',
-                content: data.answer || 'Completed inquiry.',
+                content: cleanContent,
                 isSevere: Boolean(data.isSevere),
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };

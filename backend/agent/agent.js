@@ -51,6 +51,94 @@ Here is what I **can** generate reports on:
 }
 
 /**
+ * Bulletproof Answer & Tool Call Extractor for LLM JSON/Markdown output
+ */
+export function extractCleanAnswer(rawText) {
+    if (!rawText || typeof rawText !== 'string') return { type: 'finish', answer: '', isSevere: false };
+
+    let clean = rawText.trim();
+    clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+    // 1. Try standard JSON parse
+    try {
+        const parsed = JSON.parse(clean);
+        if (parsed) {
+            const isSevere = Boolean(parsed.assessment?.isSevere || parsed.reasoning?.isSevere);
+            if (parsed.type === 'tool use' && (parsed.tool === 'runSqlQuery' || parsed.toolInput?.query)) {
+                return { type: 'tool use', tool: 'runSqlQuery', toolInput: parsed.toolInput, isSevere };
+            }
+            if (typeof parsed.answer === 'string' && parsed.answer.trim()) {
+                return { type: 'finish', answer: parsed.answer.trim(), isSevere };
+            }
+            if (typeof parsed.content === 'string' && parsed.content.trim()) {
+                return { type: 'finish', answer: parsed.content.trim(), isSevere };
+            }
+            if (typeof parsed.message === 'string' && parsed.message.trim()) {
+                return { type: 'finish', answer: parsed.message.trim(), isSevere };
+            }
+        }
+    } catch (_) {}
+
+    // 2. Check if tool use via regex
+    if (clean.includes('"tool": "runSqlQuery"') || clean.includes('"tool":"runSqlQuery"') || clean.includes('"runSqlQuery"')) {
+        const queryMatch = clean.match(/"query"\s*:\s*"([\s\S]*?)"/);
+        if (queryMatch) {
+            return {
+                type: 'tool use',
+                tool: 'runSqlQuery',
+                toolInput: { query: queryMatch[1].replace(/\\"/g, '"'), params: [] },
+                isSevere: false,
+            };
+        }
+    }
+
+    // 3. Resilient extraction for "answer" property
+    const answerKeyIndex = clean.indexOf('"answer"');
+    if (answerKeyIndex !== -1) {
+        const afterKey = clean.slice(answerKeyIndex + 8);
+        const firstQuoteMatch = afterKey.match(/:\s*"/);
+        if (firstQuoteMatch) {
+            const contentStart = answerKeyIndex + 8 + firstQuoteMatch.index + firstQuoteMatch[0].length;
+            let contentEnd = clean.lastIndexOf('"');
+            if (contentEnd > contentStart) {
+                const candidate = clean.slice(contentStart, contentEnd);
+                const isSevere = /"isSevere"\s*:\s*true/i.test(clean);
+                try {
+                    const unescaped = JSON.parse('"' + candidate + '"');
+                    if (unescaped && unescaped.trim()) return { type: 'finish', answer: unescaped.trim(), isSevere };
+                } catch (_) {
+                    const manual = candidate
+                        .replace(/\\n/g, '\n')
+                        .replace(/\\r/g, '')
+                        .replace(/\\t/g, '\t')
+                        .replace(/\\"/g, '"')
+                        .replace(/\\\\/g, '\\');
+                    if (manual.trim()) return { type: 'finish', answer: manual.trim(), isSevere };
+                }
+            }
+        }
+    }
+
+    // 4. If rawText still looks like a JSON envelope, strip the envelope
+    if (clean.startsWith('{') && (clean.includes('"role"') || clean.includes('"reasoning"') || clean.includes('"assessment"'))) {
+        const markdownMatch = clean.match(/(?:#|\*\*|##|\|)[\s\S]+/);
+        if (markdownMatch) {
+            let extracted = markdownMatch[0].replace(/"\s*\}?\s*$/, '').trim();
+            extracted = extracted
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '')
+                .replace(/\\t/g, '\t')
+                .replace(/\\"/g, '"');
+            const isSevere = /"isSevere"\s*:\s*true/i.test(clean);
+            return { type: 'finish', answer: extracted, isSevere };
+        }
+    }
+
+    const isSevere = /"isSevere"\s*:\s*true/i.test(clean);
+    return { type: 'finish', answer: clean, isSevere };
+}
+
+/**
  * Safe SQL Query Executor with Role Enforcement & Read-Only Protection
  */
 export async function executeSafeSqlQuery(sql, params = [], role = 'admin', constantOwnerId = null) {
@@ -224,10 +312,10 @@ When providing the final synthesized answer or when rejecting an invalid/severe 
   "role": "agent",
   "reasoning": {
     "intentAnalysis": "Explain the response or advice formulated.",
-    "isSevere": true | false
+    "isSevere": false
   },
   "assessment": {
-    "isSevere": true | false,
+    "isSevere": false,
     "reason": "Assessment reason."
   },
   "type": "finish",
@@ -374,46 +462,37 @@ export async function runGarageAgentTask({
 
         try {
             const rawReply = await callLlmChat(messages, onStatus);
-            const clean = rawReply.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+            const extracted = extractCleanAnswer(rawReply);
 
             messages.push({
                 role: 'assistant',
-                content: clean,
+                content: rawReply,
             });
 
-            let parsed;
-            try {
-                parsed = JSON.parse(clean);
-            } catch (pErr) {
-                // If it replied directly in text
-                finalAnswer = clean;
-                break;
-            }
-
             // Check assessment
-            if (parsed.assessment?.isSevere) {
+            if (extracted.isSevere) {
                 isSevere = true;
             }
 
             // If severe, format with helpful refusal guidance
-            if (parsed.assessment?.isSevere || isSevere) {
+            if (extracted.isSevere || isSevere) {
                 isSevere = true;
-                finalAnswer = parsed.answer || buildHelpfulRefusalMessage(role);
+                finalAnswer = extracted.answer || buildHelpfulRefusalMessage(role);
 
                 steps.push({
                     id: 'step_sec_' + Date.now(),
                     type: 'security_assessment',
                     status: 'severe_blocked',
-                    reason: parsed.assessment?.reason || 'Access denied due to policy violation or scope mismatch.',
+                    reason: 'Access denied due to policy violation or scope mismatch.',
                     timestamp: new Date().toISOString(),
                 });
                 break;
             }
 
             // If it wants to use a tool
-            if (parsed.type === 'tool use' && parsed.tool === 'runSqlQuery') {
-                const queryToRun = parsed.toolInput?.query;
-                const paramsToRun = parsed.toolInput?.params || [];
+            if (extracted.type === 'tool use' && extracted.tool === 'runSqlQuery' && extracted.toolInput?.query) {
+                const queryToRun = extracted.toolInput.query;
+                const paramsToRun = extracted.toolInput.params || [];
 
                 onStatus('Executing database query...');
 
@@ -446,19 +525,8 @@ export async function runGarageAgentTask({
                 continue;
             }
 
-            // If final finish response
-            if (parsed.answer && typeof parsed.answer === 'string') {
-                finalAnswer = parsed.answer;
-                break;
-            }
-
-            if (parsed.type === 'finish') {
-                finalAnswer = parsed.answer || parsed.message || parsed.content || clean;
-                break;
-            }
-
-            // Fallback for unrecognized structure
-            finalAnswer = typeof parsed === 'string' ? parsed : (parsed.answer || JSON.stringify(parsed));
+            // Final finish response
+            finalAnswer = extracted.answer || rawReply;
             break;
         } catch (err) {
             console.error('Agent loop error:', err);
