@@ -4,8 +4,8 @@
     display: flex;
     min-height: 100vh;
     min-height: 100dvh;
-    background-color: var(--bg-olive-dark);
-    color: var(--text-main);
+    background-color: var(--bg-olive-dark, #161e18);
+    color: var(--text-main, #f1f5f9);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
@@ -16,6 +16,18 @@
     flex-direction: column;
     min-width: 0;
     min-height: 100vh;
+}
+
+.vin-history-layout .mobile-menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-main, #f1f5f9);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Header */
@@ -745,4 +757,14 @@
 
 .modal-close:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .vin-history-wrapper {
+        margin-left: 0;
+    }
+    .vin-history-layout .mobile-menu-btn {
+        display: flex;
+    }
 }
