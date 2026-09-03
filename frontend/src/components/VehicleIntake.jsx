@@ -60,35 +60,62 @@ export default function VehicleIntake() {
         return () => clearTimeout(timer);
     }, [formData.ownerSearch]);
 
-    // Handle VIN auto-lookup on 17 characters
-    const handleVinBlur = async () => {
-        const vin = formData.vin.trim().toUpperCase();
-        if (vin.length === 17) {
-            try {
-                const res = await fetch(`${API_BASE_URL}/vehicles/vin/${encodeURIComponent(vin)}`);
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json.found && json.data) {
-                        const v = json.data;
-                        setFormData((prev) => ({
-                            ...prev,
-                            make: v.make || prev.make,
-                            model: v.model || prev.model,
-                            year: v.year ? String(v.year) : prev.year,
-                            licensePlate: v.license_plate || prev.licensePlate,
-                            fullName: v.owner_name || prev.fullName,
-                            phone: v.owner_phone || prev.phone,
-                            email: v.owner_email || prev.email,
-                        }));
-                        if (v.owner_id) {
-                            setSelectedOwnerId(v.owner_id);
-                        }
-                        showNotification(`Recognized existing vehicle ${v.year || ''} ${v.make || ''} ${v.model || ''}`, 'info');
-                    }
-                }
-            } catch (err) {
-                console.warn('VIN lookup notice:', err.message);
+    // Live auto-lookup for VIN as user types (debounced) or on blur/search
+    const handleVinLookup = async (vinToQuery, isManual = false) => {
+        const vin = (vinToQuery !== undefined ? vinToQuery : formData.vin).trim().toUpperCase();
+        if (!vin || vin.length < 3) {
+            if (isManual) {
+                showNotification('Please enter at least 3 characters of a VIN to search.', 'warning');
             }
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/vehicles/vin/${encodeURIComponent(vin)}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.found && json.data) {
+                    const v = json.data;
+                    setFormData((prev) => ({
+                        ...prev,
+                        vin: v.vin || vin,
+                        make: v.make || prev.make,
+                        model: v.model || prev.model,
+                        year: v.year ? String(v.year) : prev.year,
+                        licensePlate: v.license_plate || prev.licensePlate,
+                        fullName: v.owner_name || prev.fullName,
+                        phone: v.owner_phone || prev.phone,
+                        email: v.owner_email || prev.email,
+                    }));
+                    if (v.owner_id) {
+                        setSelectedOwnerId(v.owner_id);
+                    }
+                    showNotification(`Auto-filled details for existing vehicle ${v.year || ''} ${v.make || ''} ${v.model || ''} (${v.owner_name || 'Known Owner'})`, 'success');
+                } else if (isManual) {
+                    showNotification(`VIN "${vin}" is not in database. Enter new vehicle & owner details below.`, 'info');
+                }
+            }
+        } catch (err) {
+            console.warn('VIN lookup error:', err.message);
+        }
+    };
+
+    // Auto-search VIN as user types (debounced 350ms)
+    useEffect(() => {
+        const vin = formData.vin.trim().toUpperCase();
+        if (vin.length < 5) return;
+
+        const timer = setTimeout(() => {
+            handleVinLookup(vin, false);
+        }, 350);
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.vin]);
+
+    const handleVinBlur = () => {
+        if (formData.vin.trim().length >= 3) {
+            handleVinLookup(formData.vin.trim().toUpperCase(), false);
         }
     };
 
@@ -250,13 +277,19 @@ export default function VehicleIntake() {
                                             value={formData.vin}
                                             onChange={handleChange}
                                             onBlur={handleVinBlur}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleVinLookup(undefined, true);
+                                                }
+                                            }}
                                             className="uppercase-input font-mono"
                                             required
                                         />
                                         <button
                                             type="button"
                                             className="input-action-btn"
-                                            onClick={handleVinBlur}
+                                            onClick={() => handleVinLookup(undefined, true)}
                                             title="Lookup VIN in database"
                                         >
                                             <span className="material-symbols-outlined">search</span>

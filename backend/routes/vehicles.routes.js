@@ -108,6 +108,48 @@ router.get("/vehicles", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch vehicles", details: err.message });
     }
 });
+// GET /api/vehicles/vin/:vin - Fast Lookup existing vehicle & owner by VIN for intake auto-fill
+router.get("/vin/:vin", async (req, res) => {
+    const { vin } = req.params;
+    const cleanVin = (vin || "").trim().toUpperCase();
+
+    if (!cleanVin) {
+        return res.status(400).json({ error: "VIN parameter is required." });
+    }
+
+    try {
+        const query = `
+            SELECT 
+                v.vehicle_id,
+                v.vin,
+                v.make,
+                v.model,
+                v.year,
+                v.license_plate,
+                v.created_at,
+                o.owner_id,
+                o.full_name AS owner_name,
+                o.phone_number AS owner_phone,
+                o.email_address AS owner_email,
+                o.billing_address AS owner_address,
+                o.is_vip
+            FROM vehicles v
+            JOIN car_owners o ON v.owner_id = o.owner_id
+            WHERE UPPER(TRIM(v.vin)) = $1
+            LIMIT 1;
+        `;
+        const result = await pool.query(query, [cleanVin]);
+
+        if (result.rows.length === 0) {
+            return res.json({ success: true, found: false, data: null });
+        }
+
+        return res.json({ success: true, found: true, data: result.rows[0] });
+    } catch (err) {
+        console.error("Error looking up vehicle by VIN:", err);
+        return res.status(500).json({ error: "Database error during VIN lookup", details: err.message });
+    }
+});
 
 // GET /api/vehicles/vin/:vin/history - Complete service history matched with VIN number
 router.get("/vin/:vin/history", async (req, res) => {

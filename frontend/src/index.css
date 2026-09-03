@@ -26,6 +26,31 @@ html, body {
   min-height: 100vh;
 }
 
+/* Global sleek dark scrollbars */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 216, 95, 0.18);
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 216, 95, 0.45);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 216, 95, 0.2) transparent;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
