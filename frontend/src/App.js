@@ -34,7 +34,7 @@ const CarServiceHistory = lazy(() => import('./owner/CarServiceHistory'));
 const AIChatReports = lazy(() => import('./components/AIChatReports'));
 
 // Branded loading spinner fallback
-function RouteLoadingFallback() {
+export function RouteLoadingFallback() {
     return (
         <div style={{
             minHeight: '100vh',
