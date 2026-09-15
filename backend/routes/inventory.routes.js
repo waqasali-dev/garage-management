@@ -427,6 +427,12 @@ router.delete("/:id", async (req, res) => {
             deletedPart: deleted,
         });
     } catch (err) {
+        if (err.code === "23503") {
+            return res.status(409).json({
+                error: "Cannot delete this part because it is referenced in existing work orders or service records. Consider adjusting its stock to 0 instead.",
+                code: "FOREIGN_KEY_VIOLATION",
+            });
+        }
         console.error("Error deleting inventory part:", err);
         res.status(500).json({ error: "Failed to delete part from database", details: err.message });
     }

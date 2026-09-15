@@ -4,8 +4,8 @@ import { getCache, setCache } from "../redis.js";
 
 const router = express.Router();
 
-// GET /api/owner/vehicles - List all vehicles with owner, active work order, and service metrics
-router.get("/vehicles", async (req, res) => {
+// GET /api/vehicles or /api/owner/vehicles - List all vehicles with owner, active work order, and service metrics
+router.get(["/", "/vehicles"], async (req, res) => {
     const { owner_id, search } = req.query;
     const cacheKey = `garage:cache:owner:vehicles:${owner_id || "all"}:${(search || "").trim().toLowerCase()}`;
 
