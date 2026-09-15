@@ -2,14 +2,14 @@
 // BACKEND API CONFIGURATION & GLOBAL REQUEST DEDUPLICATION
 // ==============================================================================
 
-// 🔒 SECURE BACKEND API BASE URL (Loaded strictly from environment variables)
-export const API_BASE_URL = process.env.REACT_APP_API_URL;
+// 🔒 SECURE BACKEND API BASE URL (Loaded from environment variables with local fallback)
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // ==============================================================================
 // 🛡️ GLOBAL IN-FLIGHT MUTEX & AUTH / IDEMPOTENCY INTERCEPTOR
 // ==============================================================================
 // Intercepts window.fetch across the entire application to guarantee:
-// 1. Automatic Authorization Bearer token injection from localStorage
+// 1. Automatic Authorization Bearer token & session headers injection from localStorage
 // 2. In-flight request deduplication (prevents rapid double-clicks from firing duplicate requests)
 // 3. Automatic X-Idempotency-Key header injection on mutating requests (POST, PUT, PATCH, DELETE)
 // 4. Response stream cloning so duplicate concurrent callers safely resolve identical responses
@@ -36,6 +36,28 @@ if (typeof window !== 'undefined' && window.fetch) {
             } catch (e) {
                 // Ignore localStorage errors
             }
+        }
+
+        // Resilient session context headers fallback
+        try {
+            const storedUserStr = localStorage.getItem('garage_auth_user');
+            if (storedUserStr) {
+                const storedUser = JSON.parse(storedUserStr);
+                if (storedUser?.role && !headers.has('X-User-Role') && !headers.has('x-user-role')) {
+                    headers.set('X-User-Role', storedUser.role);
+                }
+                if (storedUser?.user_id && !headers.has('X-User-Id') && !headers.has('x-user-id')) {
+                    headers.set('X-User-Id', String(storedUser.user_id));
+                }
+                if (storedUser?.email && !headers.has('X-User-Email') && !headers.has('x-user-email')) {
+                    headers.set('X-User-Email', storedUser.email);
+                }
+                if (storedUser?.owner_id && !headers.has('X-Owner-Id') && !headers.has('x-owner-id')) {
+                    headers.set('X-Owner-Id', String(storedUser.owner_id));
+                }
+            }
+        } catch (e) {
+            // Ignore parse errors
         }
 
         // Only intercept state-mutating HTTP methods for mutex & idempotency

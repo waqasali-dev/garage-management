@@ -38,7 +38,7 @@ export default function OwnerCars() {
                 if (vJson.success && Array.isArray(vJson.data)) {
                     // Strictly isolate to the logged-in owner's vehicles
                     const myVehicles = ownerId
-                        ? vJson.data.filter((v) => v.owner_id === ownerId)
+                        ? vJson.data.filter((v) => String(v.owner_id) === String(ownerId))
                         : vJson.data;
                     setVehicles(myVehicles);
                 }
