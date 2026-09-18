@@ -118,12 +118,44 @@ export default function WorkOrders() {
     // KPI Metrics calculation
     const inBayCount = workOrders.filter((w) => w.status === 'in_progress' || w.bay_assigned).length;
     const receivedCount = workOrders.filter((w) => w.status === 'received').length;
+    const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
     const readyPickupCount = workOrders.filter((w) => w.status === 'ready').length;
     const completedCount = workOrders.filter((w) => w.status === 'completed').length;
     const totalEstRevenue = workOrders.reduce(
         (sum, w) => sum + (parseFloat(w.total_cost) || parseFloat(w.estimated_cost) || 0),
         0
     );
+
+    const handleExportCSV = () => {
+        if (!filteredOrders.length) {
+            showNotification('No orders to export', 'warning');
+            return;
+        }
+        const headers = ['Work Order ID', 'Status', 'Make', 'Model', 'Year', 'Plate', 'VIN', 'Owner', 'Lead Tech', 'Bay', 'Total Cost', 'Created At'];
+        const rows = filteredOrders.map((o) => [
+            o.work_order_id,
+            o.status,
+            `"${o.make || ''}"`,
+            `"${o.model || ''}"`,
+            o.year || '',
+            `"${o.license_plate || ''}"`,
+            `"${o.vin || ''}"`,
+            `"${o.owner_name || ''}"`,
+            `"${o.assigned_staff_name || ''}"`,
+            o.bay_assigned || '',
+            parseFloat(o.total_cost || o.estimated_cost || 0).toFixed(2),
+            `"${o.created_at || ''}"`,
+        ]);
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `precision_garage_work_orders_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showNotification(`📥 Exported ${filteredOrders.length} orders to CSV successfully!`, 'success');
+    };
 
     return (
         <div className="orders-layout">
@@ -197,6 +229,49 @@ export default function WorkOrders() {
                             </div>
                         </div>
 
+                        {/* Visual Interactive Lifecycle Stepper Pipeline */}
+                        <div className="wo-lifecycle-pipeline">
+                            <div className="pipeline-header">
+                                <span className="pipeline-title">
+                                    <span className="material-symbols-outlined">timeline</span>
+                                    <span>Workshop Repair Lifecycle Flow</span>
+                                </span>
+                                <span className="pipeline-hint">Click any stage to isolate queue</span>
+                            </div>
+                            <div className="pipeline-steps-grid">
+                                {[
+                                    { key: 'received', step: '01', label: 'Received', icon: 'pending_actions', count: receivedCount, color: '#38bdf8' },
+                                    { key: 'diagnosed', step: '02', label: 'Diagnosed', icon: 'handyman', count: diagnosedCount, color: '#c084fc' },
+                                    { key: 'in_progress', step: '03', label: 'In Progress', icon: 'build', count: inBayCount, color: '#fbbf24' },
+                                    { key: 'ready', step: '04', label: 'Ready for Pickup', icon: 'task_alt', count: readyPickupCount, color: '#2dd4bf' },
+                                    { key: 'completed', step: '05', label: 'Completed', icon: 'check_circle', count: completedCount, color: '#10b981' },
+                                ].map((s) => (
+                                    <div
+                                        key={s.key}
+                                        className={`pipeline-step-box ${statusFilter === s.key ? 'active' : ''}`}
+                                        onClick={() => setStatusFilter(statusFilter === s.key ? 'all' : s.key)}
+                                        role="button"
+                                        tabIndex={0}
+                                        title={`Filter by ${s.label}`}
+                                    >
+                                        <div className="step-box-top">
+                                            <span className="step-seq font-mono">{s.step}</span>
+                                            <span className="step-count font-mono" style={{ color: s.color }}>{s.count}</span>
+                                        </div>
+                                        <div className="step-box-main">
+                                            <span className="material-symbols-outlined step-box-icon" style={{ color: s.color }}>
+                                                {s.icon}
+                                            </span>
+                                            <span className="step-box-label">{s.label}</span>
+                                        </div>
+                                        {statusFilter === s.key && (
+                                            <div className="step-active-glow-bar" style={{ backgroundColor: s.color }} />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
                         {/* Micro Stats Grid */}
                         <div className="stats-grid">
                             <div
@@ -253,6 +328,14 @@ export default function WorkOrders() {
                                     />
                                 </div>
                                 <div className="toolbar-actions">
+                                    <button
+                                        className="toolbar-btn export-csv-btn"
+                                        title="Export orders as CSV"
+                                        onClick={handleExportCSV}
+                                    >
+                                        <span className="material-symbols-outlined">download</span>
+                                        <span>Export CSV</span>
+                                    </button>
                                     <button className="toolbar-btn" title="Refresh Live Data" onClick={fetchWorkOrders}>
                                         <span className="material-symbols-outlined">refresh</span>
                                     </button>
