@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
 import AddIcon from '@mui/icons-material/Add';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import './css/Dashboard.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -34,9 +37,40 @@ const getStatusBadge = (status) => {
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const searchInputRef = useRef(null);
+    const [currentTime, setCurrentTime] = useState(new Date());
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+
+    // Real-time ticking clock
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // '/' Keyboard shortcut to focus search
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === '/' && document.activeElement !== searchInputRef.current && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // Workshop shift detector based on current hour
+    const getWorkshopShift = (date) => {
+        const hour = date.getHours();
+        if (hour >= 8 && hour < 13) return { name: 'Morning Diagnostics', tone: 'shift-morning' };
+        if (hour >= 13 && hour < 18) return { name: 'Peak Afternoon Repairs', tone: 'shift-peak' };
+        if (hour >= 18 && hour < 22) return { name: 'Evening Quality Handover', tone: 'shift-evening' };
+        return { name: 'Night Standby Bay', tone: 'shift-night' };
+    };
+
+    const currentShift = useMemo(() => getWorkshopShift(currentTime), [currentTime]);
 
     // Live data states
     const [workOrders, setWorkOrders] = useState([]);
@@ -165,11 +199,24 @@ export default function Dashboard() {
                         <div className="search-bar">
                             <SearchIcon className="search-icon" fontSize="small" />
                             <input
+                                ref={searchInputRef}
                                 type="text"
-                                placeholder="Search VIN, Owner, Plate, or Work Order..."
+                                placeholder="Search VIN, Owner, Plate, or Order... (Press / to focus)"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
+                            {searchTerm ? (
+                                <button
+                                    className="search-clear-btn"
+                                    onClick={() => setSearchTerm('')}
+                                    title="Clear search"
+                                    type="button"
+                                >
+                                    <CloseIcon style={{ fontSize: '15px' }} />
+                                </button>
+                            ) : (
+                                <span className="search-shortcut-badge">/</span>
+                            )}
                         </div>
                     </div>
 
@@ -193,9 +240,19 @@ export default function Dashboard() {
                             <h2 className="page-title">Workshop Control Terminal</h2>
                             <p className="page-subtitle">Real-time status of active repairs, vehicle queue, and shop floor activity.</p>
                         </div>
-                        <div className="status-pill">
-                            <span className="pulse-dot"></span>
-                            <span>Workshop Network Online</span>
+                        <div className="dashboard-telemetry-cluster">
+                            <div className="telemetry-clock-pill font-mono">
+                                <AccessTimeIcon style={{ fontSize: '15px', color: 'var(--accent-yellow)' }} />
+                                <span>{currentTime.toLocaleTimeString('en-US', { hour12: false })}</span>
+                            </div>
+                            <div className={`shift-status-pill ${currentShift.tone}`}>
+                                <PrecisionManufacturingIcon style={{ fontSize: '15px' }} />
+                                <span>{currentShift.name}</span>
+                            </div>
+                            <div className="status-pill">
+                                <span className="pulse-dot"></span>
+                                <span>Network Online</span>
+                            </div>
                         </div>
                     </section>
 
@@ -204,39 +261,63 @@ export default function Dashboard() {
                         <div
                             className={`kpi-card ${statusFilter === 'in_progress' ? 'kpi-active' : ''}`}
                             onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
+                            title="Filter orders in active repair"
                         >
-                            <span className="kpi-label">In Active Repair</span>
+                            <div className="kpi-header-row">
+                                <span className="kpi-label">In Active Repair</span>
+                                <span className="kpi-badge-indicator badge-in-progress">LIVE</span>
+                            </div>
                             <span className="kpi-val text-warning">{inProgressCount}</span>
                         </div>
                         <div
                             className={`kpi-card ${statusFilter === 'received' ? 'kpi-active' : ''}`}
                             onClick={() => setStatusFilter(statusFilter === 'received' ? 'all' : 'received')}
+                            title="Filter orders awaiting diagnosis"
                         >
-                            <span className="kpi-label">Received Queue</span>
+                            <div className="kpi-header-row">
+                                <span className="kpi-label">Received Queue</span>
+                                <span className="kpi-badge-indicator badge-received">QUEUE</span>
+                            </div>
                             <span className="kpi-val" style={{ color: '#38bdf8' }}>{receivedCount}</span>
                         </div>
                         <div
                             className={`kpi-card ${statusFilter === 'ready' ? 'kpi-active' : ''}`}
                             onClick={() => setStatusFilter(statusFilter === 'ready' ? 'all' : 'ready')}
+                            title="Filter orders ready for pickup"
                         >
-                            <span className="kpi-label">Ready for Pickup</span>
+                            <div className="kpi-header-row">
+                                <span className="kpi-label">Ready for Pickup</span>
+                                <span className="kpi-badge-indicator badge-ready">READY</span>
+                            </div>
                             <span className="kpi-val" style={{ color: '#2dd4bf' }}>{readyCount}</span>
                         </div>
                         <div
                             className={`kpi-card ${statusFilter === 'completed' ? 'kpi-active' : ''}`}
                             onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
+                            title="Filter completed orders"
                         >
-                            <span className="kpi-label">Picked Up / Done</span>
+                            <div className="kpi-header-row">
+                                <span className="kpi-label">Picked Up / Done</span>
+                                <span className="kpi-badge-indicator badge-completed">DONE</span>
+                            </div>
                             <span className="kpi-val text-success">{completedCount}</span>
                         </div>
-                        <div className="kpi-card" onClick={() => navigate('/inventory')}>
-                            <span className="kpi-label">Low Stock Alerts</span>
+                        <div className="kpi-card" onClick={() => navigate('/inventory')} title="Manage low stock inventory">
+                            <div className="kpi-header-row">
+                                <span className="kpi-label">Low Stock Alerts</span>
+                                <span className={`kpi-badge-indicator ${lowStockParts.length > 0 ? 'badge-alert' : 'badge-ok'}`}>
+                                    {lowStockParts.length > 0 ? 'ALERT' : 'OPTIMAL'}
+                                </span>
+                            </div>
                             <span className={`kpi-val ${lowStockParts.length > 0 ? 'text-error' : 'text-success'}`}>
                                 {lowStockParts.length}
                             </span>
                         </div>
-                        <div className="kpi-card">
-                            <span className="kpi-label">Est. Revenue</span>
+                        <div className="kpi-card" title="Total workshop pipeline revenue">
+                            <div className="kpi-header-row">
+                                <span className="kpi-label">Est. Revenue</span>
+                                <span className="kpi-badge-indicator badge-gold">PIPELINE</span>
+                            </div>
                             <span className="kpi-val font-mono text-yellow">
                                 ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
