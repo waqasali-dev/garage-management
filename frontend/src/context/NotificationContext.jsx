@@ -1,73 +1,109 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
+import './NotificationToast.css';
 
 const NotificationContext = createContext(null);
 
+const TOAST_CONFIG = {
+    success: {
+        title: 'Operation Success',
+        icon: <CheckCircleOutlineIcon fontSize="small" />,
+        className: 'pg-toast-success',
+    },
+    error: {
+        title: 'System Alert',
+        icon: <ErrorOutlineIcon fontSize="small" />,
+        className: 'pg-toast-error',
+    },
+    warning: {
+        title: 'Workshop Notice',
+        icon: <WarningAmberIcon fontSize="small" />,
+        className: 'pg-toast-warning',
+    },
+    info: {
+        title: 'Information',
+        icon: <InfoOutlinedIcon fontSize="small" />,
+        className: 'pg-toast-info',
+    },
+};
+
 export function NotificationProvider({ children }) {
     const [notification, setNotification] = useState(null);
-
-    const showNotification = useCallback((message, type = 'success', duration = 4000) => {
-        setNotification({ message, type });
-        const timer = setTimeout(() => {
-            setNotification(null);
-        }, duration);
-        return () => clearTimeout(timer);
-    }, []);
+    const timerRef = useRef(null);
 
     const closeNotification = useCallback(() => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
         setNotification(null);
     }, []);
+
+    const showNotification = useCallback((message, type = 'success', duration = 4200) => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+
+        const normalizedType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'success';
+        setNotification({
+            id: Date.now(),
+            message,
+            type: normalizedType,
+            duration,
+        });
+
+        timerRef.current = setTimeout(() => {
+            setNotification(null);
+            timerRef.current = null;
+        }, duration);
+
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, []);
+
+    const activeConfig = notification ? (TOAST_CONFIG[notification.type] || TOAST_CONFIG.success) : TOAST_CONFIG.success;
 
     return (
         <NotificationContext.Provider value={{ notification, showNotification, closeNotification }}>
             {children}
             {notification && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        bottom: '24px',
-                        right: '24px',
-                        zIndex: 9999,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '14px 20px',
-                        borderRadius: '8px',
-                        backgroundColor: notification.type === 'error' ? '#1e1b2e' : '#111b27',
-                        border: `1px solid ${notification.type === 'error' ? '#ef4444' : '#10b981'}`,
-                        color: notification.type === 'error' ? '#fca5a5' : '#6ee7b7',
-                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6)',
-                        fontFamily: 'Inter, -apple-system, sans-serif',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        animation: 'slideInToast 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                    }}
+                <aside
+                    key={notification.id}
+                    className={`pg-toast-container ${activeConfig.className}`}
+                    role="alert"
+                    aria-live="assertive"
                 >
-                    <span style={{ fontSize: '18px' }}>
-                        {notification.type === 'error' ? '⚠️' : '✅'}
-                    </span>
-                    <span>{notification.message}</span>
-                    <button
-                        onClick={closeNotification}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'inherit',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            marginLeft: '8px',
-                            opacity: 0.7,
-                            fontSize: '16px',
-                        }}
-                    >
-                        ✕
-                    </button>
-                    <style>{`
-                        @keyframes slideInToast {
-                            from { transform: translateY(20px); opacity: 0; }
-                            to { transform: translateY(0); opacity: 1; }
-                        }
-                    `}</style>
-                </div>
+                    <div className="pg-toast-content">
+                        <div className="pg-toast-icon-wrap">
+                            {activeConfig.icon}
+                        </div>
+                        <div className="pg-toast-body">
+                            <div className="pg-toast-header">
+                                <span className="pg-toast-title">{activeConfig.title}</span>
+                                <span className="pg-toast-time">Just now</span>
+                            </div>
+                            <div className="pg-toast-message">{notification.message}</div>
+                        </div>
+                        <button
+                            onClick={closeNotification}
+                            className="pg-toast-close"
+                            aria-label="Close notification"
+                        >
+                            <CloseIcon style={{ fontSize: '16px' }} />
+                        </button>
+                    </div>
+                    <div className="pg-toast-progress-track">
+                        <div
+                            className="pg-toast-progress-bar"
+                            style={{ animationDuration: `${notification.duration}ms` }}
+                        />
+                    </div>
+                </aside>
             )}
         </NotificationContext.Provider>
     );
