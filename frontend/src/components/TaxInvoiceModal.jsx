@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import PrintIcon from '@mui/icons-material/Print';
 import CloseIcon from '@mui/icons-material/Close';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 import { useAuth } from '../context/AuthContext';
 import './css/TaxInvoiceModal.css';
 
 export default function TaxInvoiceModal({ invoice, onClose }) {
     const { isOwner } = useAuth();
+    const [copied, setCopied] = useState(false);
     const [taxPercentage, setTaxPercentage] = useState(() => {
         if (invoice?.tax_percentage !== undefined && invoice?.tax_percentage !== null) {
             return parseFloat(invoice.tax_percentage) || 0;
@@ -84,6 +87,19 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
     const paidAmount = isPaid ? totalInclVatSum.toFixed(3) : '0.000';
     const outstandingAmount = isPaid ? '0.000' : totalInclVatSum.toFixed(3);
 
+    const handleCopySummary = () => {
+        const text = `Official Tax Invoice #${invoiceId}
+Date: ${formattedDate}
+Customer: ${ownerName} (${ownerPhone})
+Vehicle: ${vehicleModel} [Plate: ${vehiclePlate} | VIN: ${vehicleVin}]
+VAT Rate: ${(parseFloat(taxPercentage) || 0)}%
+Total Amount: OMR ${totalInclVatSum.toFixed(3)} (${isPaid ? 'PAID IN FULL' : 'PAYMENT DUE: OMR ' + outstandingAmount})
+Precision Garage Workshop Management System`;
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+    };
+
     return (
         <div className="tax-invoice-modal-overlay" onClick={onClose}>
             <div className="tax-invoice-modal-container" onClick={(e) => e.stopPropagation()}>
@@ -103,6 +119,24 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                         </div>
 
                         <div className="toolbar-actions">
+                            <button
+                                type="button"
+                                className="btn-copy-invoice"
+                                onClick={handleCopySummary}
+                                title="Copy invoice summary to clipboard"
+                            >
+                                {copied ? (
+                                    <>
+                                        <CheckIcon fontSize="small" style={{ color: '#10b981' }} />
+                                        <span style={{ color: '#10b981', fontWeight: 700 }}>Copied!</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ContentCopyIcon fontSize="small" />
+                                        <span>Copy Summary</span>
+                                    </>
+                                )}
+                            </button>
                             <button type="button" className="btn-print-invoice" onClick={handlePrint}>
                                 <PrintIcon fontSize="small" />
                                 <span>Print / Save as PDF</span>
@@ -171,6 +205,14 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                 {/* TAX INVOICE A4 DOCUMENT CONTAINER (MATCHING SAMPLE IMAGE) */}
                 {/* ========================================================= */}
                 <div className="tax-invoice-paper" id="printable-tax-invoice">
+                    {/* Authentic Official Rubber Watermark Stamp */}
+                    <div className={`invoice-stamp ${isPaid ? 'stamp-paid' : 'stamp-pending'}`}>
+                        <div className="stamp-inner-border">
+                            <span className="stamp-title">{isPaid ? 'PAID IN FULL' : 'PAYMENT DUE'}</span>
+                            <span className="stamp-sub font-mono">{isPaid ? 'OFFICIALLY CLEARED' : 'SETTLEMENT REQUIRED'}</span>
+                        </div>
+                    </div>
+
                     {/* Header */}
                     <header className="invoice-doc-header">
                         {/* Brand Logo Box Left */}
@@ -303,6 +345,14 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
                             </div>
                         </div>
                     </section>
+
+                    {/* Warranty & Guarantee Assurance Banner */}
+                    <div className="invoice-guarantee-banner">
+                        <span className="material-symbols-outlined guarantee-icon">verified_user</span>
+                        <div className="guarantee-text">
+                            <strong>Precision Workshop Quality Guarantee:</strong> All installed replacement parts and mechanical craftsmanship are protected under our comprehensive 90-Day or 5,000 KM service assurance warranty.
+                        </div>
+                    </div>
 
                     {/* Signatures & Seal Section */}
                     <footer className="invoice-signatures-section">
