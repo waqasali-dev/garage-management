@@ -3,11 +3,16 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './css/Sidebar.css';
 
+const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
     const { user, role, isAdmin, isStaff, isOwner, logout } = useAuth();
-
-    const getNavClass = ({ isActive }) => `nav-item ${isActive ? 'active' : ''}`;
 
     const handleLogout = () => {
         logout();
@@ -28,6 +33,19 @@ export default function Sidebar({ isOpen, onClose }) {
         : isStaff
         ? 'role-staff'
         : 'role-owner';
+
+    const renderNavItem = (to, icon, label, shortcut = null, end = false, extraStyle = null) => (
+        <NavLink to={to} end={end} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            {({ isActive }) => (
+                <>
+                    <span className="material-symbols-outlined" style={extraStyle || {}}>{icon}</span>
+                    <span className="nav-label" style={extraStyle || {}}>{label}</span>
+                    {shortcut && <span className="nav-shortcut-tag">{shortcut}</span>}
+                    {isActive && <span className="nav-active-pip" />}
+                </>
+            )}
+        </NavLink>
+    );
 
     return (
         <>
@@ -51,65 +69,18 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* ==================================================== */}
                     {isAdmin && (
                         <>
-                            <NavLink to="/dashboard" end className={getNavClass}>
-                                <span className="material-symbols-outlined">dashboard</span>
-                                <span>Dashboard</span>
-                            </NavLink>
-
-                            <NavLink to="/staff/dashboard" end className={getNavClass}>
-                                <span className="material-symbols-outlined">engineering</span>
-                                <span>Staff Hub</span>
-                            </NavLink>
-
-                            <NavLink to="/work-orders" className={getNavClass}>
-                                <span className="material-symbols-outlined">build</span>
-                                <span>Work Orders</span>
-                            </NavLink>
-
-                            <NavLink to="/invoices" end className={getNavClass}>
-                                <span className="material-symbols-outlined">receipt_long</span>
-                                <span>Invoices</span>
-                            </NavLink>
-
-                            <NavLink to="/inventory" end className={getNavClass}>
-                                <span className="material-symbols-outlined">inventory_2</span>
-                                <span>Inventory</span>
-                            </NavLink>
-
-                            <NavLink to="/scheduling" end className={getNavClass}>
-                                <span className="material-symbols-outlined">calendar_month</span>
-                                <span>Scheduling</span>
-                            </NavLink>
-
-                            <NavLink to="/owners" end className={getNavClass}>
-                                <span className="material-symbols-outlined">group</span>
-                                <span>Owners Directory</span>
-                            </NavLink>
-
-                            <NavLink to="/owner/cars" end className={getNavClass}>
-                                <span className="material-symbols-outlined">directions_car</span>
-                                <span>Owner's Cars</span>
-                            </NavLink>
-
-                            <NavLink to="/staff" end className={getNavClass}>
-                                <span className="material-symbols-outlined">badge</span>
-                                <span>Staff Directory</span>
-                            </NavLink>
-
-                            <NavLink to="/audit-log" end className={getNavClass}>
-                                <span className="material-symbols-outlined">assessment</span>
-                                <span>Audit Log</span>
-                            </NavLink>
-
-                            <NavLink to="/users" end className={getNavClass}>
-                                <span className="material-symbols-outlined">admin_panel_settings</span>
-                                <span>Users & Roles</span>
-                            </NavLink>
-
-                            <NavLink to="/ai-reports" end className={getNavClass}>
-                                <span className="material-symbols-outlined" style={{ color: '#ffd85f' }}>auto_awesome</span>
-                                <span style={{ color: '#ffd85f', fontWeight: '700' }}>AI Reports & Chat</span>
-                            </NavLink>
+                            {renderNavItem('/dashboard', 'dashboard', 'Dashboard', 'D', true)}
+                            {renderNavItem('/staff/dashboard', 'engineering', 'Staff Hub', null, true)}
+                            {renderNavItem('/work-orders', 'build', 'Work Orders', 'W')}
+                            {renderNavItem('/invoices', 'receipt_long', 'Invoices', null, true)}
+                            {renderNavItem('/inventory', 'inventory_2', 'Inventory', 'I', true)}
+                            {renderNavItem('/scheduling', 'calendar_month', 'Scheduling', 'S', true)}
+                            {renderNavItem('/owners', 'group', 'Owners Directory', null, true)}
+                            {renderNavItem('/owner/cars', 'directions_car', "Owner's Cars", null, true)}
+                            {renderNavItem('/staff', 'badge', 'Staff Directory', null, true)}
+                            {renderNavItem('/audit-log', 'assessment', 'Audit Log', null, true)}
+                            {renderNavItem('/users', 'admin_panel_settings', 'Users & Roles', null, true)}
+                            {renderNavItem('/ai-reports', 'auto_awesome', 'AI Reports & Chat', 'AI', true, { color: '#ffd85f', fontWeight: '700' })}
                         </>
                     )}
 
@@ -118,20 +89,9 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* ==================================================== */}
                     {isStaff && (
                         <>
-                            <NavLink to="/staff/dashboard" end className={getNavClass}>
-                                <span className="material-symbols-outlined">engineering</span>
-                                <span>Staff Dashboard</span>
-                            </NavLink>
-
-                            <NavLink to="/staff/schedules" end className={getNavClass}>
-                                <span className="material-symbols-outlined">calendar_month</span>
-                                <span>Workshop Schedules</span>
-                            </NavLink>
-
-                            <NavLink to="/inventory" end className={getNavClass}>
-                                <span className="material-symbols-outlined">inventory_2</span>
-                                <span>Inventory Parts</span>
-                            </NavLink>
+                            {renderNavItem('/staff/dashboard', 'engineering', 'Staff Dashboard', 'D', true)}
+                            {renderNavItem('/staff/schedules', 'calendar_month', 'Workshop Schedules', null, true)}
+                            {renderNavItem('/inventory', 'inventory_2', 'Inventory Parts', 'I', true)}
                         </>
                     )}
 
@@ -140,30 +100,16 @@ export default function Sidebar({ isOpen, onClose }) {
                     {/* ==================================================== */}
                     {isOwner && (
                         <>
-                            <NavLink to="/owner/cars" end className={getNavClass}>
-                                <span className="material-symbols-outlined">directions_car</span>
-                                <span>My Garage / Cars</span>
-                            </NavLink>
-
-                            <NavLink to="/invoices" end className={getNavClass}>
-                                <span className="material-symbols-outlined">receipt_long</span>
-                                <span>Invoices & Billing</span>
-                            </NavLink>
-
-                            <NavLink to="/ai-reports" end className={getNavClass}>
-                                <span className="material-symbols-outlined" style={{ color: '#ffd85f' }}>auto_awesome</span>
-                                <span style={{ color: '#ffd85f', fontWeight: '700' }}>AI Car Advisor & Reports</span>
-                            </NavLink>
+                            {renderNavItem('/owner/cars', 'directions_car', 'My Garage / Cars', null, true)}
+                            {renderNavItem('/invoices', 'receipt_long', 'Invoices & Billing', null, true)}
+                            {renderNavItem('/ai-reports', 'auto_awesome', 'AI Car Advisor', 'AI', true, { color: '#ffd85f', fontWeight: '700' })}
                         </>
                     )}
 
                     {/* Fallback for unauthenticated guest preview */}
                     {!user && (
                         <>
-                            <NavLink to="/login" end className={getNavClass}>
-                                <span className="material-symbols-outlined">login</span>
-                                <span>Sign In</span>
-                            </NavLink>
+                            {renderNavItem('/login', 'login', 'Sign In', null, true)}
                         </>
                     )}
                 </div>
@@ -175,22 +121,34 @@ export default function Sidebar({ isOpen, onClose }) {
                         <NavLink to="/intake" end className="sidebar-intake-btn" title="Intake new vehicle into workshop">
                             <span className="material-symbols-outlined">add_circle</span>
                             <span>Vehicle Intake</span>
+                            <span className="intake-key-badge">N</span>
                         </NavLink>
                     )}
 
                     {user && (
                         <div className="sidebar-user-card">
-                            <div className="sidebar-user-top">
-                                <span className="sidebar-user-name" title={user.full_name || user.email}>
-                                    {user.full_name || 'Active User'}
-                                </span>
-                                <span className={`sidebar-role-pill ${roleBadgeClass}`}>
-                                    {role.toUpperCase()}
-                                </span>
+                            <div className="sidebar-user-main">
+                                <div className={`sidebar-avatar-ring ${roleBadgeClass}`}>
+                                    <span>{getInitials(user.full_name || user.email)}</span>
+                                </div>
+                                <div className="sidebar-user-details">
+                                    <div className="sidebar-user-top">
+                                        <span className="sidebar-user-name" title={user.full_name || user.email}>
+                                            {user.full_name || 'Active User'}
+                                        </span>
+                                        <span className={`sidebar-role-pill ${roleBadgeClass}`}>
+                                            {role.toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <span className="sidebar-user-email" title={user.email}>
+                                        {user.email}
+                                    </span>
+                                </div>
                             </div>
-                            <span className="sidebar-user-email" title={user.email}>
-                                {user.email}
-                            </span>
+                            <div className="sidebar-status-telemetry">
+                                <span className="telemetry-ping-dot"></span>
+                                <span className="telemetry-text">Workshop Cloud Sync Active</span>
+                            </div>
                         </div>
                     )}
 
