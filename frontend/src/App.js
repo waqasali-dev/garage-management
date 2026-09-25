@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import StyledLoading from './components/StyledLoading';
 import './App.css';
 
 // Admin Core Components (Lazy Loaded)
@@ -39,30 +40,18 @@ export function RouteLoadingFallback() {
         <div style={{
             minHeight: '100vh',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#0a0d14',
-            color: '#94a3b8',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+            backgroundColor: 'var(--bg-olive-dark, #161e18)',
         }}>
-            <div style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(59, 130, 246, 0.2)',
-                borderTopColor: '#3b82f6',
-                borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite',
-                marginBottom: '16px',
-            }} />
-            <span style={{ fontSize: '13px', letterSpacing: '0.05em', color: '#64748b' }}>
-                LOADING PRECISION GARAGE...
-            </span>
-            <style>{`
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
+            <StyledLoading
+                message="LOADING PRECISION GARAGE..."
+                subtitle="Initializing workshop portal modules and secure sessions"
+                icon="speed"
+                badge="System Boot"
+                variant="fullscreen"
+                size="lg"
+            />
         </div>
     );
 }

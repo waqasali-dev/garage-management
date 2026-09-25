@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
+import StyledLoading from './StyledLoading';
 import './css/Invoices.css';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -300,8 +301,15 @@ export default function Invoices() {
                                     <tbody>
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan={isOwner ? "9" : "10"} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                                                    Loading invoice records...
+                                                <td colSpan={isOwner ? "9" : "10"} style={{ padding: '36px 16px', background: 'transparent' }}>
+                                                    <StyledLoading
+                                                        variant="table"
+                                                        size="sm"
+                                                        message="Loading invoice records..."
+                                                        subtitle="Querying tax invoices, line items & payment settlements"
+                                                        icon="receipt_long"
+                                                        badge="Billing Ledgers"
+                                                    />
                                                 </td>
                                             </tr>
                                         ) : filteredInvoices.length === 0 ? (

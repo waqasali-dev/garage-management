@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -341,8 +342,15 @@ export default function OwnersList() {
                         {/* Owners Grid */}
                         <div className="owners-grid">
                             {isLoading ? (
-                                <div className="loading-state">
-                                    <p className="font-mono">Loading car owners directory...</p>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <StyledLoading
+                                        variant="card"
+                                        size="md"
+                                        message="Loading car owners directory..."
+                                        subtitle="Syncing client profiles, linked vehicles & historical visits"
+                                        icon="group"
+                                        badge="Client Directory"
+                                    />
                                 </div>
                             ) : filteredOwners.length === 0 ? (
                                 <div className="empty-state">

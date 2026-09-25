@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -217,9 +218,15 @@ export default function Staff() {
                         {/* Bento Grid Staff Cards */}
                         <div className="staff-grid">
                             {isLoading ? (
-                                <div className="loading-staff-box">
-                                    <EngineeringIcon className="spinning-icon" />
-                                    <p>Loading Workshop Staff Directory...</p>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <StyledLoading
+                                        variant="card"
+                                        size="md"
+                                        message="Loading Workshop Staff Directory..."
+                                        subtitle="Syncing mechanics, certified technicians & shift roles"
+                                        icon="engineering"
+                                        badge="Technician Registry"
+                                    />
                                 </div>
                             ) : (
                                 filteredStaff.map((member) => (

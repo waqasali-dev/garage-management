@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import StyledLoading from '../components/StyledLoading';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import HistoryIcon from '@mui/icons-material/History';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -111,10 +112,15 @@ export default function OwnerCars() {
                         {/* Vehicles Cards Grid */}
                         <div className="vehicles-grid">
                             {isLoading ? (
-                                <div className="empty-vehicles-box">
-                                    <DirectionsCarIcon style={{ fontSize: '48px', color: 'var(--text-muted)' }} />
-                                    <h3>Loading your vehicles...</h3>
-                                    <p>Retrieving your registered vehicle profile and service records.</p>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <StyledLoading
+                                        variant="card"
+                                        size="md"
+                                        message="Loading your registered vehicles..."
+                                        subtitle="Retrieving vehicle profile, active status & service records"
+                                        icon="directions_car"
+                                        badge="Owner Garage"
+                                    />
                                 </div>
                             ) : vehicles.length === 0 ? (
                                 <div className="empty-vehicles-box">

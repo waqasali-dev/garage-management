@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
+import StyledLoading from './StyledLoading';
 import './css/WorkOrderDetails.css';
 import { API_BASE_URL } from '../config/api';
 
@@ -392,12 +393,12 @@ export default function WorkOrderDetails() {
             <div className="wo-details-layout">
                 <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
                 <div className="wo-details-wrapper loading-center">
-                    <span className="material-symbols-outlined spinning-icon" style={{ fontSize: '48px', color: 'var(--accent-yellow)' }}>
-                        build
-                    </span>
-                    <p style={{ fontFamily: 'JetBrains Mono', marginTop: '14px', color: 'var(--text-muted)' }}>
-                        Loading Work Order details from database...
-                    </p>
+                    <StyledLoading
+                        message="Loading Work Order details from database..."
+                        subtitle="Retrieving vehicle service timeline, assigned technicians & parts checklist"
+                        icon="build"
+                        badge="Work Order Sync"
+                    />
                 </div>
             </div>
         );

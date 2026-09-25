@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import StyledLoading from '../components/StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -153,11 +154,14 @@ export default function CarServiceHistory() {
                     <div className="vin-history-container">
                         {/* Loading State */}
                         {isLoading && (
-                            <div className="empty-history-box">
-                                <DirectionsCarIcon style={{ fontSize: '48px', color: 'var(--text-muted)' }} />
-                                <h3>Loading Vehicle Service Records...</h3>
-                                <p>Querying maintenance records, itemized parts, labor hours, and inspection photos for VIN {vinInput}.</p>
-                            </div>
+                            <StyledLoading
+                                variant="card"
+                                size="md"
+                                message="Loading Vehicle Service Records..."
+                                subtitle={`Querying maintenance records, itemized parts, labor hours, and inspection photos for VIN ${vinInput || ''}`}
+                                icon="history"
+                                badge="VIN History Audit"
+                            />
                         )}
 
                         {/* Error / Not Found State */}

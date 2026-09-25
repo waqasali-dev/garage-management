@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import './css/WorkOrders.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -361,8 +362,15 @@ export default function WorkOrders() {
                                     <tbody>
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan="9" className="empty-table-state">
-                                                    Loading work orders...
+                                                <td colSpan="9" style={{ padding: '36px 16px', background: 'transparent' }}>
+                                                    <StyledLoading
+                                                        variant="table"
+                                                        size="sm"
+                                                        message="Loading workshop work orders..."
+                                                        subtitle="Syncing repair jobs, client vehicles & technicians"
+                                                        icon="build"
+                                                        badge="Work Orders"
+                                                    />
                                                 </td>
                                             </tr>
                                         ) : filteredOrders.length === 0 ? (

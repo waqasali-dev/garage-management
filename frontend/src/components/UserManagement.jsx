@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -500,8 +501,15 @@ export default function UserManagement() {
                                 <tbody>
                                     {isLoading ? (
                                         <tr>
-                                            <td colSpan="7" className="no-data-cell">
-                                                Loading user accounts...
+                                            <td colSpan="7" style={{ padding: '36px 16px', background: 'transparent' }}>
+                                                <StyledLoading
+                                                    variant="table"
+                                                    size="sm"
+                                                    message="Loading user accounts..."
+                                                    subtitle="Querying role permissions, security hashes & active status"
+                                                    icon="manage_accounts"
+                                                    badge="Security & IAM"
+                                                />
                                             </td>
                                         </tr>
                                     ) : filteredUsers.length === 0 ? (

@@ -12,6 +12,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
+import StyledLoading from './StyledLoading';
 import './css/Dashboard.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -386,9 +387,14 @@ export default function Dashboard() {
                             {/* Work Orders List */}
                             <div className="dashboard-orders-list">
                                 {isLoading ? (
-                                    <div className="empty-dashboard-state">
-                                        Loading active work orders...
-                                    </div>
+                                    <StyledLoading
+                                        variant="card"
+                                        size="sm"
+                                        message="Loading active work orders..."
+                                        subtitle="Fetching active vehicle repair status"
+                                        icon="construction"
+                                        badge="Live Queue"
+                                    />
                                 ) : filteredOrders.length === 0 ? (
                                     <div className="empty-dashboard-state">
                                         No active vehicles currently in the workshop queue. Click <Link to="/intake" style={{ color: 'var(--accent-yellow)', fontWeight: 700 }}>"New Intake Order"</Link> to intake a vehicle.

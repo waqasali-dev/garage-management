@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import BuildIcon from '@mui/icons-material/Build';
 import StarIcon from '@mui/icons-material/Star';
@@ -61,12 +62,12 @@ export default function OwnerDetail() {
             <div className="owner-detail-layout">
                 <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
                 <div className="owner-detail-wrapper loading-center">
-                    <span className="material-symbols-outlined spinning-icon" style={{ fontSize: '48px', color: 'var(--accent-yellow)' }}>
-                        group
-                    </span>
-                    <p style={{ fontFamily: 'JetBrains Mono', marginTop: '14px', color: 'var(--text-muted)' }}>
-                        Loading Client profile and vehicle history...
-                    </p>
+                    <StyledLoading
+                        message="Loading Client Profile & Vehicle History..."
+                        subtitle="Syncing registered vehicles, invoices & service records from database"
+                        icon="person"
+                        badge="Client Record Sync"
+                    />
                 </div>
             </div>
         );

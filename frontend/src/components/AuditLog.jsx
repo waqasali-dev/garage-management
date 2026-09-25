@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -311,9 +312,14 @@ export default function AuditLog() {
 
                             <div className="timeline-container">
                                 {isLoading && logs.length === 0 ? (
-                                    <div className="empty-stream-box">
-                                        Loading audit activity trail...
-                                    </div>
+                                    <StyledLoading
+                                        variant="card"
+                                        size="md"
+                                        message="Loading audit activity trail..."
+                                        subtitle="Aggregating compliance events, security checkpoints & transaction logs"
+                                        icon="shield"
+                                        badge="Compliance Audit"
+                                    />
                                 ) : logs.length === 0 ? (
                                     <div className="empty-stream-box">
                                         No audit events found matching the filter criteria.

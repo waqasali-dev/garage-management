@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
   --bg-olive-dark: #161e18;
   --bg-olive-card: #1c261e;
@@ -55,3 +57,29 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Global Animated Spinner & Loading Helper */
+.spinning-icon {
+  display: inline-block !important;
+  transform-origin: center center !important;
+  animation: globalSpin 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+@keyframes globalSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+

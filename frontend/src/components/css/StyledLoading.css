@@ -1,0 +1,307 @@
+/* StyledLoading.css - High-fidelity animated loading states */
+
+.styled-loading-root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    text-align: center;
+    animation: fadeInLoader 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    user-select: none;
+}
+
+/* Fullscreen / Full Page View Mode */
+.styled-loading-root.variant-fullscreen {
+    min-height: 80vh;
+    padding: 60px 24px;
+    flex: 1;
+}
+
+/* Card / Section View Mode */
+.styled-loading-root.variant-card {
+    min-height: 280px;
+    padding: 40px 20px;
+    background: rgba(28, 38, 30, 0.45);
+    border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    backdrop-filter: blur(8px);
+}
+
+/* Table Row / Inline Mode */
+.styled-loading-root.variant-table {
+    min-height: 180px;
+    padding: 32px 16px;
+}
+
+.styled-loading-root.variant-inline {
+    min-height: auto;
+    padding: 12px 16px;
+    flex-direction: row;
+    gap: 12px;
+}
+
+/* Ambient Radial Glow */
+.loading-ambient-glow {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    background: radial-gradient(circle, rgba(255, 216, 95, 0.12) 0%, rgba(16, 185, 129, 0.05) 45%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: ambientBreathe 3.5s ease-in-out infinite alternate;
+    z-index: 0;
+}
+
+/* Orbital Rings Container */
+.loading-orbit-system {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    z-index: 1;
+}
+
+.styled-loading-root.size-lg .loading-orbit-system {
+    width: 88px;
+    height: 88px;
+}
+
+.styled-loading-root.size-md .loading-orbit-system {
+    width: 76px;
+    height: 76px;
+}
+
+.styled-loading-root.size-sm .loading-orbit-system {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 12px;
+}
+
+/* Outer Precision Ring */
+.loading-ring-outer {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 216, 95, 0.3);
+    border-top: 2.5px solid var(--accent-yellow, #ffd85f);
+    border-right: 2.5px solid var(--accent-yellow, #ffd85f);
+    box-shadow: 0 0 16px rgba(255, 216, 95, 0.22);
+    animation: orbitClockwise 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Inner Counter Ring */
+.loading-ring-inner {
+    position: absolute;
+    inset: 7px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-left: 2px solid #38bdf8;
+    border-bottom: 2px solid #10b981;
+    animation: orbitCounter 1.8s linear infinite;
+    opacity: 0.85;
+}
+
+.styled-loading-root.size-sm .loading-ring-inner {
+    inset: 4px;
+}
+
+/* Core Icon / Emblem */
+.loading-emblem-core {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-yellow, #ffd85f);
+    animation: mechanicWiggle 2.5s ease-in-out infinite;
+    z-index: 2;
+}
+
+.loading-emblem-core .material-symbols-outlined {
+    font-size: 34px;
+    line-height: 1;
+    filter: drop-shadow(0 0 10px rgba(255, 216, 95, 0.6));
+}
+
+.styled-loading-root.size-lg .loading-emblem-core .material-symbols-outlined {
+    font-size: 42px;
+}
+
+.styled-loading-root.size-sm .loading-emblem-core .material-symbols-outlined {
+    font-size: 22px;
+}
+
+.loading-emblem-core svg {
+    font-size: 34px;
+    filter: drop-shadow(0 0 10px rgba(255, 216, 95, 0.6));
+}
+
+.styled-loading-root.size-lg .loading-emblem-core svg {
+    font-size: 42px;
+}
+
+.styled-loading-root.size-sm .loading-emblem-core svg {
+    font-size: 22px;
+}
+
+/* Metadata & Text Content */
+.loading-content-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 1;
+    max-width: 480px;
+    padding: 0 16px;
+}
+
+/* Telemetry Badge */
+.loading-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    background: rgba(255, 216, 95, 0.08);
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-yellow, #ffd85f);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent-green, #10b981);
+    box-shadow: 0 0 8px var(--accent-green, #10b981);
+    animation: liveDotPulse 1.4s ease-in-out infinite;
+}
+
+/* Primary Message */
+.loading-primary-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-main, #f1f5f9);
+    letter-spacing: 0.03em;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.styled-loading-root.size-lg .loading-primary-text {
+    font-size: 17px;
+}
+
+.styled-loading-root.size-sm .loading-primary-text {
+    font-size: 13px;
+}
+
+/* Secondary Subtitle */
+.loading-subtitle-text {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    color: var(--text-muted, #94a3b8);
+    margin: 0;
+    line-height: 1.5;
+    opacity: 0.9;
+}
+
+/* Precision Shimmer Track */
+.loading-shimmer-track {
+    width: 140px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 10px;
+}
+
+.loading-shimmer-bar {
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent-yellow, #ffd85f), var(--accent-green, #10b981), transparent);
+    border-radius: 999px;
+    animation: shimmerSlide 1.8s ease-in-out infinite;
+}
+
+/* Keyframe Animations */
+@keyframes fadeInLoader {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes ambientBreathe {
+    0% {
+        transform: scale(0.85);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(1.15);
+        opacity: 0.9;
+    }
+}
+
+@keyframes orbitClockwise {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes orbitCounter {
+    0% {
+        transform: rotate(360deg);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes mechanicWiggle {
+    0%, 100% {
+        transform: rotate(-8deg) scale(0.96);
+    }
+    50% {
+        transform: rotate(14deg) scale(1.04);
+    }
+}
+
+@keyframes liveDotPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.4;
+        transform: scale(0.75);
+    }
+}
+
+@keyframes shimmerSlide {
+    0% {
+        left: -60%;
+    }
+    100% {
+        left: 140%;
+    }
+}

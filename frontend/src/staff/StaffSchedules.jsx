@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import StyledLoading from '../components/StyledLoading';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PersonIcon from '@mui/icons-material/Person';
@@ -265,9 +266,14 @@ export default function StaffSchedules() {
 
                                 <div className="daily-tasks-list">
                                     {isLoading ? (
-                                        <div className="empty-sched-state">
-                                            <p>Loading scheduled appointments...</p>
-                                        </div>
+                                        <StyledLoading
+                                            variant="card"
+                                            size="sm"
+                                            message="Loading scheduled appointments..."
+                                            subtitle="Fetching workshop bay bookings and mechanic calendar"
+                                            icon="calendar_month"
+                                            badge="Bay Bookings"
+                                        />
                                     ) : dayTasks.length === 0 ? (
                                         <div className="empty-sched-state">
                                             <CalendarMonthIcon style={{ fontSize: '48px', color: 'var(--text-muted)' }} />

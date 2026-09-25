@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import StyledLoading from '../components/StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -285,9 +286,15 @@ export default function StaffDashboard() {
                         {/* Work Orders List / Grid */}
                         <div className="orders-grid">
                             {isLoading ? (
-                                <div className="loading-card col-span-full">
-                                    <EngineeringIcon className="spinning-icon" />
-                                    <p>Loading Active Workshop Work Orders...</p>
+                                <div className="col-span-full">
+                                    <StyledLoading
+                                        variant="card"
+                                        size="md"
+                                        message="Loading Active Workshop Work Orders..."
+                                        subtitle="Syncing job bay assignments, stage pipelines & repair metrics"
+                                        icon="engineering"
+                                        badge="Active Workstation"
+                                    />
                                 </div>
                             ) : filteredOrders.length === 0 ? (
                                 <div className="empty-card col-span-full">

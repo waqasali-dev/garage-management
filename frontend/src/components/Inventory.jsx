@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
+import StyledLoading from './StyledLoading';
 import { useAuth } from '../context/AuthContext';
 import './css/Inventory.css';
 import { API_BASE_URL } from '../config/api';
@@ -474,8 +475,15 @@ export default function Inventory() {
                                     <tbody>
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan="8" className="empty-table-state">
-                                                    Loading inventory parts catalog...
+                                                <td colSpan="8" style={{ padding: '36px 16px', background: 'transparent' }}>
+                                                    <StyledLoading
+                                                        variant="table"
+                                                        size="sm"
+                                                        message="Loading inventory parts catalog..."
+                                                        subtitle="Querying stock levels, reorder thresholds & SKU registry"
+                                                        icon="inventory_2"
+                                                        badge="Warehouse Catalog"
+                                                    />
                                                 </td>
                                             </tr>
                                         ) : filteredItems.length === 0 ? (

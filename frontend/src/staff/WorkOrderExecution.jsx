@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import StyledLoading from '../components/StyledLoading';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import PersonIcon from '@mui/icons-material/Person';
@@ -469,8 +470,12 @@ export default function WorkOrderExecution() {
             <div className="exec-layout">
                 <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
                 <div className="exec-wrapper loading-center">
-                    <BuildIcon className="spinning-icon" />
-                    <p>Loading Work Order Execution Workspace...</p>
+                    <StyledLoading
+                        message="Loading Work Order Execution Workspace..."
+                        subtitle="Initializing diagnostic telemetry, inspection items & repair tracker"
+                        icon="handyman"
+                        badge="Staff Workspace"
+                    />
                 </div>
             </div>
         );
