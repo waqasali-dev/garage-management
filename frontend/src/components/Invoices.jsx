@@ -43,10 +43,17 @@ export default function Invoices() {
             const res = await fetch(url);
             if (res.ok) {
                 const json = await res.json();
-                if (json.success && Array.isArray(json.data)) {
+                if (json.success) {
+                    const rawList = Array.isArray(json.data)
+                        ? json.data
+                        : Array.isArray(json.data?.invoices)
+                            ? json.data.invoices
+                            : Array.isArray(json.invoices)
+                                ? json.invoices
+                                : [];
                     const myInvoices = ownerId
-                        ? json.data.filter((inv) => inv.owner_id === ownerId)
-                        : json.data;
+                        ? rawList.filter((inv) => inv.owner_id === ownerId)
+                        : rawList;
                     setInvoicesList(myInvoices);
                 }
             }
@@ -60,7 +67,7 @@ export default function Invoices() {
     useEffect(() => {
         fetchInvoices();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.owner_id]);
+    }, [user?.owner_id, user?.user_id, isOwner, isAdmin]);
 
     const handleViewPdf = async (inv) => {
         try {

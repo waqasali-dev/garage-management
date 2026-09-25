@@ -13,6 +13,12 @@ router.get("/", async (req, res) => {
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
+            if (Array.isArray(cached)) {
+                return res.json({ success: true, source: "redis", data: cached });
+            }
+            if (cached && Array.isArray(cached.invoices)) {
+                return res.json({ success: true, source: "redis", data: cached.invoices, settings: cached.settings });
+            }
             return res.json({ success: true, source: "redis", data: cached });
         }
 
