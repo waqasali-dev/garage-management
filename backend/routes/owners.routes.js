@@ -104,9 +104,16 @@ router.get("/", async (req, res) => {
     }
 });
 
-// GET /api/owners/unlinked - Fetch customers from car_owners without a user portal account
+// GET /api/owners/unlinked - Fetch customers from car_owners without a user portal account with Redis caching
 router.get("/unlinked", async (req, res) => {
+    const cacheKey = "garage:cache:owners:unlinked";
+
     try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", count: cached.length, data: cached });
+        }
+
         const query = `
             SELECT 
                 o.owner_id,
@@ -131,8 +138,11 @@ router.get("/unlinked", async (req, res) => {
         `;
         const result = await pool.query(query);
 
+        await setCache(cacheKey, result.rows, 300);
+
         res.json({
             success: true,
+            source: "postgres",
             count: result.rows.length,
             data: result.rows,
         });
@@ -251,9 +261,11 @@ router.patch("/:id", async (req, res) => {
             return res.status(404).json({ error: "Car owner not found" });
         }
 
-        // Invalidate owner caches
+        // Invalidate owner, work order, and vehicle caches
         await deleteCache(`garage:cache:owner:details:${id}`);
         await deleteCachePattern("garage:cache:owners:*");
+        await deleteCachePattern("garage:cache:workorder:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
 
         res.json({
             success: true,
