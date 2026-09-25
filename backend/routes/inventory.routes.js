@@ -113,14 +113,21 @@ export const handleGetInventory = async (req, res) => {
 router.get("/", handleGetInventory);
 router.get("/items", handleGetInventory);
 
-// GET /api/inventory/categories - List unique categories
+// GET /api/inventory/categories - List unique categories with Redis caching
 router.get("/categories", async (req, res) => {
+    const cacheKey = "garage:cache:inventory:categories";
     try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", data: cached });
+        }
+
         const result = await pool.query(
             "SELECT DISTINCT category FROM inventory_data WHERE category IS NOT NULL ORDER BY category ASC;"
         );
         const categories = result.rows.map((r) => r.category);
-        res.json({ success: true, data: categories });
+        await setCache(cacheKey, categories, 600);
+        res.json({ success: true, source: "postgres", data: categories });
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch categories", details: err.message });
     }

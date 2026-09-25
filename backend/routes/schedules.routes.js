@@ -171,6 +171,7 @@ router.post("/", async (req, res) => {
 
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:details:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
 
         res.status(201).json({
             success: true,
@@ -243,6 +244,7 @@ router.patch("/:id", async (req, res) => {
 
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:details:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
 
         res.json({ success: true, message: "Task updated successfully", data: result.rows[0] });
     } catch (err) {
@@ -263,6 +265,7 @@ router.delete("/:id", async (req, res) => {
 
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:details:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
 
         res.json({ success: true, message: "Scheduled task deleted", data: result.rows[0] });
     } catch (err) {
