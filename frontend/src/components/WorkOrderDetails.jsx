@@ -58,6 +58,7 @@ export default function WorkOrderDetails() {
     // Modal state for adding Part/Labor
     const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
     const [itemType, setItemType] = useState('part');
+    const [partSearchQuery, setPartSearchQuery] = useState('');
     const [inventoryList, setInventoryList] = useState([]);
     const [itemFormData, setItemFormData] = useState({
         part_id: '',
@@ -243,6 +244,7 @@ export default function WorkOrderDetails() {
                 part_id: String(selected.part_id),
                 description: `${selected.part_name} (${selected.sku})`,
                 unit_price: String(selected.selling_price || '0.00'),
+                quantity_or_hours: prev.quantity_or_hours || '1',
             }));
         }
     };
@@ -683,6 +685,7 @@ export default function WorkOrderDetails() {
                                                 className="secondary-btn-sm"
                                                 onClick={() => {
                                                     setItemType('part');
+                                                    fetchInventoryForPicker();
                                                     setIsAddItemModalOpen(true);
                                                 }}
                                             >
@@ -693,6 +696,7 @@ export default function WorkOrderDetails() {
                                                 className="secondary-btn-sm"
                                                 onClick={() => {
                                                     setItemType('labor');
+                                                    fetchInventoryForPicker();
                                                     setIsAddItemModalOpen(true);
                                                 }}
                                             >
@@ -1036,18 +1040,45 @@ export default function WorkOrderDetails() {
                         <form onSubmit={handleAddItemSubmit} className="wo-modal-form">
                             {itemType === 'part' && (
                                 <div className="form-group">
-                                    <label>SELECT SPARE PART FROM INVENTORY</label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                        <label style={{ margin: 0 }}>SELECT SPARE PART FROM INVENTORY</label>
+                                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                            {inventoryList.length} items loaded
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="🔍 Filter parts by name or SKU..."
+                                        value={partSearchQuery}
+                                        onChange={(e) => setPartSearchQuery(e.target.value)}
+                                        className="modal-input"
+                                        style={{ marginBottom: '8px', padding: '6px 10px', fontSize: '13px' }}
+                                    />
                                     <select
                                         value={itemFormData.part_id}
                                         onChange={handlePartSelect}
                                         className="modal-input"
                                     >
                                         <option value="">-- Choose from inventory_data --</option>
-                                        {inventoryList.map((inv) => (
-                                            <option key={inv.part_id} value={inv.part_id}>
-                                                {inv.part_name} ({inv.sku}) • Stock: {inv.stock_quantity} • ${parseFloat(inv.selling_price).toFixed(2)}
-                                            </option>
-                                        ))}
+                                        {inventoryList
+                                            .filter((inv) => {
+                                                if (!partSearchQuery.trim()) return true;
+                                                const q = partSearchQuery.toLowerCase();
+                                                return (
+                                                    (inv.part_name && inv.part_name.toLowerCase().includes(q)) ||
+                                                    (inv.sku && inv.sku.toLowerCase().includes(q)) ||
+                                                    (inv.category && inv.category.toLowerCase().includes(q))
+                                                );
+                                            })
+                                            .map((inv) => {
+                                                const stock = parseInt(inv.stock_quantity ?? inv.stock, 10) || 0;
+                                                const stockBadge = stock <= 0 ? '🔴 Out of Stock' : stock <= 5 ? `⚠️ Low (${stock})` : `🟢 Stock: ${stock}`;
+                                                return (
+                                                    <option key={inv.part_id} value={inv.part_id}>
+                                                        {inv.part_name} ({inv.sku}) • {stockBadge} • ${parseFloat(inv.selling_price).toFixed(2)}
+                                                    </option>
+                                                );
+                                            })}
                                     </select>
                                 </div>
                             )}
