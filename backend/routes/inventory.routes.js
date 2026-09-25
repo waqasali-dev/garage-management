@@ -4,8 +4,8 @@ import { getCache, setCache, deleteCachePattern } from "../redis.js";
 
 const router = express.Router();
 
-// GET /api/inventory - Fetch all inventory parts with computed statuses and KPI metrics
-router.get("/", async (req, res) => {
+// GET /api/inventory & GET /api/inventory/items - Fetch all inventory parts with computed statuses and KPI metrics
+export const handleGetInventory = async (req, res) => {
     const cacheKey = "garage:cache:inventory:all";
 
     try {
@@ -108,7 +108,10 @@ router.get("/", async (req, res) => {
         console.error("Error fetching inventory:", err);
         res.status(500).json({ error: "Failed to fetch inventory from database", details: err.message });
     }
-});
+};
+
+router.get("/", handleGetInventory);
+router.get("/items", handleGetInventory);
 
 // GET /api/inventory/categories - List unique categories
 router.get("/categories", async (req, res) => {

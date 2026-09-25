@@ -163,11 +163,11 @@ export default function WorkOrderExecution() {
             ]);
             if (staffRes.ok) {
                 const sJson = await staffRes.json();
-                if (sJson.success) setStaffList(sJson.data);
+                if (sJson.success && Array.isArray(sJson.data)) setStaffList(sJson.data);
             }
             if (invRes.ok) {
                 const iJson = await invRes.json();
-                if (iJson.success) setInventoryItems(iJson.data);
+                if (iJson.success && Array.isArray(iJson.data)) setInventoryItems(iJson.data);
             }
         } catch (err) {
             console.warn('Selector lookup notice:', err.message);
@@ -682,6 +682,7 @@ export default function WorkOrderExecution() {
                                                 className="secondary-btn-small"
                                                 onClick={() => {
                                                     setItemType('part');
+                                                    fetchSelectors();
                                                     setIsAddItemModalOpen(true);
                                                 }}
                                             >
@@ -693,6 +694,7 @@ export default function WorkOrderExecution() {
                                                 className="secondary-btn-small"
                                                 onClick={() => {
                                                     setItemType('labor');
+                                                    fetchSelectors();
                                                     setIsAddItemModalOpen(true);
                                                 }}
                                             >
