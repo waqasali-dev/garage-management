@@ -1,6 +1,6 @@
 import express from "express";
 import pool from "../db.js";
-import { getCache, setCache } from "../redis.js";
+import { getCache, setCache, deleteCachePattern } from "../redis.js";
 
 const router = express.Router();
 
@@ -117,7 +117,14 @@ router.get("/vin/:vin", async (req, res) => {
         return res.status(400).json({ error: "VIN parameter is required." });
     }
 
+    const cacheKey = `garage:cache:vehicle:vin:lookup:${cleanVin}`;
+
     try {
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, source: "redis", ...cached });
+        }
+
         const query = `
             SELECT 
                 v.vehicle_id,
@@ -144,7 +151,9 @@ router.get("/vin/:vin", async (req, res) => {
             return res.json({ success: true, found: false, data: null });
         }
 
-        return res.json({ success: true, found: true, data: result.rows[0] });
+        const payload = { found: true, data: result.rows[0] };
+        await setCache(cacheKey, payload, 600);
+        return res.json({ success: true, source: "postgres", ...payload });
     } catch (err) {
         console.error("Error looking up vehicle by VIN:", err);
         return res.status(500).json({ error: "Database error during VIN lookup", details: err.message });

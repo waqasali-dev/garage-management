@@ -280,6 +280,9 @@ router.patch("/:id/status", async (req, res) => {
         }
 
         await deleteCachePattern("garage:cache:invoice*");
+        await deleteCachePattern("garage:cache:vehicle*");
+        await deleteCachePattern("garage:cache:owner*");
+        await deleteCachePattern("garage:cache:workorder*");
 
         res.json({
             success: true,
@@ -308,6 +311,9 @@ router.delete("/:id", authenticateToken, requireRole(["admin"]), async (req, res
         }
 
         await deleteCachePattern("garage:cache:invoice*");
+        await deleteCachePattern("garage:cache:vehicle*");
+        await deleteCachePattern("garage:cache:owner*");
+        await deleteCachePattern("garage:cache:workorder*");
 
         res.json({
             success: true,

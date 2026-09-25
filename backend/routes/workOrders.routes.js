@@ -211,6 +211,9 @@ export const handleIntake = async (req, res) => {
         await deleteCachePattern("garage:cache:owners:*");
         await deleteCachePattern("garage:cache:users:*");
         await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCachePattern("garage:cache:owner:vehicles:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:dashboard:*");
         await setCache(`garage:cache:vehicle:vin:${sanitizedVin}`, responseData, 3600);
         await setCache(`garage:cache:workorder:${createdWorkOrder.work_order_id}`, responseData, 3600);
 
@@ -510,6 +513,9 @@ router.delete("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:dashboard:*");
         await deleteCachePattern("garage:cache:inventory:*");
         await deleteCachePattern("garage:cache:schedules:*");
+        await deleteCachePattern("garage:cache:owner:vehicles:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:owners:*");
 
         res.json({
             success: true,
@@ -586,6 +592,9 @@ router.patch("/:id/status", async (req, res) => {
 
         await deleteCachePattern("garage:cache:workorders:*");
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:owner:vehicles:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:dashboard:*");
 
         res.json({ success: true, message: `Status updated to ${status}`, data: result.rows[0] });
     } catch (err) {
@@ -701,6 +710,9 @@ router.post("/:id/items", async (req, res) => {
 
         await deleteCachePattern("garage:cache:workorders:*");
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:owner:vehicles:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:owners:*");
 
         res.status(201).json({
             success: true,
@@ -764,6 +776,9 @@ router.delete("/:id/items/:itemId", async (req, res) => {
 
         await deleteCachePattern("garage:cache:workorders:*");
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:owner:vehicles:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:owners:*");
 
         res.json({
             success: true,
@@ -801,6 +816,7 @@ router.post("/:id/media", async (req, res) => {
 
         await deleteCache(`garage:cache:workorder:details:${id}`);
         await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
 
         res.status(201).json({ success: true, message: "Media attached successfully", data: result.rows[0] });
     } catch (err) {
@@ -826,6 +842,7 @@ router.delete("/:id/media/:mediaId", async (req, res) => {
 
         await deleteCache(`garage:cache:workorder:details:${id}`);
         await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
 
         res.json({ success: true, message: "Media removed successfully", data: result.rows[0] });
     } catch (err) {
