@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 
 // Database & Redis Clients
 import pool from "./db.js";
-import redisClient from "./redis.js";
+import redisClient, { getCacheStats } from "./redis.js";
 
 // Middlewares
 import idempotencyMiddleware from "./middleware/idempotency.js";
@@ -94,6 +94,7 @@ app.get("/api/health", async (req, res) => {
         service: "Precision Garage API",
         database: dbStatus,
         redis: redisStatus,
+        cacheTelemetry: getCacheStats(),
         serverTime,
         version: pgVersion,
     });

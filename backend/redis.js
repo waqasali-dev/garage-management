@@ -41,28 +41,65 @@ if (redisUrl && redisToken && redisToken !== "your_upstash_redis_token_here") {
     }
 })();
 
-// Helper Functions for Clean, Safe Caching
+// Cache Telemetry & In-Memory Resilient Cache Fallback
+const memoryCache = new Map();
+const MAX_MEMORY_CACHE_ITEMS = 500;
+const cacheStats = {
+    hits: 0,
+    misses: 0,
+    sets: 0,
+    invalidations: 0,
+};
+
+const cleanupMemoryCache = () => {
+    const now = Date.now();
+    for (const [k, v] of memoryCache.entries()) {
+        if (v.expiresAt <= now) {
+            memoryCache.delete(k);
+        }
+    }
+    if (memoryCache.size > MAX_MEMORY_CACHE_ITEMS) {
+        const oldestKeys = Array.from(memoryCache.keys()).slice(0, 100);
+        for (const k of oldestKeys) memoryCache.delete(k);
+    }
+};
+
+// Helper Functions for Clean, Safe Caching with In-Memory Resiliency
 export const getCache = async (key) => {
     try {
         if (redis && isConfigured) {
             const data = await redis.get(key);
-            if (data === null || data === undefined) return null;
-            if (typeof data === "string") {
-                try {
-                    return JSON.parse(data);
-                } catch {
-                    return data;
+            if (data !== null && data !== undefined) {
+                cacheStats.hits++;
+                if (typeof data === "string") {
+                    try {
+                        return JSON.parse(data);
+                    } catch {
+                        return data;
+                    }
                 }
+                return data;
             }
-            return data;
         }
     } catch (err) {
-        console.warn(`Upstash getCache error for key [${key}]:`, err.message);
+        console.warn(`Upstash getCache error for key [${key}], checking local fallback:`, err.message);
     }
+
+    // Check resilient local memory cache fallback
+    const local = memoryCache.get(key);
+    if (local && local.expiresAt > Date.now()) {
+        cacheStats.hits++;
+        return local.value;
+    }
+
+    cacheStats.misses++;
     return null;
 };
 
 export const setCache = async (key, value, ttlSeconds = 600) => {
+    cacheStats.sets++;
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+
     try {
         if (redis && isConfigured) {
             await redis.set(key, JSON.stringify(value), { ex: ttlSeconds });
@@ -70,9 +107,16 @@ export const setCache = async (key, value, ttlSeconds = 600) => {
     } catch (err) {
         console.warn(`Upstash setCache error for key [${key}]:`, err.message);
     }
+
+    // Also populate local memory cache for resilience & instant fallback
+    cleanupMemoryCache();
+    memoryCache.set(key, { value, expiresAt });
 };
 
 export const deleteCache = async (key) => {
+    cacheStats.invalidations++;
+    memoryCache.delete(key);
+
     try {
         if (redis && isConfigured) {
             await redis.del(key);
@@ -83,6 +127,18 @@ export const deleteCache = async (key) => {
 };
 
 export const deleteCachePattern = async (pattern) => {
+    cacheStats.invalidations++;
+
+    // Invalidate matching keys in local memory cache
+    try {
+        const regexPattern = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
+        for (const k of memoryCache.keys()) {
+            if (regexPattern.test(k)) {
+                memoryCache.delete(k);
+            }
+        }
+    } catch (_) {}
+
     try {
         if (redis && isConfigured) {
             const keys = await redis.keys(pattern);
@@ -93,6 +149,17 @@ export const deleteCachePattern = async (pattern) => {
     } catch (err) {
         console.warn(`Upstash deleteCachePattern error for pattern [${pattern}]:`, err.message);
     }
+};
+
+export const getCacheStats = () => {
+    const total = cacheStats.hits + cacheStats.misses;
+    const hitRate = total > 0 ? `${((cacheStats.hits / total) * 100).toFixed(1)}%` : "N/A";
+    return {
+        ...cacheStats,
+        hitRate,
+        memoryCacheSize: memoryCache.size,
+        redisConnected: Boolean(redis && isConfigured),
+    };
 };
 
 // In-Memory Lock Fallback Map (for offline/direct DB mode or local resiliency)
