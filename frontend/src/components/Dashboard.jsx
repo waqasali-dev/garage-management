@@ -13,6 +13,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import StyledLoading from './StyledLoading';
+import { useCurrency } from '../context/CurrencyContext';
 import './css/Dashboard.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -38,6 +39,7 @@ const getStatusBadge = (status) => {
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { formatCurrency } = useCurrency();
     const searchInputRef = useRef(null);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -454,7 +456,7 @@ export default function Dashboard() {
                                                         <span className="bay-pill font-mono">📍 {wo.bay_assigned}</span>
                                                     )}
                                                     <span className="cost-val font-mono">
-                                                        ${parseFloat(wo.total_cost || wo.estimated_cost || 0).toFixed(2)}
+                                                        {formatCurrency(wo.total_cost || wo.estimated_cost || 0)}
                                                     </span>
                                                     <span className="date-sub font-mono">{dateStr}</span>
                                                     <button

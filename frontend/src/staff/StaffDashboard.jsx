@@ -11,16 +11,18 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import HandymanIcon from '@mui/icons-material/Handyman';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import StarIcon from '@mui/icons-material/Star';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import HandymanIcon from '@mui/icons-material/Handyman';
+import { useCurrency } from '../context/CurrencyContext';
 import './StaffDashboard.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
 export default function StaffDashboard() {
     const navigate = useNavigate();
+    const { formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [workOrders, setWorkOrders] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -349,7 +351,7 @@ export default function StaffDashboard() {
                                             <div className="meta-cost-group">
                                                 <span className="cost-label">TOTAL COST</span>
                                                 <span className="cost-val font-mono">
-                                                    ${parseFloat(order.total_cost || 0).toFixed(2)}
+                                                    {formatCurrency(order.total_cost || 0)}
                                                 </span>
                                             </div>
 

@@ -13,6 +13,7 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import CloseIcon from '@mui/icons-material/Close';
 import './CarServiceHistory.css';
 import { API_BASE_URL } from '../config/api';
+import { useCurrency } from '../context/CurrencyContext';
 
 const MEDIA_TYPE_META = {
     vehicle_condition: {
@@ -40,6 +41,7 @@ const MEDIA_TYPE_META = {
 export default function CarServiceHistory() {
     const { vin: paramVin } = useParams();
     const navigate = useNavigate();
+    const { formatCurrency, taxPercentage } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const [vinInput, setVinInput] = useState(paramVin ? decodeURIComponent(paramVin).toUpperCase() : '');
@@ -326,9 +328,9 @@ export default function CarServiceHistory() {
                                                                                         : (item.description || 'Mechanic Labor Service')}
                                                                                 </td>
                                                                                 <td>{parseFloat(item.quantity || 1).toFixed(item.item_type === 'part' ? 0 : 1)}</td>
-                                                                                <td>${parseFloat(item.unit_price || 0).toFixed(2)}</td>
+                                                                                <td>{formatCurrency(item.unit_price || 0)}</td>
                                                                                 <td style={{ textAlign: 'right', fontWeight: '700' }}>
-                                                                                    ${parseFloat(item.total_price || 0).toFixed(2)}
+                                                                                    {formatCurrency(item.total_price || 0)}
                                                                                 </td>
                                                                             </tr>
                                                                         ))}
@@ -386,8 +388,8 @@ export default function CarServiceHistory() {
                                                             </div>
 
                                                             <div className="t-cost-total">
-                                                                <span>TOTAL SERVICE INVOICE (INCL. TAX): </span>
-                                                                <span>${parseFloat(wo.total_with_tax || (parseFloat(wo.total_cost || wo.estimated_cost || 0) * 1.05)).toFixed(2)}</span>
+                                                                <span>TOTAL SERVICE INVOICE (INCL. {taxPercentage}% TAX): </span>
+                                                                <span>{formatCurrency(wo.total_with_tax || (parseFloat(wo.total_cost || wo.estimated_cost || 0) * (1 + (taxPercentage / 100))))}</span>
                                                             </div>
                                                         </div>
                                                     </article>

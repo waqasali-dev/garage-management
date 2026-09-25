@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
 import './css/Sidebar.css';
 
 const getInitials = (name) => {
@@ -13,6 +14,7 @@ const getInitials = (name) => {
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
     const { user, role, isAdmin, isStaff, isOwner, logout } = useAuth();
+    const { openSettingsModal } = useCurrency();
 
     const handleLogout = () => {
         logout();
@@ -81,6 +83,19 @@ export default function Sidebar({ isOpen, onClose }) {
                             {renderNavItem('/audit-log', 'assessment', 'Audit Log', null, true)}
                             {renderNavItem('/users', 'admin_panel_settings', 'Users & Roles', null, true)}
                             {renderNavItem('/ai-reports', 'auto_awesome', 'AI Reports & Chat', 'AI', true, { color: '#ffd85f', fontWeight: '700' })}
+                            <button
+                                type="button"
+                                className="nav-item"
+                                onClick={() => {
+                                    if (onClose) onClose();
+                                    openSettingsModal();
+                                }}
+                                title="Configure workshop tax rate and currency"
+                                style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                            >
+                                <span className="material-symbols-outlined">settings</span>
+                                <span className="nav-label">Workshop Settings</span>
+                            </button>
                         </>
                     )}
 

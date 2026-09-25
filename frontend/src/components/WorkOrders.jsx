@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import StyledLoading from './StyledLoading';
+import { useCurrency } from '../context/CurrencyContext';
 import './css/WorkOrders.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -34,6 +35,7 @@ const getInitials = (name) => {
 
 export default function WorkOrders() {
     const navigate = useNavigate();
+    const { currency, formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [workOrders, setWorkOrders] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -354,7 +356,7 @@ export default function WorkOrders() {
                                             <th>Status</th>
                                             <th>Lead Tech</th>
                                             <th>Bay</th>
-                                            <th>Total Cost</th>
+                                            <th>Total Cost ({currency.code || currency.symbol})</th>
                                             <th>Date In</th>
                                             <th className="text-right">Action</th>
                                         </tr>
@@ -451,7 +453,7 @@ export default function WorkOrders() {
                                                             {order.bay_assigned || '--'}
                                                         </td>
                                                         <td className="font-mono" style={{ color: 'var(--accent-yellow)', fontWeight: 700 }}>
-                                                            ${parseFloat(order.total_cost || order.estimated_cost || 0).toFixed(2)}
+                                                            {formatCurrency(order.total_cost || order.estimated_cost || 0)}
                                                         </td>
                                                         <td className="text-muted font-mono" style={{ fontSize: '11px' }}>
                                                             {formattedDate}

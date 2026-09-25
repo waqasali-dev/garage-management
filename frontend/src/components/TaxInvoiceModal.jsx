@@ -4,16 +4,18 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
 import './css/TaxInvoiceModal.css';
 
 export default function TaxInvoiceModal({ invoice, onClose }) {
     const { isOwner } = useAuth();
+    const { currency, taxPercentage: defaultTaxRate } = useCurrency();
     const [copied, setCopied] = useState(false);
     const [taxPercentage, setTaxPercentage] = useState(() => {
         if (invoice?.tax_percentage !== undefined && invoice?.tax_percentage !== null) {
-            return parseFloat(invoice.tax_percentage) || 0;
+            return parseFloat(invoice.tax_percentage);
         }
-        return 5; // Default is 5%
+        return defaultTaxRate !== undefined ? defaultTaxRate : 5;
     });
 
     if (!invoice) return null;
@@ -49,6 +51,8 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
 
     // Calculate line items breakdown with customizable VAT rate (Default 5%)
     // Base unit price is exclusive of tax; Tax is generated ON TOP of the base price.
+    const currDecimals = currency?.decimals !== undefined ? currency.decimals : 2;
+    const currSymbol = currency?.symbol || currency?.code || '$';
     const currentTaxRate = (parseFloat(taxPercentage) || 0) / 100;
     let totalExclVatSum = 0;
     let totalVatSum = 0;
@@ -76,16 +80,16 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
             index: index + 1,
             description: item.description || item.part_name || 'Vehicle Service',
             qty: qty,
-            unitPrice: unitPriceBase.toFixed(3),
-            amountExcl: lineBase.toFixed(3),
-            vat: lineVat.toFixed(3),
-            amountTotal: lineTotal.toFixed(3),
+            unitPrice: unitPriceBase.toFixed(currDecimals),
+            amountExcl: lineBase.toFixed(currDecimals),
+            vat: lineVat.toFixed(currDecimals),
+            amountTotal: lineTotal.toFixed(currDecimals),
         };
     });
 
     const isPaid = invoice.status === 'paid';
-    const paidAmount = isPaid ? totalInclVatSum.toFixed(3) : '0.000';
-    const outstandingAmount = isPaid ? '0.000' : totalInclVatSum.toFixed(3);
+    const paidAmount = isPaid ? totalInclVatSum.toFixed(currDecimals) : (0).toFixed(currDecimals);
+    const outstandingAmount = isPaid ? (0).toFixed(currDecimals) : totalInclVatSum.toFixed(currDecimals);
 
     const handleCopySummary = () => {
         const text = `Official Tax Invoice #${invoiceId}
@@ -93,7 +97,7 @@ Date: ${formattedDate}
 Customer: ${ownerName} (${ownerPhone})
 Vehicle: ${vehicleModel} [Plate: ${vehiclePlate} | VIN: ${vehicleVin}]
 VAT Rate: ${(parseFloat(taxPercentage) || 0)}%
-Total Amount: OMR ${totalInclVatSum.toFixed(3)} (${isPaid ? 'PAID IN FULL' : 'PAYMENT DUE: OMR ' + outstandingAmount})
+Total Amount: ${currSymbol} ${totalInclVatSum.toFixed(currDecimals)} (${isPaid ? 'PAID IN FULL' : 'PAYMENT DUE: ' + currSymbol + ' ' + outstandingAmount})
 Precision Garage Workshop Management System`;
         navigator.clipboard.writeText(text);
         setCopied(true);
@@ -114,7 +118,7 @@ Precision Garage Workshop Management System`;
                             </div>
                             <div className="toolbar-sub-badges">
                                 <span className="invoice-id-pill font-mono">{invoiceId}</span>
-                                <span className="currency-pill">OMR Standard</span>
+                                <span className="currency-pill">{currency?.code || 'USD'} Standard</span>
                             </div>
                         </div>
 
@@ -312,9 +316,9 @@ Precision Garage Workshop Management System`;
                                     <td colSpan="2"></td>
                                     <td className="col-center">{totalQtySum}</td>
                                     <td></td>
-                                    <td className="col-right">{totalExclVatSum.toFixed(3)}</td>
-                                    <td className="col-right">{totalVatSum.toFixed(3)}</td>
-                                    <td className="col-right">{totalInclVatSum.toFixed(3)}</td>
+                                    <td className="col-right">{totalExclVatSum.toFixed(currDecimals)}</td>
+                                    <td className="col-right">{totalVatSum.toFixed(currDecimals)}</td>
+                                    <td className="col-right">{totalInclVatSum.toFixed(currDecimals)}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -325,15 +329,15 @@ Precision Garage Workshop Management System`;
                         <div className="invoice-totals-box">
                             <div className="totals-line-row">
                                 <span>Sub Total</span>
-                                <span>{totalExclVatSum.toFixed(3)}</span>
+                                <span>{totalExclVatSum.toFixed(currDecimals)}</span>
                             </div>
                             <div className="totals-line-row">
                                 <span>VAT ({parseFloat(taxPercentage) || 0}%)</span>
-                                <span>{totalVatSum.toFixed(3)}</span>
+                                <span>{totalVatSum.toFixed(currDecimals)}</span>
                             </div>
                             <div className="totals-grand-bar">
-                                <span>Grand Total (OMR)</span>
-                                <span>{totalInclVatSum.toFixed(3)}</span>
+                                <span>Grand Total ({currency?.code || currSymbol})</span>
+                                <span>{totalInclVatSum.toFixed(currDecimals)}</span>
                             </div>
                             <div className="totals-line-row" style={{ marginTop: '4px' }}>
                                 <span>Paid Amount</span>

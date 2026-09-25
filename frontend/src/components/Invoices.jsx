@@ -9,17 +9,24 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
+import WorkshopSettingsModal from './WorkshopSettingsModal';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
 export default function Invoices() {
     const { user, isOwner, isAdmin } = useAuth();
+    const { currency, taxPercentage, formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [invoicesList, setInvoicesList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+
+    // Workshop Settings Modal (Admin)
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     // Selected Invoice for PDF Modal
     const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -160,7 +167,7 @@ export default function Invoices() {
                             <p className="header-subtitle">
                                 {isOwner
                                     ? 'Review your official workshop tax invoices, payments, and PDF receipts.'
-                                    : 'Official billing records, tax calculations (5% VAT), and printable PDF statements.'}
+                                    : `Official billing records, tax calculations (${taxPercentage}% VAT), and printable PDF statements.`}
                             </p>
                         </div>
                     </div>
@@ -177,6 +184,20 @@ export default function Invoices() {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
+                        )}
+
+                        {/* Admin Tax & Currency Configuration Trigger */}
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="settings-trigger-btn"
+                                onClick={() => setIsSettingsOpen(true)}
+                                title="Configure workshop tax percentage & currency type"
+                            >
+                                <SettingsIcon fontSize="small" />
+                                <span className="hide-mobile">Tax & Currency</span>
+                                <span className="settings-pill-badge">{taxPercentage}% | {currency.code}</span>
+                            </button>
                         )}
 
                         <button className="icon-btn" onClick={fetchInvoices} title="Refresh Invoices">
@@ -246,7 +267,7 @@ export default function Invoices() {
                                         </span>
                                         <AccessTimeIcon className="text-warning" />
                                     </div>
-                                    <span className="kpi-value font-mono">${totalPending.toFixed(2)}</span>
+                                    <span className="kpi-value font-mono">{formatCurrency(totalPending)}</span>
                                     <span className="kpi-subtext text-warning font-mono">
                                         {pendingCount} Invoices
                                     </span>
@@ -259,7 +280,7 @@ export default function Invoices() {
                                         </span>
                                         <CheckCircleIcon className="text-success" />
                                     </div>
-                                    <span className="kpi-value font-mono">${totalCollected.toFixed(2)}</span>
+                                    <span className="kpi-value font-mono">{formatCurrency(totalCollected)}</span>
                                     <span className="kpi-subtext text-success font-mono">
                                         Settled Invoices
                                     </span>
@@ -272,7 +293,7 @@ export default function Invoices() {
                                         </span>
                                         <WarningAmberIcon className="text-error" />
                                     </div>
-                                    <span className="kpi-value font-mono">${totalOverdue.toFixed(2)}</span>
+                                    <span className="kpi-value font-mono">{formatCurrency(totalOverdue)}</span>
                                     <span className="kpi-subtext text-error font-mono font-bold">
                                         {overdueCount} Action Required
                                     </span>
@@ -291,8 +312,8 @@ export default function Invoices() {
                                             {!isOwner && <th>Owner / Customer</th>}
                                             <th>Vehicle [Plate]</th>
                                             <th>Subtotal</th>
-                                            <th>VAT (5%)</th>
-                                            <th>Total (OMR/$)</th>
+                                            <th>VAT ({taxPercentage}%)</th>
+                                            <th>TOTAL ({currency.code || currency.symbol})</th>
                                             <th>Date Issued</th>
                                             <th>Status</th>
                                             <th className="text-right">Actions</th>
@@ -348,10 +369,10 @@ export default function Invoices() {
                                                             🚗 {inv.license_plate}
                                                         </div>
                                                     </td>
-                                                    <td className="font-mono">${parseFloat(inv.subtotal || 0).toFixed(2)}</td>
-                                                    <td className="font-mono text-muted">${parseFloat(inv.tax_amount || 0).toFixed(2)}</td>
+                                                    <td className="font-mono">{formatCurrency(inv.subtotal)}</td>
+                                                    <td className="font-mono text-muted">{formatCurrency(inv.tax_amount)}</td>
                                                     <td className="font-mono amount-text" style={{ color: 'var(--accent-yellow)', fontWeight: 800 }}>
-                                                        ${parseFloat(inv.total_amount || 0).toFixed(2)}
+                                                        {formatCurrency(inv.total_amount)}
                                                     </td>
                                                     <td className="text-muted font-mono">{inv.date_issued}</td>
                                                     <td onClick={(e) => e.stopPropagation()}>
@@ -423,6 +444,15 @@ export default function Invoices() {
                     onClose={() => setIsPdfModalOpen(false)}
                 />
             )}
+
+            {/* Admin Workshop Billing & Currency Settings Modal */}
+            <WorkshopSettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                onSaved={() => {
+                    fetchInvoices();
+                }}
+            />
         </div>
     );
 }

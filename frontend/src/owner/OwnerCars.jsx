@@ -9,11 +9,13 @@ import MenuIcon from '@mui/icons-material/Menu';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
 import './OwnerCars.css';
 import { API_BASE_URL } from '../config/api';
 
 export default function OwnerCars() {
     const { user } = useAuth();
+    const { formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [vehicles, setVehicles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -174,7 +176,7 @@ export default function OwnerCars() {
                                                 <div className="v-metric-item">
                                                     <span className="v-metric-lbl">Total Spent</span>
                                                     <span className="v-metric-val" style={{ color: '#ffd85f' }}>
-                                                        ${parseFloat(vehicle.total_spent || 0).toFixed(2)}
+                                                        {formatCurrency(vehicle.total_spent || 0)}
                                                     </span>
                                                 </div>
                                                 <div className="v-metric-item">

@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS invoice_data (
     work_order_id VARCHAR(30) UNIQUE NOT NULL REFERENCES work_order_data(work_order_id) ON DELETE RESTRICT,
     owner_id VARCHAR(30) NOT NULL REFERENCES car_owners(owner_id) ON DELETE RESTRICT,
     subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    tax_percentage NUMERIC(5, 2) NOT NULL DEFAULT 5.00,
     tax_amount NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
     total_amount NUMERIC(10, 2) GENERATED ALWAYS AS (subtotal + tax_amount) STORED,
     status invoice_status NOT NULL DEFAULT 'pending',
@@ -265,6 +266,18 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_task_id_format CHECK (task_id ~ '^TSK-\d{4}-\d{4}$')
+);
+
+-- Workshop & System Settings
+CREATE TABLE IF NOT EXISTS workshop_settings (
+    id INT PRIMARY KEY DEFAULT 1,
+    tax_percentage NUMERIC(5, 2) NOT NULL DEFAULT 5.00,
+    currency_code VARCHAR(10) NOT NULL DEFAULT 'USD',
+    currency_symbol VARCHAR(10) NOT NULL DEFAULT '$',
+    currency_decimals INT NOT NULL DEFAULT 2,
+    workshop_name VARCHAR(100) DEFAULT 'Precision Garage',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_single_settings CHECK (id = 1)
 );
 
 -- ============================================

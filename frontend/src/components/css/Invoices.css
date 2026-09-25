@@ -594,3 +594,37 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Settings Trigger in Invoices Header */
+.settings-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 216, 95, 0.1);
+    border: 1px solid rgba(255, 216, 95, 0.3);
+    color: var(--accent-yellow);
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.settings-trigger-btn:hover {
+    background: rgba(255, 216, 95, 0.2);
+    border-color: var(--accent-yellow);
+    box-shadow: 0 0 14px rgba(255, 216, 95, 0.25);
+    transform: translateY(-1px);
+}
+
+.settings-pill-badge {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    color: #ffffff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    letter-spacing: 0.3px;
+}

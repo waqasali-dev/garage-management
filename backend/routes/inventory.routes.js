@@ -32,6 +32,17 @@ export const handleGetInventory = async (req, res) => {
         `;
         const itemsResult = await pool.query(itemsQuery);
 
+        // 2.5 Fetch active currency settings
+        let currSymbol = "$";
+        try {
+            const sRes = await pool.query("SELECT currency_symbol FROM workshop_settings WHERE id = 1");
+            if (sRes.rows.length > 0 && sRes.rows[0].currency_symbol) {
+                currSymbol = sRes.rows[0].currency_symbol;
+            }
+        } catch (e) {}
+
+        const isPrefixChar = ['$', '€', '£', '₹', '¥'].includes(currSymbol);
+
         // 3. Compute statuses and formatted currency
         const formattedItems = itemsResult.rows.map((item) => {
             const stock = parseInt(item.stock, 10) || 0;
@@ -50,6 +61,9 @@ export const handleGetInventory = async (req, res) => {
                 statusType = "warning";
             }
 
+            const formattedUnitCost = isPrefixChar ? `${currSymbol}${unitCostNum.toFixed(2)}` : `${currSymbol} ${unitCostNum.toFixed(2)}`;
+            const formattedSellingPrice = isPrefixChar ? `${currSymbol}${sellingPriceNum.toFixed(2)}` : `${currSymbol} ${sellingPriceNum.toFixed(2)}`;
+
             return {
                 part_id: item.part_id,
                 sku: item.sku,
@@ -61,8 +75,8 @@ export const handleGetInventory = async (req, res) => {
                 reorder_threshold: threshold,
                 unit_cost: unitCostNum,
                 selling_price: sellingPriceNum,
-                unitCost: `$${unitCostNum.toFixed(2)}`,
-                sellingPrice: `$${sellingPriceNum.toFixed(2)}`,
+                unitCost: formattedUnitCost,
+                sellingPrice: formattedSellingPrice,
                 status: status,
                 statusType: statusType,
                 created_at: item.created_at,
@@ -84,8 +98,12 @@ export const handleGetInventory = async (req, res) => {
             if (it.statusType === "error") outOfStockCount++;
         });
 
+        const formattedTotalVal = isPrefixChar 
+            ? `${currSymbol}${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `${currSymbol} ${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
         const kpiStats = {
-            totalValue: `$${totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            totalValue: formattedTotalVal,
             totalValueRaw: totalVal,
             lowStockAlerts: lowStockCount + outOfStockCount,
             lowStockCount,

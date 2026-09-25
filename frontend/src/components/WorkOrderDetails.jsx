@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
 import StyledLoading from './StyledLoading';
+import { useCurrency } from '../context/CurrencyContext';
 import './css/WorkOrderDetails.css';
 import { API_BASE_URL } from '../config/api';
 
@@ -40,6 +41,7 @@ const STATUS_STEPS = [
 export default function WorkOrderDetails() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { taxPercentage, formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [order, setOrder] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -258,7 +260,10 @@ export default function WorkOrderDetails() {
             const res = await fetch(`${API_BASE_URL}/invoices/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ work_order_id: order.work_order_id }),
+                body: JSON.stringify({
+                    work_order_id: order.work_order_id,
+                    tax_percentage: taxPercentage,
+                }),
             });
             const json = await res.json();
             if (res.ok && json.success) {
@@ -749,10 +754,10 @@ export default function WorkOrderDetails() {
                                                                 {parseFloat(item.quantity_or_hours).toFixed(1)}
                                                             </td>
                                                             <td className="text-right font-mono">
-                                                                ${parseFloat(item.unit_price).toFixed(2)}
+                                                                {formatCurrency(item.unit_price)}
                                                             </td>
                                                             <td className="text-right font-mono highlight">
-                                                                ${parseFloat(item.total_price || (item.quantity_or_hours * item.unit_price) || 0).toFixed(2)}
+                                                                {formatCurrency(item.total_price || (item.quantity_or_hours * item.unit_price) || 0)}
                                                             </td>
                                                             <td className="text-right">
                                                                 <button
@@ -773,7 +778,7 @@ export default function WorkOrderDetails() {
                                                     <td colSpan="3"></td>
                                                     <td className="text-right total-label font-mono">Grand Total</td>
                                                     <td className="text-right total-amount font-mono" colSpan="2">
-                                                        ${total.toFixed(2)}
+                                                        {formatCurrency(total)}
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -1012,8 +1017,9 @@ export default function WorkOrderDetails() {
                     invoice={invoiceData || {
                         ...order,
                         subtotal: total,
-                        total_amount: total * 1.05,
-                        tax_amount: total * 0.05,
+                        tax_percentage: taxPercentage,
+                        tax_amount: total * (taxPercentage / 100),
+                        total_amount: total * (1 + (taxPercentage / 100)),
                         date_issued: new Date().toISOString().split('T')[0],
                     }}
                     onClose={() => setIsInvoiceModalOpen(false)}
@@ -1078,7 +1084,7 @@ export default function WorkOrderDetails() {
                                                 const stockBadge = stock <= 0 ? '🔴 Out of Stock' : stock <= 5 ? `⚠️ Low (${stock})` : `🟢 Stock: ${stock}`;
                                                 return (
                                                     <option key={inv.part_id} value={inv.part_id}>
-                                                        {inv.part_name} ({inv.sku}) • {stockBadge} • ${parseFloat(inv.selling_price).toFixed(2)}
+                                                        {inv.part_name} ({inv.sku}) • {stockBadge} • {formatCurrency(inv.selling_price)}
                                                     </option>
                                                 );
                                             })}
@@ -1376,7 +1382,7 @@ export default function WorkOrderDetails() {
                                     {deleteItemTarget.item_type.toUpperCase()}
                                 </span>
                                 <span style={{ fontFamily: 'monospace', color: 'var(--accent-yellow)', fontWeight: 700, fontSize: '15px' }}>
-                                    ${parseFloat(deleteItemTarget.total_price || (deleteItemTarget.quantity_or_hours * deleteItemTarget.unit_price) || 0).toFixed(2)}
+                                    {formatCurrency(deleteItemTarget.total_price || (deleteItemTarget.quantity_or_hours * deleteItemTarget.unit_price) || 0)}
                                 </span>
                             </div>
                             <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main, #f0f4f1)', marginBottom: '4px' }}>
@@ -1389,7 +1395,7 @@ export default function WorkOrderDetails() {
                             )}
                             <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '16px', marginTop: '6px' }}>
                                 <span>Quantity / Hours: <strong style={{ color: '#fff' }}>{parseFloat(deleteItemTarget.quantity_or_hours).toFixed(2)}</strong></span>
-                                <span>Rate: <strong style={{ color: '#fff' }}>${parseFloat(deleteItemTarget.unit_price).toFixed(2)}</strong></span>
+                                <span>Rate: <strong style={{ color: '#fff' }}>{formatCurrency(deleteItemTarget.unit_price)}</strong></span>
                             </div>
                         </div>
 

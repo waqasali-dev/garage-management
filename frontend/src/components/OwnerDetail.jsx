@@ -14,11 +14,13 @@ import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import './css/OwnerDetail.css';
 import { API_BASE_URL } from '../config/api';
+import { useCurrency } from '../context/CurrencyContext';
 // Local API URL fallback: 'http://localhost:5000/api'
 
 export default function OwnerDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [owner, setOwner] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -308,7 +310,7 @@ export default function OwnerDetail() {
                                                                 {wo.status.replace('_', ' ').toUpperCase()}
                                                             </span>
                                                             <span className="wo-item-cost font-mono text-yellow">
-                                                                ${parseFloat(wo.total_cost || 0).toFixed(2)}
+                                                                {formatCurrency(wo.total_cost || 0)}
                                                             </span>
                                                         </div>
                                                     </div>

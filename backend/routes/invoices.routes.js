@@ -30,6 +30,7 @@ router.get("/", async (req, res) => {
                 i.owner_id,
                 i.subtotal,
                 i.tax_amount,
+                COALESCE(i.tax_percentage, 5.00)::float AS tax_percentage,
                 i.total_amount,
                 i.status,
                 TO_CHAR(i.date_issued, 'YYYY-MM-DD') AS date_issued,
@@ -55,9 +56,25 @@ router.get("/", async (req, res) => {
         `;
         const result = await pool.query(query, queryParams);
 
-        await setCache(cacheKey, result.rows, 300);
+        // Fetch active workshop settings for tax and currency
+        let workshopSettings = { tax_percentage: 5.0, currency_code: 'USD', currency_symbol: '$', currency_decimals: 2 };
+        try {
+            const settingsRes = await pool.query('SELECT tax_percentage::float, currency_code, currency_symbol, currency_decimals FROM workshop_settings WHERE id = 1');
+            if (settingsRes.rows.length > 0) {
+                workshopSettings = settingsRes.rows[0];
+            }
+        } catch (sErr) {
+            console.warn("Could not fetch workshop settings for invoices:", sErr.message);
+        }
 
-        res.json({ success: true, source: "postgres", data: result.rows });
+        const responsePayload = {
+            invoices: result.rows,
+            settings: workshopSettings,
+        };
+
+        await setCache(cacheKey, responsePayload, 300);
+
+        res.json({ success: true, source: "postgres", data: result.rows, settings: workshopSettings });
     } catch (err) {
         console.error("Error fetching invoices list:", err);
         res.status(500).json({ error: "Failed to fetch invoices", details: err.message });
@@ -83,6 +100,7 @@ router.get("/:id", async (req, res) => {
                 i.owner_id,
                 i.subtotal,
                 i.tax_amount,
+                COALESCE(i.tax_percentage, 5.00)::float AS tax_percentage,
                 i.total_amount,
                 i.status,
                 TO_CHAR(i.date_issued, 'YYYY-MM-DD') AS date_issued,
@@ -191,24 +209,43 @@ router.post("/generate", async (req, res) => {
             subtotal = parseFloat(wo.total_cost);
         }
 
-        const taxRateNum = parseFloat(tax_rate) || 0.05;
-        const taxAmount = parseFloat((subtotal * taxRateNum).toFixed(2));
+        // Resolve tax percentage from request body or workshop settings
+        let effectiveTaxPercentage = 5.0;
+        if (req.body.tax_percentage !== undefined && req.body.tax_percentage !== null) {
+            effectiveTaxPercentage = parseFloat(req.body.tax_percentage) || 0;
+        } else if (req.body.tax_rate !== undefined && req.body.tax_rate !== null) {
+            const tr = parseFloat(req.body.tax_rate) || 0;
+            effectiveTaxPercentage = tr <= 1 ? tr * 100 : tr;
+        } else {
+            try {
+                const sRes = await pool.query('SELECT tax_percentage::float FROM workshop_settings WHERE id = 1');
+                if (sRes.rows.length > 0 && sRes.rows[0].tax_percentage !== null) {
+                    effectiveTaxPercentage = parseFloat(sRes.rows[0].tax_percentage) || 5.0;
+                }
+            } catch (e) {
+                effectiveTaxPercentage = 5.0;
+            }
+        }
+
+        const taxAmount = parseFloat((subtotal * (effectiveTaxPercentage / 100.0)).toFixed(2));
         const initialStatus = wo.status === 'completed' ? 'paid' : 'pending';
 
-        // Upsert invoice record
+        // Upsert invoice record including tax_percentage
         const upsertQuery = `
             INSERT INTO invoice_data (
                 work_order_id,
                 owner_id,
                 subtotal,
+                tax_percentage,
                 tax_amount,
                 status,
                 date_issued,
                 date_due
             )
-            VALUES ($1, $2, $3, $4, $5::invoice_status, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
+            VALUES ($1, $2, $3, $4, $5, $6::invoice_status, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
             ON CONFLICT (work_order_id) DO UPDATE SET
                 subtotal = EXCLUDED.subtotal,
+                tax_percentage = EXCLUDED.tax_percentage,
                 tax_amount = EXCLUDED.tax_amount,
                 status = CASE WHEN invoice_data.status = 'paid' THEN 'paid' ELSE EXCLUDED.status END
             RETURNING *;
@@ -217,6 +254,7 @@ router.post("/generate", async (req, res) => {
             wo.work_order_id,
             wo.owner_id,
             subtotal,
+            effectiveTaxPercentage,
             taxAmount,
             initialStatus,
         ]);

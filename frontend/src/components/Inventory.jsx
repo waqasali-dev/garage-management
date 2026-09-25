@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
 import StyledLoading from './StyledLoading';
 import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
 import './css/Inventory.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -31,6 +32,7 @@ const INITIAL_FORM_STATE = {
 
 export default function Inventory() {
     const { isAdmin } = useAuth();
+    const { currency, formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [items, setItems] = useState([]);
     const [kpi, setKpi] = useState({
@@ -401,7 +403,7 @@ export default function Inventory() {
                                         account_balance_wallet
                                     </span>
                                 </div>
-                                <span className="kpi-value">{kpi.totalValue}</span>
+                                <span className="kpi-value">{kpi.totalValueRaw !== undefined ? formatCurrency(kpi.totalValueRaw) : kpi.totalValue}</span>
                                 <div className="kpi-trend text-success">
                                     <span className="material-symbols-outlined">trending_up</span>
                                     <span>Based on live cost</span>
@@ -462,8 +464,8 @@ export default function Inventory() {
                                             <th>Part Name</th>
                                             <th>Category</th>
                                             <th className="text-right">Stock Level</th>
-                                            <th className="text-right">Unit Cost</th>
-                                            <th className="text-right">Selling Price</th>
+                                            <th className="text-right">Unit Cost ({currency.code || currency.symbol})</th>
+                                            <th className="text-right">Selling Price ({currency.code || currency.symbol})</th>
                                             <th className="text-center">Status</th>
                                             {isAdmin ? (
                                                 <th className="text-right">Actions</th>
@@ -517,10 +519,10 @@ export default function Inventory() {
                                                         {item.stock}
                                                     </td>
                                                     <td className="text-right font-mono text-muted">
-                                                        {item.unitCost}
+                                                        {item.unit_cost !== undefined ? formatCurrency(item.unit_cost) : item.unitCost}
                                                     </td>
                                                     <td className="text-right font-mono" style={{ color: 'var(--accent-yellow)', fontWeight: 600 }}>
-                                                        {item.sellingPrice}
+                                                        {item.selling_price !== undefined ? formatCurrency(item.selling_price) : item.sellingPrice}
                                                     </td>
                                                     <td className="text-center">
                                                         <span className={`status-pill pill-${item.statusType}`}>

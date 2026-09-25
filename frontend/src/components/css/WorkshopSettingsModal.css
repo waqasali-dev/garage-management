@@ -1,0 +1,358 @@
+/* Workshop Settings Modal Styling */
+.settings-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 15, 12, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: settingsFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes settingsFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.settings-modal-container {
+    background: #141c16;
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(255, 216, 95, 0.08);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: #e2e8f0;
+}
+
+/* Modal Header */
+.settings-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(255, 216, 95, 0.06) 0%, transparent 100%);
+}
+
+.settings-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.settings-header-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(255, 216, 95, 0.12);
+    border: 1px solid rgba(255, 216, 95, 0.3);
+    color: #ffd85f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-modal-title {
+    font-size: 19px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.settings-modal-subtitle {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 3px 0 0 0;
+}
+
+.settings-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.settings-close-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Modal Body */
+.settings-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Section Card */
+.settings-section-card {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 18px 20px;
+}
+
+.settings-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.settings-section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-section-icon {
+    font-size: 18px;
+    color: #ffd85f;
+}
+
+.settings-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #ffd85f;
+    margin: 0;
+}
+
+.settings-section-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 216, 95, 0.12);
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    color: #ffd85f;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Preset Chips */
+.settings-preset-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.settings-chip-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings-chip-btn:hover {
+    background: rgba(255, 216, 95, 0.1);
+    border-color: rgba(255, 216, 95, 0.3);
+    color: #ffffff;
+}
+
+.settings-chip-btn.active {
+    background: #ffd85f;
+    border-color: #ffd85f;
+    color: #121814;
+    font-weight: 800;
+    box-shadow: 0 0 12px rgba(255, 216, 95, 0.35);
+}
+
+/* Form Row Grid */
+.settings-form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.settings-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.settings-field-group label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.settings-input,
+.settings-select {
+    background: rgba(10, 15, 12, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: #ffffff;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.settings-input:focus,
+.settings-select:focus {
+    border-color: #ffd85f;
+    box-shadow: 0 0 0 2px rgba(255, 216, 95, 0.15);
+}
+
+/* Live Preview Banner */
+.settings-preview-banner {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px dashed rgba(255, 216, 95, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+.settings-preview-label {
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings-preview-value {
+    color: #ffd85f;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+/* Checkbox Row */
+.settings-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.settings-checkbox-row input[type="checkbox"] {
+    accent-color: #ffd85f;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    cursor: pointer;
+}
+
+.settings-checkbox-text {
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.4;
+}
+
+.settings-checkbox-sub {
+    display: block;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* Modal Footer */
+.settings-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(10, 15, 12, 0.5);
+}
+
+.settings-btn-cancel {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #cbd5e1;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.settings-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.settings-btn-save {
+    background: #ffd85f;
+    color: #121814;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 22px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.18s ease;
+    box-shadow: 0 4px 14px rgba(255, 216, 95, 0.25);
+}
+
+.settings-btn-save:hover:not(:disabled) {
+    background: #ffe38e;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(255, 216, 95, 0.35);
+}
+
+.settings-btn-save:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.settings-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(18, 24, 20, 0.3);
+    border-top-color: #121814;
+    border-radius: 50%;
+    animation: settingsSpin 0.7s linear infinite;
+}
+
+@keyframes settingsSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}

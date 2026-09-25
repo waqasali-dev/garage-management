@@ -2,6 +2,8 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { CurrencyProvider, useCurrency } from './context/CurrencyContext';
+import WorkshopSettingsModal from './components/WorkshopSettingsModal';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import StyledLoading from './components/StyledLoading';
@@ -74,12 +76,24 @@ function RootRedirect() {
     return <Navigate to="/dashboard" replace />;
 }
 
+function GlobalSettingsModal() {
+    const { isSettingsModalOpen, closeSettingsModal } = useCurrency();
+    return (
+        <WorkshopSettingsModal
+            isOpen={isSettingsModalOpen}
+            onClose={closeSettingsModal}
+        />
+    );
+}
+
 function App() {
     return (
         <ErrorBoundary>
             <AuthProvider>
                 <NotificationProvider>
-                    <div className="App">
+                    <CurrencyProvider>
+                        <GlobalSettingsModal />
+                        <div className="App">
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
                     {/* Public Login Route */}
@@ -289,6 +303,7 @@ function App() {
                 </Routes>
             </Suspense>
         </div>
+        </CurrencyProvider>
     </NotificationProvider>
 </AuthProvider>
 </ErrorBoundary>

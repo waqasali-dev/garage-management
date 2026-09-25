@@ -25,6 +25,8 @@ import usersRoutes, { handleCreateUser } from "./routes/users.routes.js";
 import invoicesRoutes from "./routes/invoices.routes.js";
 import exportRoutes from "./routes/export.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
+import { migrateSettingsAndTax } from "./migrate_settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -124,6 +126,9 @@ app.use("/api/invoices", invoicesRoutes);
 app.use("/api/export", exportRoutes);
 app.use("/api/ai", aiRoutes);
 
+// Workshop Settings (Tax % and Currency Configuration)
+app.use("/api/settings", settingsRoutes);
+
 // User Management & Admin Provisioning
 app.post("/api/admin/create-user", handleCreateUser);
 app.use("/api/users", usersRoutes);
@@ -136,4 +141,7 @@ app.use(errorHandler);
 
 app.listen(port, () => {
     console.log(`🚀 Precision Garage API Server running on http://localhost:${port}`);
+    migrateSettingsAndTax().catch((err) => {
+        console.warn("⚠️ Automatic settings migration notice:", err.message);
+    });
 });

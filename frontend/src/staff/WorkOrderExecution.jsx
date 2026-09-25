@@ -21,6 +21,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './WorkOrderExecution.css';
 import { API_BASE_URL } from '../config/api';
+import { useCurrency } from '../context/CurrencyContext';
 
 const STATUS_STEPS = [
     { key: 'received', label: '1. RECEIVED', icon: 'pending_actions' },
@@ -70,6 +71,7 @@ const MEDIA_TYPE_META = {
 export default function WorkOrderExecution() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { formatCurrency, currency } = useCurrency();
     const fileInputRef = useRef(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [order, setOrder] = useState(null);
@@ -646,7 +648,7 @@ export default function WorkOrderExecution() {
                                                 <option value="">-- Unassigned Staff --</option>
                                                 {staffList.map((s) => (
                                                     <option key={s.staff_id} value={s.staff_id}>
-                                                        {s.full_name} ({s.role} - ${parseFloat(s.hourly_rate).toFixed(2)}/hr)
+                                                        {s.full_name} ({s.role} - {formatCurrency(s.hourly_rate)}/hr)
                                                     </option>
                                                 ))}
                                             </select>
@@ -738,9 +740,9 @@ export default function WorkOrderExecution() {
                                                                 {item.sku && <div className="item-sku-sub font-mono">SKU: {item.sku}</div>}
                                                             </td>
                                                             <td className="font-mono">{parseFloat(item.quantity_or_hours).toFixed(2)}</td>
-                                                            <td className="font-mono">${parseFloat(item.unit_price).toFixed(2)}</td>
+                                                            <td className="font-mono">{formatCurrency(item.unit_price)}</td>
                                                             <td className="font-mono text-yellow font-bold">
-                                                                ${parseFloat(item.total_price || 0).toFixed(2)}
+                                                                {formatCurrency(item.total_price || 0)}
                                                             </td>
                                                             <td style={{ textAlign: 'right' }}>
                                                                 <button
@@ -770,7 +772,7 @@ export default function WorkOrderExecution() {
                                         <div className="cost-summary-item">
                                             <span className="summary-label">TOTAL PARTS & LABOR:</span>
                                             <span className="summary-val font-mono text-yellow">
-                                                ${parseFloat(order.total_cost || 0).toFixed(2)}
+                                                {formatCurrency(order.total_cost || 0)}
                                             </span>
                                         </div>
                                     </div>
@@ -1005,7 +1007,7 @@ export default function WorkOrderExecution() {
                                                 const stockBadge = stock <= 0 ? '🔴 Out of Stock' : stock <= 5 ? `⚠️ Low (${stock})` : `🟢 Stock: ${stock}`;
                                                 return (
                                                     <option key={inv.part_id} value={inv.part_id}>
-                                                        {inv.part_name} ({inv.sku}) • {stockBadge} • ${parseFloat(inv.selling_price).toFixed(2)}
+                                                        {inv.part_name} ({inv.sku}) • {stockBadge} • {formatCurrency(inv.selling_price)}
                                                     </option>
                                                 );
                                             })}
@@ -1040,7 +1042,7 @@ export default function WorkOrderExecution() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label>UNIT PRICE / RATE ($) *</label>
+                                    <label>UNIT PRICE / RATE ({currency.code || currency.symbol}) *</label>
                                     <input
                                         type="number"
                                         step="any"
@@ -1523,7 +1525,7 @@ export default function WorkOrderExecution() {
                                     {deleteItemTarget.item_type.toUpperCase()}
                                 </span>
                                 <span style={{ fontFamily: 'monospace', color: 'var(--accent-yellow)', fontWeight: 700, fontSize: '15px' }}>
-                                    ${parseFloat(deleteItemTarget.total_price || 0).toFixed(2)}
+                                    {formatCurrency(deleteItemTarget.total_price || 0)}
                                 </span>
                             </div>
                             <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main, #f0f4f1)', marginBottom: '4px' }}>
@@ -1536,7 +1538,7 @@ export default function WorkOrderExecution() {
                             )}
                             <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '16px', marginTop: '6px' }}>
                                 <span>Quantity / Hours: <strong style={{ color: '#fff' }}>{parseFloat(deleteItemTarget.quantity_or_hours).toFixed(2)}</strong></span>
-                                <span>Rate: <strong style={{ color: '#fff' }}>${parseFloat(deleteItemTarget.unit_price).toFixed(2)}</strong></span>
+                                <span>Rate: <strong style={{ color: '#fff' }}>{formatCurrency(deleteItemTarget.unit_price)}</strong></span>
                             </div>
                         </div>
 
