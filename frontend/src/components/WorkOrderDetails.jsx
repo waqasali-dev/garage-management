@@ -514,7 +514,7 @@ export default function WorkOrderDetails() {
                                         title="Create official Tax Invoice for this vehicle"
                                     >
                                         <span className="material-symbols-outlined">receipt_long</span>
-                                        <span>{isGeneratingInvoice ? 'Creating Invoice...' : '➕ Create Tax Invoice'}</span>
+                                        <span>{isGeneratingInvoice ? 'Creating Invoice...' : 'Create Tax Invoice'}</span>
                                     </button>
                                 )}
 
@@ -527,7 +527,7 @@ export default function WorkOrderDetails() {
                                         title="View & Print official Tax Invoice"
                                     >
                                         <span className="material-symbols-outlined">receipt_long</span>
-                                        <span>📄 View Tax Invoice</span>
+                                        <span>View Tax Invoice</span>
                                     </button>
                                 )}
 
@@ -690,7 +690,8 @@ export default function WorkOrderDetails() {
                                                     setIsAddItemModalOpen(true);
                                                 }}
                                             >
-                                                <span className="material-symbols-outlined">add</span> Add Part
+                                                <span className="material-symbols-outlined">add</span>
+                                                <span>Add Part</span>
                                             </button>
                                             <button
                                                 type="button"
@@ -701,7 +702,8 @@ export default function WorkOrderDetails() {
                                                     setIsAddItemModalOpen(true);
                                                 }}
                                             >
-                                                <span className="material-symbols-outlined">handyman</span> Add Labor
+                                                <span className="material-symbols-outlined">handyman</span>
+                                                <span>Add Labor</span>
                                             </button>
                                         </div>
                                     </div>

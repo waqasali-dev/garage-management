@@ -178,12 +178,14 @@
 
 .page-actions {
     display: flex;
+    align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .secondary-btn {
     height: 40px;
-    padding: 0 18px;
+    padding: 0 16px;
     background-color: var(--bg-olive-card);
     border: 1px solid var(--border-glass);
     color: var(--text-main);
@@ -191,15 +193,24 @@
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    vertical-align: middle;
+    line-height: 1;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
 }
 
 .secondary-btn:hover {
     background-color: rgba(255, 216, 95, 0.08);
+    border-color: rgba(255, 216, 95, 0.3);
 }
 
 .primary-btn {
     height: 40px;
-    padding: 0 20px;
+    padding: 0 18px;
     background-color: var(--accent-yellow);
     color: var(--bg-olive-dark);
     border: none;
@@ -207,6 +218,34 @@
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    vertical-align: middle;
+    line-height: 1;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+}
+
+.primary-btn .material-symbols-outlined,
+.secondary-btn .material-symbols-outlined {
+    font-size: 19px;
+    width: 19px;
+    height: 19px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.primary-btn > span,
+.secondary-btn > span {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
 }
 
 .primary-btn:active {
@@ -377,10 +416,29 @@
     border-radius: 6px;
     font-size: 12px;
     font-family: 'JetBrains Mono', monospace;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 6px;
     cursor: pointer;
+    vertical-align: middle;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.secondary-btn-sm:hover {
+    border-color: var(--accent-yellow);
+    color: var(--accent-yellow);
+}
+
+.secondary-btn-sm .material-symbols-outlined {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 .primary-btn-sm {
@@ -394,6 +452,23 @@
     font-family: 'JetBrains Mono', monospace;
     font-weight: 700;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    vertical-align: middle;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.primary-btn-sm .material-symbols-outlined {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 .table-responsive {

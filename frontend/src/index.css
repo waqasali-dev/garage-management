@@ -83,3 +83,196 @@ code {
   }
 }
 
+/* ========================================================================== */
+/* UNIVERSAL TEXT & WIDGET / ICON ALIGNMENT                                  */
+/* Ensures icons, text, buttons, and badges align seamlessly across the app  */
+/* ========================================================================== */
+
+/* All Material Symbols & SVG icons - exact vertical optical centering */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Material UI and general SVG icons */
+svg.MuiSvgIcon-root,
+.MuiSvgIcon-root {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  flex-shrink: 0;
+}
+
+/* Universal Button Widget & Text Alignment */
+button,
+.btn,
+.primary-btn,
+.secondary-btn,
+.danger-btn,
+.action-btn,
+.tab-btn,
+.filter-btn,
+.see-full-log-btn,
+.back-btn,
+.mobile-menu-btn,
+.icon-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  box-sizing: border-box;
+}
+
+/* Standard button icons */
+button > .material-symbols-outlined,
+.btn > .material-symbols-outlined,
+.primary-btn > .material-symbols-outlined,
+.secondary-btn > .material-symbols-outlined,
+.danger-btn > .material-symbols-outlined,
+.action-btn > .material-symbols-outlined,
+.tab-btn > .material-symbols-outlined,
+.filter-btn > .material-symbols-outlined,
+.see-full-log-btn > .material-symbols-outlined,
+.back-btn > .material-symbols-outlined {
+  font-size: 19px !important;
+  width: 19px !important;
+  height: 19px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  flex-shrink: 0;
+  margin: 0 !important;
+}
+
+/* MUI icons inside buttons */
+button > .MuiSvgIcon-root,
+.btn > .MuiSvgIcon-root,
+.primary-btn > .MuiSvgIcon-root,
+.secondary-btn > .MuiSvgIcon-root,
+.danger-btn > .MuiSvgIcon-root,
+.action-btn > .MuiSvgIcon-root,
+.tab-btn > .MuiSvgIcon-root {
+  font-size: 19px !important;
+  width: 19px !important;
+  height: 19px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  flex-shrink: 0;
+  margin: 0 !important;
+}
+
+/* Button direct text spans */
+button > span:not(.material-symbols-outlined),
+.btn > span:not(.material-symbols-outlined),
+.primary-btn > span:not(.material-symbols-outlined),
+.secondary-btn > span:not(.material-symbols-outlined),
+.danger-btn > span:not(.material-symbols-outlined),
+.action-btn > span:not(.material-symbols-outlined) {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* Small button variants */
+.primary-btn-sm,
+.secondary-btn-sm,
+.secondary-btn-small,
+.btn-sm {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+}
+
+.primary-btn-sm > .material-symbols-outlined,
+.secondary-btn-sm > .material-symbols-outlined,
+.secondary-btn-small > .material-symbols-outlined,
+.btn-sm > .material-symbols-outlined,
+.primary-btn-sm > .MuiSvgIcon-root,
+.secondary-btn-sm > .MuiSvgIcon-root,
+.secondary-btn-small > .MuiSvgIcon-root {
+  font-size: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  line-height: 1 !important;
+}
+
+/* Universal Badges, Status Pills, and Tags */
+.badge,
+.status-badge,
+.tag,
+.status-pill,
+.meta-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  box-sizing: border-box;
+}
+
+.badge > .material-symbols-outlined,
+.status-badge > .material-symbols-outlined,
+.tag > .material-symbols-outlined,
+.status-pill > .material-symbols-outlined,
+.meta-pill > .material-symbols-outlined {
+  font-size: 14px !important;
+  width: 14px !important;
+  height: 14px !important;
+  line-height: 1 !important;
+}
+
+.badge > .MuiSvgIcon-root,
+.status-badge > .MuiSvgIcon-root {
+  font-size: 14px !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Search bars & Input widget alignments */
+.search-input-wrapper,
+.search-box,
+.search-group .search-input-wrapper {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.search-input-wrapper input,
+.search-box input {
+  vertical-align: middle;
+}
+
+.search-input-wrapper .search-icon,
+.search-box .search-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+}
+
