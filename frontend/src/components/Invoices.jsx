@@ -319,7 +319,7 @@ export default function Invoices() {
                                             {!isOwner && <th>Owner / Customer</th>}
                                             <th>Vehicle [Plate]</th>
                                             <th>Subtotal</th>
-                                            <th>VAT ({taxPercentage}%)</th>
+                                            <th>VAT</th>
                                             <th>TOTAL ({currency.code || currency.symbol})</th>
                                             <th>Date Issued</th>
                                             <th>Status</th>
