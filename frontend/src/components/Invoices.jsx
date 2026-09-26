@@ -377,7 +377,32 @@ export default function Invoices() {
                                                         </div>
                                                     </td>
                                                     <td className="font-mono">{formatCurrency(inv.subtotal)}</td>
-                                                    <td className="font-mono text-muted">{formatCurrency(inv.tax_amount)}</td>
+                                                    <td className="font-mono">
+                                                        <div style={{ fontWeight: 600 }}>{formatCurrency(inv.tax_amount)}</div>
+                                                        <span
+                                                            className="inv-vat-rate-tag"
+                                                            style={{
+                                                                display: 'inline-block',
+                                                                fontSize: '10px',
+                                                                padding: '1px 6px',
+                                                                borderRadius: '4px',
+                                                                marginTop: '3px',
+                                                                background: parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
+                                                                    ? 'rgba(255, 216, 95, 0.16)'
+                                                                    : 'rgba(255, 255, 255, 0.05)',
+                                                                color: parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
+                                                                    ? 'var(--accent-yellow)'
+                                                                    : 'var(--text-muted)',
+                                                                fontWeight: 700,
+                                                                border: parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
+                                                                    ? '1px solid rgba(255, 216, 95, 0.35)'
+                                                                    : '1px solid rgba(255, 255, 255, 0.08)',
+                                                            }}
+                                                            title={`VAT rate: ${inv.tax_percentage || taxPercentage}%`}
+                                                        >
+                                                            {parseFloat(inv.tax_percentage !== undefined && inv.tax_percentage !== null ? inv.tax_percentage : taxPercentage)}% VAT
+                                                        </span>
+                                                    </td>
                                                     <td className="font-mono amount-text" style={{ color: 'var(--accent-yellow)', fontWeight: 800 }}>
                                                         {formatCurrency(inv.total_amount)}
                                                     </td>
@@ -449,6 +474,17 @@ export default function Invoices() {
                 <TaxInvoiceModal
                     invoice={selectedInvoice}
                     onClose={() => setIsPdfModalOpen(false)}
+                    onInvoiceUpdated={(updated) => {
+                        setSelectedInvoice(updated);
+                        setInvoicesList((prev) =>
+                            prev.map((inv) =>
+                                (inv.invoice_id === updated.invoice_id || inv.work_order_id === updated.work_order_id)
+                                    ? { ...inv, ...updated }
+                                    : inv
+                            )
+                        );
+                        fetchInvoices();
+                    }}
                 />
             )}
 

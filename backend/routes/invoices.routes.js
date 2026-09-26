@@ -339,6 +339,137 @@ router.patch("/:id/status", async (req, res) => {
     }
 });
 
+// Helper to update tax percentage on an invoice
+const updateInvoiceTax = async (id, taxVal, res) => {
+    let parsedTax = 5.0;
+    if (taxVal !== undefined && taxVal !== null) {
+        parsedTax = parseFloat(taxVal);
+    }
+    if (isNaN(parsedTax) || parsedTax < 0 || parsedTax > 100) {
+        return res.status(400).json({ error: "Tax percentage must be a valid number between 0 and 100." });
+    }
+    parsedTax = parseFloat(parsedTax.toFixed(2));
+
+    try {
+        const query = `
+            UPDATE invoice_data
+            SET 
+                tax_percentage = $1,
+                tax_amount = ROUND(subtotal * ($1 / 100.0), 2)
+            WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($2))
+               OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($2))
+            RETURNING 
+                invoice_id,
+                work_order_id,
+                owner_id,
+                subtotal,
+                tax_percentage::float,
+                tax_amount,
+                total_amount,
+                status,
+                TO_CHAR(date_issued, 'YYYY-MM-DD') AS date_issued,
+                TO_CHAR(date_due, 'YYYY-MM-DD') AS date_due,
+                TO_CHAR(date_paid, 'YYYY-MM-DD') AS date_paid;
+        `;
+        const result = await pool.query(query, [parsedTax, id.trim()]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        const updated = result.rows[0];
+
+        // Audit log
+        try {
+            await pool.query(`
+                INSERT INTO audit_logs (work_order_id, event_type, description, payload_json)
+                VALUES ($1, 'INVOICE_TAX_UPDATED', $2, $3);
+            `, [
+                updated.work_order_id,
+                `Invoice ${updated.invoice_id} tax rate updated to ${parsedTax}%. Tax: ${updated.tax_amount}, Total: ${updated.total_amount}.`,
+                JSON.stringify({ invoice_id: updated.invoice_id, tax_percentage: parsedTax, tax_amount: updated.tax_amount, total_amount: updated.total_amount }),
+            ]);
+        } catch (auditErr) {
+            console.warn("Notice: Audit log for invoice tax update failed:", auditErr.message);
+        }
+
+        await deleteCachePattern("garage:cache:invoice*");
+        await deleteCachePattern("garage:cache:workorder*");
+        await deleteCachePattern("garage:cache:vehicle*");
+        await deleteCachePattern("garage:cache:owner*");
+
+        return res.json({
+            success: true,
+            message: `Invoice tax updated to ${parsedTax}%. Total amount recalculated.`,
+            data: updated,
+        });
+    } catch (err) {
+        console.error("Error updating invoice tax percentage:", err);
+        return res.status(500).json({ error: "Failed to update invoice tax percentage", details: err.message });
+    }
+};
+
+// PATCH /api/invoices/:id/tax - Update invoice tax percentage
+router.patch("/:id/tax", async (req, res) => {
+    const { id } = req.params;
+    const taxVal = req.body.tax_percentage !== undefined ? req.body.tax_percentage : req.body.tax_rate;
+    return updateInvoiceTax(id, taxVal, res);
+});
+
+// PUT /api/invoices/:id/tax - Alias
+router.put("/:id/tax", async (req, res) => {
+    const { id } = req.params;
+    const taxVal = req.body.tax_percentage !== undefined ? req.body.tax_percentage : req.body.tax_rate;
+    return updateInvoiceTax(id, taxVal, res);
+});
+
+// PATCH /api/invoices/:id - General update (supports tax_percentage and/or status)
+router.patch("/:id", async (req, res) => {
+    const { id } = req.params;
+    const { tax_percentage, tax_rate, status } = req.body;
+
+    if (tax_percentage !== undefined || tax_rate !== undefined) {
+        const taxVal = tax_percentage !== undefined ? tax_percentage : tax_rate;
+        return updateInvoiceTax(id, taxVal, res);
+    }
+
+    if (status !== undefined) {
+        const validStatuses = ['pending', 'paid', 'overdue', 'cancelled'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+        }
+        try {
+            const query = `
+                UPDATE invoice_data
+                SET 
+                    status = $1::invoice_status,
+                    date_paid = CASE WHEN $1::text = 'paid' THEN CURRENT_DATE ELSE NULL END
+                WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($2))
+                   OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($2))
+                RETURNING *;
+            `;
+            const result = await pool.query(query, [status, id.trim()]);
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: "Invoice not found" });
+            }
+            await deleteCachePattern("garage:cache:invoice*");
+            await deleteCachePattern("garage:cache:vehicle*");
+            await deleteCachePattern("garage:cache:owner*");
+            await deleteCachePattern("garage:cache:workorder*");
+            return res.json({
+                success: true,
+                message: `Invoice status updated to ${status}.`,
+                data: result.rows[0],
+            });
+        } catch (err) {
+            console.error("Error updating invoice:", err);
+            return res.status(500).json({ error: "Failed to update invoice", details: err.message });
+        }
+    }
+
+    return res.status(400).json({ error: "No valid fields provided to update (status or tax_percentage required)." });
+});
+
 // DELETE /api/invoices/:id - Delete an invoice
 router.delete("/:id", authenticateToken, requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;

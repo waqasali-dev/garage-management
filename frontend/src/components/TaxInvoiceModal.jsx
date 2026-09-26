@@ -1,22 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PrintIcon from '@mui/icons-material/Print';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import SaveIcon from '@mui/icons-material/Save';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { API_BASE_URL } from '../config/api';
 import './css/TaxInvoiceModal.css';
 
-export default function TaxInvoiceModal({ invoice, onClose }) {
+export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) {
     const { isOwner } = useAuth();
     const { currency, taxPercentage: defaultTaxRate } = useCurrency();
     const [copied, setCopied] = useState(false);
-    const [taxPercentage, setTaxPercentage] = useState(() => {
+
+    // Initial tax rate resolution from invoice or global settings (default 5%)
+    const getInitialTax = () => {
         if (invoice?.tax_percentage !== undefined && invoice?.tax_percentage !== null) {
             return parseFloat(invoice.tax_percentage);
         }
         return defaultTaxRate !== undefined ? defaultTaxRate : 5;
-    });
+    };
+
+    const [taxPercentage, setTaxPercentage] = useState(getInitialTax);
+    const [savedTaxPercentage, setSavedTaxPercentage] = useState(getInitialTax);
+    const [isSavingTax, setIsSavingTax] = useState(false);
+    const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+    const [saveErrorMsg, setSaveErrorMsg] = useState('');
+
+    // Keep state in sync whenever invoice or invoice.tax_percentage changes
+    useEffect(() => {
+        if (invoice) {
+            const tax = invoice.tax_percentage !== undefined && invoice.tax_percentage !== null
+                ? parseFloat(invoice.tax_percentage)
+                : (defaultTaxRate !== undefined ? defaultTaxRate : 5);
+            setTaxPercentage(tax);
+            setSavedTaxPercentage(tax);
+            setSaveSuccessMsg('');
+            setSaveErrorMsg('');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [invoice?.invoice_id, invoice?.work_order_id, invoice?.tax_percentage, defaultTaxRate]);
 
     if (!invoice) return null;
 
@@ -91,6 +115,58 @@ export default function TaxInvoiceModal({ invoice, onClose }) {
     const paidAmount = isPaid ? totalInclVatSum.toFixed(currDecimals) : (0).toFixed(currDecimals);
     const outstandingAmount = isPaid ? (0).toFixed(currDecimals) : totalInclVatSum.toFixed(currDecimals);
 
+    const hasUnsavedTaxChanges = parseFloat(taxPercentage || 0) !== parseFloat(savedTaxPercentage || 0);
+
+    const handleSaveTaxRate = async () => {
+        const targetId = invoice.invoice_id || invoice.work_order_id;
+        if (!targetId) return;
+
+        const numTax = parseFloat(taxPercentage);
+        if (isNaN(numTax) || numTax < 0 || numTax > 100) {
+            setSaveErrorMsg('Tax rate must be between 0% and 100%');
+            setTimeout(() => setSaveErrorMsg(''), 4000);
+            return;
+        }
+
+        setIsSavingTax(true);
+        setSaveErrorMsg('');
+        setSaveSuccessMsg('');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(targetId)}/tax`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tax_percentage: numTax }),
+            });
+            const json = await res.json();
+            if (res.ok && json.success) {
+                setSavedTaxPercentage(numTax);
+                setSaveSuccessMsg(`Saved! Tax rate set to ${numTax}%`);
+                setTimeout(() => setSaveSuccessMsg(''), 4000);
+
+                const updatedInvoice = {
+                    ...invoice,
+                    ...(json.data || {}),
+                    tax_percentage: numTax,
+                    tax_amount: json.data?.tax_amount !== undefined ? json.data.tax_amount : totalVatSum.toFixed(currDecimals),
+                    total_amount: json.data?.total_amount !== undefined ? json.data.total_amount : totalInclVatSum.toFixed(currDecimals),
+                };
+
+                if (onInvoiceUpdated) {
+                    onInvoiceUpdated(updatedInvoice);
+                }
+            } else {
+                setSaveErrorMsg(json.error || 'Failed to save tax rate');
+                setTimeout(() => setSaveErrorMsg(''), 4000);
+            }
+        } catch (err) {
+            setSaveErrorMsg(`Error: ${err.message}`);
+            setTimeout(() => setSaveErrorMsg(''), 4000);
+        } finally {
+            setIsSavingTax(false);
+        }
+    };
+
     const handleCopySummary = () => {
         const text = `Official Tax Invoice #${invoiceId}
 Date: ${formattedDate}
@@ -123,6 +199,18 @@ Precision Garage Workshop Management System`;
                         </div>
 
                         <div className="toolbar-actions">
+                            {!isOwner && hasUnsavedTaxChanges && (
+                                <button
+                                    type="button"
+                                    className="btn-save-invoice-top"
+                                    onClick={handleSaveTaxRate}
+                                    disabled={isSavingTax}
+                                    title="Save modified tax rate to database"
+                                >
+                                    <SaveIcon fontSize="small" />
+                                    <span>{isSavingTax ? 'Saving...' : `Save Tax (${taxPercentage}%)`}</span>
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className="btn-copy-invoice"
@@ -151,7 +239,7 @@ Precision Garage Workshop Management System`;
                         </div>
                     </div>
 
-                    {/* Bottom Strip: Dedicated Tax (VAT) Rate Selector (Staff & Admin Only) */}
+                    {/* Bottom Strip: Dedicated Tax (VAT) Rate Selector & Direct Save Button */}
                     {!isOwner && (
                         <div className="toolbar-tax-strip">
                             <div className="tax-strip-label">
@@ -200,6 +288,42 @@ Precision Garage Workshop Management System`;
                                     />
                                     <span className="tax-percent-symbol">%</span>
                                 </div>
+                            </div>
+
+                            {/* Prominent Save Tax Rate Button */}
+                            <div className="tax-save-action-wrap">
+                                <button
+                                    type="button"
+                                    className={`btn-save-tax-rate ${hasUnsavedTaxChanges ? 'has-unsaved' : 'is-saved'}`}
+                                    onClick={handleSaveTaxRate}
+                                    disabled={isSavingTax}
+                                    title={hasUnsavedTaxChanges ? `Click to save ${taxPercentage}% tax rate to DB` : 'Tax rate is saved'}
+                                >
+                                    {isSavingTax ? (
+                                        <span>Saving...</span>
+                                    ) : hasUnsavedTaxChanges ? (
+                                        <>
+                                            <SaveIcon fontSize="small" />
+                                            <span>Save Tax ({taxPercentage}%)</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckIcon fontSize="small" style={{ color: '#10b981' }} />
+                                            <span>Saved ({savedTaxPercentage}%)</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                {saveSuccessMsg && (
+                                    <span className="tax-save-feedback success-feedback">
+                                        ✓ {saveSuccessMsg}
+                                    </span>
+                                )}
+                                {saveErrorMsg && (
+                                    <span className="tax-save-feedback error-feedback">
+                                        ⚠️ {saveErrorMsg}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     )}

@@ -1023,6 +1023,10 @@ export default function WorkOrderDetails() {
                         date_issued: new Date().toISOString().split('T')[0],
                     }}
                     onClose={() => setIsInvoiceModalOpen(false)}
+                    onInvoiceUpdated={(updated) => {
+                        setInvoiceData(updated);
+                        showNotification(`Invoice tax rate saved: ${updated.tax_percentage}%`, 'success');
+                    }}
                 />
             )}
 

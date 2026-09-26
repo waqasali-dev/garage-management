@@ -267,6 +267,115 @@
     margin-left: 2px;
 }
 
+/* Save Tax Button in Strip */
+.tax-save-action-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+}
+
+.btn-save-tax-rate {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    white-space: nowrap;
+}
+
+.btn-save-tax-rate.has-unsaved {
+    background: #ffd85f;
+    color: #111813;
+    border: 1px solid #ffd85f;
+    box-shadow: 0 0 12px rgba(255, 216, 95, 0.45);
+    animation: tax-btn-pulse 2s infinite ease-in-out;
+}
+
+.btn-save-tax-rate.has-unsaved:hover:not(:disabled) {
+    background: #ffe380;
+    transform: translateY(-1px);
+    box-shadow: 0 0 16px rgba(255, 216, 95, 0.65);
+}
+
+.btn-save-tax-rate.is-saved {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.btn-save-tax-rate.is-saved:hover {
+    background: rgba(16, 185, 129, 0.22);
+}
+
+.btn-save-tax-rate:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-save-invoice-top {
+    background: #ffd85f;
+    color: #111813;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 0 12px rgba(255, 216, 95, 0.35);
+    transition: all 0.2s ease;
+    animation: tax-btn-pulse 2s infinite ease-in-out;
+}
+
+.btn-save-invoice-top:hover:not(:disabled) {
+    background: #ffe380;
+    transform: translateY(-1px);
+    box-shadow: 0 0 16px rgba(255, 216, 95, 0.6);
+}
+
+.tax-save-feedback {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.tax-save-feedback.success-feedback {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.tax-save-feedback.error-feedback {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+@keyframes tax-btn-pulse {
+    0% {
+        box-shadow: 0 0 6px rgba(255, 216, 95, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 16px rgba(255, 216, 95, 0.65);
+    }
+    100% {
+        box-shadow: 0 0 6px rgba(255, 216, 95, 0.3);
+    }
+}
+
 /* ========================================================================== */
 /* EXACT TAX INVOICE DOCUMENT PAPER (A4 Dimension Matching Provided Image)    */
 /* ========================================================================== */
