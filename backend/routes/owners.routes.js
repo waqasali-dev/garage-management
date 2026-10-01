@@ -21,6 +21,7 @@ router.get("/", async (req, res) => {
                 o.phone_number,
                 o.email_address,
                 o.billing_address,
+                o.vat_number,
                 o.is_vip,
                 o.created_at,
                 u.user_id,
@@ -76,6 +77,7 @@ router.get("/", async (req, res) => {
                 phone: owner.phone_number,
                 email: owner.email_address,
                 address: owner.billing_address,
+                vat_number: owner.vat_number || "",
                 is_vip: owner.is_vip,
                 isActive: activeOrders > 0,
                 statusType: activeOrders > 0 ? "active" : "history",
@@ -234,7 +236,7 @@ router.get("/:id", async (req, res) => {
 // PATCH /api/owners/:id - Update owner profile details
 router.patch("/:id", async (req, res) => {
     const { id } = req.params;
-    const { full_name, phone_number, email_address, billing_address, is_vip } = req.body;
+    const { full_name, phone_number, email_address, billing_address, is_vip, vat_number } = req.body;
 
     try {
         const query = `
@@ -244,8 +246,9 @@ router.patch("/:id", async (req, res) => {
                 phone_number = COALESCE($2, phone_number),
                 email_address = COALESCE($3, email_address),
                 billing_address = COALESCE($4, billing_address),
-                is_vip = COALESCE($5, is_vip)
-            WHERE owner_id = $6
+                is_vip = COALESCE($5, is_vip),
+                vat_number = COALESCE($6, vat_number)
+            WHERE owner_id = $7
             RETURNING *;
         `;
         const result = await pool.query(query, [
@@ -254,6 +257,7 @@ router.patch("/:id", async (req, res) => {
             email_address ? email_address.trim().toLowerCase() : null,
             billing_address !== undefined ? billing_address : null,
             is_vip !== undefined ? Boolean(is_vip) : null,
+            vat_number !== undefined ? (vat_number ? vat_number.trim() : "") : null,
             id,
         ]);
 

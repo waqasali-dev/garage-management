@@ -192,6 +192,18 @@ export default function OwnerDetail() {
                                         </div>
                                     </div>
 
+                                    <div className="contact-detail-item">
+                                        <div className="icon-box">
+                                            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#60a5fa' }}>badge</span>
+                                        </div>
+                                        <div className="contact-text-stack">
+                                            <span className="item-label">VAT / TRN NUMBER:</span>
+                                            <span className="item-value font-mono" style={{ color: owner.vat_number ? '#60a5fa' : 'inherit' }}>
+                                                {owner.vat_number || 'Not Registered'}
+                                            </span>
+                                        </div>
+                                    </div>
+
                                     <div className="contact-detail-item grid-span-2">
                                         <div className="icon-box">
                                             <LocationOnIcon fontSize="small" />

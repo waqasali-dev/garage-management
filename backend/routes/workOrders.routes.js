@@ -23,7 +23,10 @@ export const handleIntake = async (req, res) => {
             email,
             selectedOwnerId,
             notes,
+            vatNumber,
+            vat_number,
         } = req.body;
+        const cleanVat = (vatNumber || vat_number || "").trim();
 
         if (!vin || !make || !model || !year || !licensePlate) {
             await client.query("ROLLBACK");
@@ -51,6 +54,8 @@ export const handleIntake = async (req, res) => {
             );
             if (checkOwner.rows.length === 0) {
                 ownerId = null;
+            } else if (cleanVat) {
+                await client.query("UPDATE car_owners SET vat_number = COALESCE(vat_number, $1) WHERE owner_id = $2;", [cleanVat, ownerId]);
             }
         }
 
@@ -76,6 +81,9 @@ export const handleIntake = async (req, res) => {
 
             if (existingOwner.rows.length > 0) {
                 ownerId = existingOwner.rows[0].owner_id;
+                if (cleanVat) {
+                    await client.query("UPDATE car_owners SET vat_number = COALESCE(vat_number, $1) WHERE owner_id = $2;", [cleanVat, ownerId]);
+                }
             } else {
                 const insertOwnerQuery = `
                     INSERT INTO car_owners (
@@ -83,15 +91,17 @@ export const handleIntake = async (req, res) => {
                         phone_number,
                         email_address,
                         billing_address,
-                        is_vip
+                        is_vip,
+                        vat_number
                     )
-                    VALUES ($1, $2, $3, NULL, FALSE)
-                    RETURNING owner_id, full_name, phone_number, email_address;
+                    VALUES ($1, $2, $3, NULL, FALSE, $4)
+                    RETURNING owner_id, full_name, phone_number, email_address, vat_number;
                 `;
                 const newOwnerResult = await client.query(insertOwnerQuery, [
                     cleanName,
                     cleanPhone,
                     cleanEmail || null,
+                    cleanVat || null,
                 ]);
                 ownerId = newOwnerResult.rows[0].owner_id;
             }

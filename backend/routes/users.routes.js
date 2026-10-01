@@ -134,7 +134,10 @@ export const handleCreateUser = async (req, res) => {
             owner_phone,
             owner_address,
             owner_is_vip = false,
+            vat_number,
+            owner_vat,
         } = req.body;
+        const cleanOwnerVat = vat_number !== undefined ? vat_number : owner_vat;
 
         if (!password || !role) {
             await client.query("ROLLBACK");
@@ -228,7 +231,7 @@ export const handleCreateUser = async (req, res) => {
                     });
                 }
 
-                if (owner_name || owner_phone || targetEmail || owner_address) {
+                if (owner_name || owner_phone || targetEmail || owner_address || cleanOwnerVat !== undefined) {
                     await client.query(
                         `UPDATE car_owners
                          SET
@@ -236,14 +239,16 @@ export const handleCreateUser = async (req, res) => {
                             phone_number = COALESCE($2, phone_number),
                             email_address = COALESCE($3, email_address),
                             billing_address = COALESCE($4, billing_address),
-                            is_vip = COALESCE($5, is_vip)
-                         WHERE owner_id = $6;`,
+                            is_vip = COALESCE($5, is_vip),
+                            vat_number = COALESCE($6, vat_number)
+                         WHERE owner_id = $7;`,
                         [
                             owner_name ? owner_name.trim() : null,
                             owner_phone ? owner_phone.trim() : null,
                             targetEmail || null,
                             owner_address ? owner_address.trim() : null,
                             owner_is_vip !== undefined ? Boolean(owner_is_vip) : null,
+                            cleanOwnerVat !== undefined ? (cleanOwnerVat ? cleanOwnerVat.trim() : "") : null,
                             existing_owner_id,
                         ]
                     );
@@ -267,10 +272,11 @@ export const handleCreateUser = async (req, res) => {
                         phone_number,
                         email_address,
                         billing_address,
-                        is_vip
+                        is_vip,
+                        vat_number
                     )
-                    VALUES ($1, $2, $3, $4, $5)
-                    RETURNING owner_id, full_name, email_address;
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING owner_id, full_name, email_address, vat_number;
                 `;
                 const ownerResult = await client.query(insertOwnerQuery, [
                     owner_name.trim(),
@@ -278,6 +284,7 @@ export const handleCreateUser = async (req, res) => {
                     targetEmail,
                     owner_address ? owner_address.trim() : null,
                     Boolean(owner_is_vip),
+                    cleanOwnerVat ? cleanOwnerVat.trim() : null,
                 ]);
 
                 targetOwnerId = ownerResult.rows[0].owner_id;

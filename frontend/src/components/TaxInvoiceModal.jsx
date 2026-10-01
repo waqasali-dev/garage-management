@@ -28,6 +28,14 @@ export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) 
     const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
     const [saveErrorMsg, setSaveErrorMsg] = useState('');
 
+    // Customer VAT State
+    const [customerVat, setCustomerVat] = useState(invoice?.customer_vat || '');
+    const [isEditingVat, setIsEditingVat] = useState(false);
+    const [vatInput, setVatInput] = useState(invoice?.customer_vat || '');
+    const [isSavingVat, setIsSavingVat] = useState(false);
+    const [vatSuccessMsg, setVatSuccessMsg] = useState('');
+    const [vatErrorMsg, setVatErrorMsg] = useState('');
+
     // Keep state in sync whenever invoice or invoice.tax_percentage changes
     useEffect(() => {
         if (invoice) {
@@ -38,9 +46,13 @@ export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) 
             setSavedTaxPercentage(tax);
             setSaveSuccessMsg('');
             setSaveErrorMsg('');
+            setCustomerVat(invoice.customer_vat || '');
+            setVatInput(invoice.customer_vat || '');
+            setVatSuccessMsg('');
+            setVatErrorMsg('');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [invoice?.invoice_id, invoice?.work_order_id, invoice?.tax_percentage, defaultTaxRate]);
+    }, [invoice?.invoice_id, invoice?.work_order_id, invoice?.tax_percentage, invoice?.customer_vat, defaultTaxRate]);
 
     if (!invoice) return null;
 
@@ -121,6 +133,13 @@ export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) 
         const targetId = invoice.invoice_id || invoice.work_order_id;
         if (!targetId) return;
 
+        // Hard Lock: Settled/paid invoices cannot have tax percentage changed
+        if (isPaid) {
+            setSaveErrorMsg("This invoice is marked as 'Paid'. The tax percentage is locked on settled invoices.");
+            setTimeout(() => setSaveErrorMsg(''), 4000);
+            return;
+        }
+
         const numTax = parseFloat(taxPercentage);
         if (isNaN(numTax) || numTax < 0 || numTax > 100) {
             setSaveErrorMsg('Tax rate must be between 0% and 100%');
@@ -167,10 +186,53 @@ export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) 
         }
     };
 
+    // Save or update Customer VAT / TRN
+    const handleSaveCustomerVat = async () => {
+        const targetId = invoice.invoice_id || invoice.work_order_id;
+        if (!targetId) return;
+
+        setIsSavingVat(true);
+        setVatErrorMsg('');
+        setVatSuccessMsg('');
+
+        try {
+            const cleanVat = (vatInput || '').trim();
+            const res = await fetch(`${API_BASE_URL}/invoices/${encodeURIComponent(targetId)}/customer-vat`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_vat: cleanVat }),
+            });
+            const json = await res.json();
+            if (res.ok && json.success) {
+                setCustomerVat(cleanVat);
+                setIsEditingVat(false);
+                setVatSuccessMsg(cleanVat ? `Customer VAT saved as ${cleanVat}!` : 'Customer VAT cleared!');
+                setTimeout(() => setVatSuccessMsg(''), 4000);
+
+                const updatedInvoice = {
+                    ...invoice,
+                    customer_vat: cleanVat,
+                };
+
+                if (onInvoiceUpdated) {
+                    onInvoiceUpdated(updatedInvoice);
+                }
+            } else {
+                setVatErrorMsg(json.error || 'Failed to update customer VAT');
+                setTimeout(() => setVatErrorMsg(''), 4000);
+            }
+        } catch (err) {
+            setVatErrorMsg(`Error: ${err.message}`);
+            setTimeout(() => setVatErrorMsg(''), 4000);
+        } finally {
+            setIsSavingVat(false);
+        }
+    };
+
     const handleCopySummary = () => {
         const text = `Official Tax Invoice #${invoiceId}
 Date: ${formattedDate}
-Customer: ${ownerName} (${ownerPhone})
+Customer: ${ownerName} (${ownerPhone})${customerVat ? ` | VAT: ${customerVat}` : ''}
 Vehicle: ${vehicleModel} [Plate: ${vehiclePlate} | VIN: ${vehicleVin}]
 VAT Rate: ${(parseFloat(taxPercentage) || 0)}%
 Total Amount: ${currSymbol} ${totalInclVatSum.toFixed(currDecimals)} (${isPaid ? 'PAID IN FULL' : 'PAYMENT DUE: ' + currSymbol + ' ' + outstandingAmount})
@@ -199,7 +261,7 @@ Precision Garage Workshop Management System`;
                         </div>
 
                         <div className="toolbar-actions">
-                            {!isOwner && hasUnsavedTaxChanges && (
+                            {!isOwner && !isPaid && hasUnsavedTaxChanges && (
                                 <button
                                     type="button"
                                     className="btn-save-invoice-top"
@@ -239,89 +301,183 @@ Precision Garage Workshop Management System`;
                         </div>
                     </div>
 
-                    {/* Bottom Strip: Dedicated Tax (VAT) Rate Selector & Direct Save Button */}
+                    {/* Bottom Strips: Tax Rate Selector & Customer VAT Option */}
                     {!isOwner && (
-                        <div className="toolbar-tax-strip">
-                            <div className="tax-strip-label">
-                                <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#ffd85f' }}>tune</span>
-                                <span>VAT Tax Rate:</span>
-                            </div>
-
-                            <div className="tax-strip-presets">
-                                {[
-                                    { val: 0, label: '0% (Tax Free)' },
-                                    { val: 5, label: '5% (Standard Default)' },
-                                    { val: 10, label: '10%' },
-                                    { val: 15, label: '15%' }
-                                ].map((preset) => {
-                                    const isActive = parseFloat(taxPercentage) === preset.val;
-                                    return (
-                                        <button
-                                            key={preset.val}
-                                            type="button"
-                                            className={`tax-preset-chip ${isActive ? 'active' : ''}`}
-                                            onClick={() => setTaxPercentage(preset.val)}
-                                            title={`Set invoice VAT to ${preset.val}%`}
-                                        >
-                                            {preset.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="tax-custom-input-wrap">
-                                <span className="custom-input-label">Custom:</span>
-                                <div className="custom-input-box-inner">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        step="0.5"
-                                        className="tax-num-field font-mono"
-                                        value={taxPercentage}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setTaxPercentage(val === '' ? '' : Math.max(0, parseFloat(val) || 0));
-                                        }}
-                                        title="Custom VAT percentage"
-                                        placeholder="5"
-                                    />
-                                    <span className="tax-percent-symbol">%</span>
+                        <div className="toolbar-sub-strips">
+                            {/* Tax Rate Strip: Locked when Paid, Editable when Pending/Overdue */}
+                            {isPaid ? (
+                                <div className="toolbar-tax-strip tax-strip-locked">
+                                    <div className="tax-strip-label">
+                                        <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#10b981' }}>lock</span>
+                                        <span>VAT Tax Rate:</span>
+                                    </div>
+                                    <div className="tax-locked-chip font-mono">
+                                        🔒 {parseFloat(taxPercentage) || 0}% VAT (LOCKED - SETTLED)
+                                    </div>
+                                    <span className="tax-locked-hint">
+                                        This invoice has been marked as <strong>PAID</strong>. Tax percentage is locked on settled invoices.
+                                    </span>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="toolbar-tax-strip">
+                                    <div className="tax-strip-label">
+                                        <span className="material-symbols-outlined" style={{ fontSize: '17px', color: '#ffd85f' }}>tune</span>
+                                        <span>VAT Tax Rate:</span>
+                                    </div>
 
-                            {/* Prominent Save Tax Rate Button */}
-                            <div className="tax-save-action-wrap">
-                                <button
-                                    type="button"
-                                    className={`btn-save-tax-rate ${hasUnsavedTaxChanges ? 'has-unsaved' : 'is-saved'}`}
-                                    onClick={handleSaveTaxRate}
-                                    disabled={isSavingTax}
-                                    title={hasUnsavedTaxChanges ? `Click to save ${taxPercentage}% tax rate to DB` : 'Tax rate is saved'}
-                                >
-                                    {isSavingTax ? (
-                                        <span>Saving...</span>
-                                    ) : hasUnsavedTaxChanges ? (
-                                        <>
+                                    <div className="tax-strip-presets">
+                                        {[
+                                            { val: 0, label: '0% (Tax Free)' },
+                                            { val: 5, label: '5% (Standard Default)' },
+                                            { val: 10, label: '10%' },
+                                            { val: 15, label: '15%' }
+                                        ].map((preset) => {
+                                            const isActive = parseFloat(taxPercentage) === preset.val;
+                                            return (
+                                                <button
+                                                    key={preset.val}
+                                                    type="button"
+                                                    className={`tax-preset-chip ${isActive ? 'active' : ''}`}
+                                                    onClick={() => setTaxPercentage(preset.val)}
+                                                    title={`Set invoice VAT to ${preset.val}%`}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="tax-custom-input-wrap">
+                                        <span className="custom-input-label">Custom:</span>
+                                        <div className="custom-input-box-inner">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.5"
+                                                className="tax-num-field font-mono"
+                                                value={taxPercentage}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTaxPercentage(val === '' ? '' : Math.max(0, parseFloat(val) || 0));
+                                                }}
+                                                title="Custom VAT percentage"
+                                                placeholder="5"
+                                            />
+                                            <span className="tax-percent-symbol">%</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Prominent Save Tax Rate Button */}
+                                    <div className="tax-save-action-wrap">
+                                        <button
+                                            type="button"
+                                            className={`btn-save-tax-rate ${hasUnsavedTaxChanges ? 'has-unsaved' : 'is-saved'}`}
+                                            onClick={handleSaveTaxRate}
+                                            disabled={isSavingTax}
+                                            title={hasUnsavedTaxChanges ? `Click to save ${taxPercentage}% tax rate to DB` : 'Tax rate is saved'}
+                                        >
+                                            {isSavingTax ? (
+                                                <span>Saving...</span>
+                                            ) : hasUnsavedTaxChanges ? (
+                                                <>
+                                                    <SaveIcon fontSize="small" />
+                                                    <span>Save Tax ({taxPercentage}%)</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckIcon fontSize="small" style={{ color: '#10b981' }} />
+                                                    <span>Saved ({savedTaxPercentage}%)</span>
+                                                </>
+                                            )}
+                                        </button>
+
+                                        {saveSuccessMsg && (
+                                            <span className="tax-save-feedback success-feedback">
+                                                ✓ {saveSuccessMsg}
+                                            </span>
+                                        )}
+                                        {saveErrorMsg && (
+                                            <span className="tax-save-feedback error-feedback">
+                                                ⚠️ {saveErrorMsg}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Customer VAT / TRN Management Strip */}
+                            <div className="toolbar-vat-strip">
+                                <div className="vat-strip-label">
+                                    <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#60a5fa' }}>badge</span>
+                                    <span>Customer VAT / TRN:</span>
+                                </div>
+
+                                {isEditingVat ? (
+                                    <div className="vat-strip-edit-wrap">
+                                        <input
+                                            type="text"
+                                            className="vat-input-field font-mono"
+                                            value={vatInput}
+                                            onChange={(e) => setVatInput(e.target.value)}
+                                            placeholder="Enter Customer VAT # (e.g. OM1100349203)"
+                                            autoFocus
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleSaveCustomerVat();
+                                                if (e.key === 'Escape') {
+                                                    setVatInput(customerVat);
+                                                    setIsEditingVat(false);
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn-vat-save"
+                                            onClick={handleSaveCustomerVat}
+                                            disabled={isSavingVat}
+                                        >
                                             <SaveIcon fontSize="small" />
-                                            <span>Save Tax ({taxPercentage}%)</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckIcon fontSize="small" style={{ color: '#10b981' }} />
-                                            <span>Saved ({savedTaxPercentage}%)</span>
-                                        </>
-                                    )}
-                                </button>
+                                            <span>{isSavingVat ? 'Saving...' : 'Save VAT'}</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn-vat-cancel"
+                                            onClick={() => {
+                                                setVatInput(customerVat);
+                                                setIsEditingVat(false);
+                                            }}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="vat-strip-display-wrap">
+                                        <span className={`vat-val-badge font-mono ${customerVat ? 'has-vat' : 'no-vat'}`}>
+                                            {customerVat ? customerVat : 'No Customer VAT on file'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="btn-vat-edit-toggle"
+                                            onClick={() => {
+                                                setVatInput(customerVat);
+                                                setIsEditingVat(true);
+                                            }}
+                                            title="Add or update Customer VAT number"
+                                        >
+                                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>edit</span>
+                                            <span>{customerVat ? 'Change VAT' : '+ Add Customer VAT'}</span>
+                                        </button>
+                                    </div>
+                                )}
 
-                                {saveSuccessMsg && (
+                                {vatSuccessMsg && (
                                     <span className="tax-save-feedback success-feedback">
-                                        ✓ {saveSuccessMsg}
+                                        ✓ {vatSuccessMsg}
                                     </span>
                                 )}
-                                {saveErrorMsg && (
+                                {vatErrorMsg && (
                                     <span className="tax-save-feedback error-feedback">
-                                        ⚠️ {saveErrorMsg}
+                                        ⚠️ {vatErrorMsg}
                                     </span>
                                 )}
                             </div>
@@ -383,6 +539,12 @@ Precision Garage Workshop Management System`;
                             <div className="meta-label-strong">Bill To :</div>
                             <div className="meta-label-strong">{ownerName}</div>
                             <div>{ownerPhone}</div>
+                            {customerVat ? (
+                                <div className="doc-customer-vat-box">
+                                    <span className="meta-label-strong">VAT / TRN #: </span>
+                                    <span className="font-mono">{customerVat}</span>
+                                </div>
+                            ) : null}
                         </div>
 
                         {/* Column 2: Vehicle */}

@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS car_owners (
     phone_number VARCHAR(20) NOT NULL,
     email_address VARCHAR(150),
     billing_address TEXT,
+    vat_number VARCHAR(50),
     is_vip BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_owner_id_format CHECK (owner_id ~ '^OWN-\d{4,}$')
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS invoice_data (
     tax_amount NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
     total_amount NUMERIC(10, 2) GENERATED ALWAYS AS (subtotal + tax_amount) STORED,
     status invoice_status NOT NULL DEFAULT 'pending',
+    customer_vat VARCHAR(50),
     date_issued DATE NOT NULL DEFAULT CURRENT_DATE,
     date_due DATE,
     date_paid DATE,

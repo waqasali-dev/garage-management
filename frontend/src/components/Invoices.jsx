@@ -366,6 +366,24 @@ export default function Invoices() {
                                                                 {inv.owner_name} {inv.owner_is_vip && <span style={{ color: 'var(--accent-yellow)' }}>★</span>}
                                                             </div>
                                                             <div className="text-muted font-mono" style={{ fontSize: '11px' }}>{inv.owner_phone}</div>
+                                                            {inv.customer_vat && (
+                                                                <div
+                                                                    className="font-mono"
+                                                                    style={{
+                                                                        fontSize: '10.5px',
+                                                                        color: '#60a5fa',
+                                                                        background: 'rgba(96, 165, 250, 0.12)',
+                                                                        border: '1px solid rgba(96, 165, 250, 0.25)',
+                                                                        borderRadius: '4px',
+                                                                        padding: '1px 5px',
+                                                                        display: 'inline-block',
+                                                                        marginTop: '2px',
+                                                                    }}
+                                                                    title={`Customer VAT: ${inv.customer_vat}`}
+                                                                >
+                                                                    VAT: {inv.customer_vat}
+                                                                </div>
+                                                            )}
                                                         </td>
                                                     )}
                                                     <td>
@@ -387,19 +405,29 @@ export default function Invoices() {
                                                                 padding: '1px 6px',
                                                                 borderRadius: '4px',
                                                                 marginTop: '3px',
-                                                                background: parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
-                                                                    ? 'rgba(255, 216, 95, 0.16)'
-                                                                    : 'rgba(255, 255, 255, 0.05)',
-                                                                color: parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
-                                                                    ? 'var(--accent-yellow)'
-                                                                    : 'var(--text-muted)',
+                                                                background: (inv.status || '').toLowerCase() === 'paid'
+                                                                    ? 'rgba(16, 185, 129, 0.14)'
+                                                                    : parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
+                                                                        ? 'rgba(255, 216, 95, 0.16)'
+                                                                        : 'rgba(255, 255, 255, 0.05)',
+                                                                color: (inv.status || '').toLowerCase() === 'paid'
+                                                                    ? '#10b981'
+                                                                    : parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
+                                                                        ? 'var(--accent-yellow)'
+                                                                        : 'var(--text-muted)',
                                                                 fontWeight: 700,
-                                                                border: parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
-                                                                    ? '1px solid rgba(255, 216, 95, 0.35)'
-                                                                    : '1px solid rgba(255, 255, 255, 0.08)',
+                                                                border: (inv.status || '').toLowerCase() === 'paid'
+                                                                    ? '1px solid rgba(16, 185, 129, 0.35)'
+                                                                    : parseFloat(inv.tax_percentage) !== parseFloat(taxPercentage)
+                                                                        ? '1px solid rgba(255, 216, 95, 0.35)'
+                                                                        : '1px solid rgba(255, 255, 255, 0.08)',
                                                             }}
-                                                            title={`VAT rate: ${inv.tax_percentage || taxPercentage}%`}
+                                                            title={(inv.status || '').toLowerCase() === 'paid'
+                                                                ? `Settled Invoice: ${parseFloat(inv.tax_percentage !== undefined && inv.tax_percentage !== null ? inv.tax_percentage : taxPercentage)}% VAT permanently locked`
+                                                                : `VAT rate: ${inv.tax_percentage || taxPercentage}%`
+                                                            }
                                                         >
+                                                            {(inv.status || '').toLowerCase() === 'paid' && <span style={{ marginRight: '3px' }}>🔒</span>}
                                                             {parseFloat(inv.tax_percentage !== undefined && inv.tax_percentage !== null ? inv.tax_percentage : taxPercentage)}% VAT
                                                         </span>
                                                     </td>

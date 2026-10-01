@@ -39,6 +39,7 @@ router.get("/", async (req, res) => {
                 COALESCE(i.tax_percentage, 5.00)::float AS tax_percentage,
                 i.total_amount,
                 i.status,
+                COALESCE(i.customer_vat, o.vat_number, '') AS customer_vat,
                 TO_CHAR(i.date_issued, 'YYYY-MM-DD') AS date_issued,
                 TO_CHAR(i.date_due, 'YYYY-MM-DD') AS date_due,
                 TO_CHAR(i.date_paid, 'YYYY-MM-DD') AS date_paid,
@@ -109,6 +110,7 @@ router.get("/:id", async (req, res) => {
                 COALESCE(i.tax_percentage, 5.00)::float AS tax_percentage,
                 i.total_amount,
                 i.status,
+                COALESCE(i.customer_vat, o.vat_number, '') AS customer_vat,
                 TO_CHAR(i.date_issued, 'YYYY-MM-DD') AS date_issued,
                 TO_CHAR(i.date_due, 'YYYY-MM-DD') AS date_due,
                 TO_CHAR(i.date_paid, 'YYYY-MM-DD') AS date_paid,
@@ -189,9 +191,11 @@ router.post("/generate", async (req, res) => {
                 w.vehicle_id,
                 w.status,
                 w.total_cost,
-                v.owner_id
+                v.owner_id,
+                o.vat_number AS owner_vat
             FROM work_order_data w
             JOIN vehicles v ON w.vehicle_id = v.vehicle_id
+            LEFT JOIN car_owners o ON v.owner_id = o.owner_id
             WHERE UPPER(TRIM(w.work_order_id)) = UPPER(TRIM($1));
         `;
         const woResult = await pool.query(woQuery, [work_order_id.trim()]);
@@ -236,7 +240,7 @@ router.post("/generate", async (req, res) => {
         const taxAmount = parseFloat((subtotal * (effectiveTaxPercentage / 100.0)).toFixed(2));
         const initialStatus = wo.status === 'completed' ? 'paid' : 'pending';
 
-        // Upsert invoice record including tax_percentage
+        // Upsert invoice record including tax_percentage and customer_vat
         const upsertQuery = `
             INSERT INTO invoice_data (
                 work_order_id,
@@ -245,14 +249,16 @@ router.post("/generate", async (req, res) => {
                 tax_percentage,
                 tax_amount,
                 status,
+                customer_vat,
                 date_issued,
                 date_due
             )
-            VALUES ($1, $2, $3, $4, $5, $6::invoice_status, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
+            VALUES ($1, $2, $3, $4, $5, $6::invoice_status, $7, CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days')
             ON CONFLICT (work_order_id) DO UPDATE SET
                 subtotal = EXCLUDED.subtotal,
                 tax_percentage = EXCLUDED.tax_percentage,
                 tax_amount = EXCLUDED.tax_amount,
+                customer_vat = COALESCE(invoice_data.customer_vat, EXCLUDED.customer_vat),
                 status = CASE WHEN invoice_data.status = 'paid' THEN 'paid' ELSE EXCLUDED.status END
             RETURNING *;
         `;
@@ -263,6 +269,7 @@ router.post("/generate", async (req, res) => {
             effectiveTaxPercentage,
             taxAmount,
             initialStatus,
+            wo.owner_vat || null,
         ]);
 
         const invoice = invoiceResult.rows[0];
@@ -351,6 +358,28 @@ const updateInvoiceTax = async (id, taxVal, res) => {
     parsedTax = parseFloat(parsedTax.toFixed(2));
 
     try {
+        // Guard 1: Verify invoice exists and ensure it is NOT marked as paid
+        const checkQuery = `
+            SELECT invoice_id, work_order_id, status 
+            FROM invoice_data 
+            WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($1))
+               OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($1));
+        `;
+        const checkResult = await pool.query(checkQuery, [id.trim()]);
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        const currentInvoice = checkResult.rows[0];
+
+        // Hard lock: Once an invoice is marked as paid, tax percentage CANNOT be modified by anyone
+        if (currentInvoice.status === 'paid') {
+            return res.status(403).json({
+                error: "This invoice has already been marked as 'Paid'. The tax percentage is locked and cannot be changed on settled invoices.",
+                code: "INVOICE_PAID_TAX_LOCKED",
+            });
+        }
+
         const query = `
             UPDATE invoice_data
             SET 
@@ -367,6 +396,7 @@ const updateInvoiceTax = async (id, taxVal, res) => {
                 tax_amount,
                 total_amount,
                 status,
+                customer_vat,
                 TO_CHAR(date_issued, 'YYYY-MM-DD') AS date_issued,
                 TO_CHAR(date_due, 'YYYY-MM-DD') AS date_due,
                 TO_CHAR(date_paid, 'YYYY-MM-DD') AS date_paid;
@@ -409,6 +439,52 @@ const updateInvoiceTax = async (id, taxVal, res) => {
     }
 };
 
+// PATCH /api/invoices/:id/customer-vat - Add or update customer VAT / TRN
+router.patch("/:id/customer-vat", async (req, res) => {
+    const { id } = req.params;
+    const { customer_vat } = req.body;
+    const cleanVat = customer_vat !== undefined && customer_vat !== null ? String(customer_vat).trim() : "";
+
+    try {
+        const updateQuery = `
+            UPDATE invoice_data
+            SET customer_vat = $1
+            WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($2))
+               OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($2))
+            RETURNING invoice_id, work_order_id, owner_id, customer_vat;
+        `;
+        const result = await pool.query(updateQuery, [cleanVat, id.trim()]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        const inv = result.rows[0];
+
+        // Also update the car_owners profile if owner_id exists
+        if (inv.owner_id && cleanVat) {
+            await pool.query(
+                "UPDATE car_owners SET vat_number = $1 WHERE owner_id = $2;",
+                [cleanVat, inv.owner_id]
+            );
+        }
+
+        await deleteCachePattern("garage:cache:invoice*");
+        await deleteCachePattern("garage:cache:owner*");
+
+        return res.json({
+            success: true,
+            message: cleanVat ? `Customer VAT updated to ${cleanVat}.` : "Customer VAT cleared.",
+            data: {
+                invoice_id: inv.invoice_id,
+                customer_vat: cleanVat,
+            },
+        });
+    } catch (err) {
+        console.error("Error updating customer VAT:", err);
+        return res.status(500).json({ error: "Failed to update customer VAT", details: err.message });
+    }
+});
+
 // PATCH /api/invoices/:id/tax - Update invoice tax percentage
 router.patch("/:id/tax", async (req, res) => {
     const { id } = req.params;
@@ -423,10 +499,30 @@ router.put("/:id/tax", async (req, res) => {
     return updateInvoiceTax(id, taxVal, res);
 });
 
-// PATCH /api/invoices/:id - General update (supports tax_percentage and/or status)
+// PATCH /api/invoices/:id - General update (supports customer_vat, tax_percentage and/or status)
 router.patch("/:id", async (req, res) => {
     const { id } = req.params;
-    const { tax_percentage, tax_rate, status } = req.body;
+    const { customer_vat, tax_percentage, tax_rate, status } = req.body;
+
+    if (customer_vat !== undefined && tax_percentage === undefined && tax_rate === undefined && status === undefined) {
+        const cleanVat = customer_vat !== null ? String(customer_vat).trim() : "";
+        try {
+            const result = await pool.query(
+                "UPDATE invoice_data SET customer_vat = $1 WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($2)) OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($2)) RETURNING *;",
+                [cleanVat, id.trim()]
+            );
+            if (result.rows.length === 0) return res.status(404).json({ error: "Invoice not found" });
+            const inv = result.rows[0];
+            if (inv.owner_id && cleanVat) {
+                await pool.query("UPDATE car_owners SET vat_number = $1 WHERE owner_id = $2;", [cleanVat, inv.owner_id]);
+            }
+            await deleteCachePattern("garage:cache:invoice*");
+            await deleteCachePattern("garage:cache:owner*");
+            return res.json({ success: true, message: "Customer VAT updated.", data: inv });
+        } catch (err) {
+            return res.status(500).json({ error: "Failed to update customer VAT", details: err.message });
+        }
+    }
 
     if (tax_percentage !== undefined || tax_rate !== undefined) {
         const taxVal = tax_percentage !== undefined ? tax_percentage : tax_rate;

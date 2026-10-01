@@ -4,10 +4,21 @@ export async function migrateSettingsAndTax() {
     console.log("⚡ Checking and running database migration for Settings and Tax...");
     const client = await pool.connect();
     try {
-        // 1. Add tax_percentage column to invoice_data if it does not exist
+        // 1. Add tax_percentage and customer_vat column to invoice_data if it does not exist
         await client.query(`
             ALTER TABLE invoice_data 
             ADD COLUMN IF NOT EXISTS tax_percentage NUMERIC(5, 2) DEFAULT 5.00;
+        `);
+
+        await client.query(`
+            ALTER TABLE invoice_data 
+            ADD COLUMN IF NOT EXISTS customer_vat VARCHAR(50);
+        `);
+
+        // 1.5 Add vat_number to car_owners if it does not exist
+        await client.query(`
+            ALTER TABLE car_owners 
+            ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50);
         `);
 
         await client.query(`
