@@ -352,6 +352,15 @@
     opacity: 0.4;
 }
 
+.step-item.locked {
+    cursor: not-allowed !important;
+}
+
+.step-item.locked:hover .step-icon {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
 /* Two Column Layout */
 .details-grid {
     display: grid;

@@ -165,6 +165,18 @@
     color: var(--text-main);
 }
 
+.step-node.node-locked,
+.step-node:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.75;
+}
+
+.step-node.node-locked:hover,
+.step-node:disabled:hover {
+    border-color: var(--border-glass) !important;
+    color: var(--text-muted) !important;
+}
+
 .step-circle {
     width: 22px;
     height: 22px;

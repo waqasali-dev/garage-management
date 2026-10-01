@@ -188,7 +188,11 @@ export default function WorkOrderExecution() {
 
     // Advance or change status
     const handleStatusChange = async (newStatus) => {
-        if (isUpdatingStatus) return;
+        if (!order || isUpdatingStatus) return;
+        if (order.status === 'completed') {
+            showNotification('Vehicle has been picked up (Completed). Status is permanently locked and cannot be changed.', 'warning');
+            return;
+        }
         setIsUpdatingStatus(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${id}/status`, {
@@ -535,8 +539,12 @@ export default function WorkOrderExecution() {
                         {/* Interactive Status Pipeline Stepper */}
                         <div className="pipeline-stepper-card">
                             <div className="stepper-title-row">
-                                <span className="stepper-tag">WORK ORDER REPAIR LIFECYCLE</span>
-                                <span className="current-status-text">CURRENT STAGE: <strong>{order.status.toUpperCase()}</strong></span>
+                                <span className="stepper-tag" style={{ color: order.status === 'completed' ? '#34d399' : undefined, fontWeight: order.status === 'completed' ? 700 : undefined }}>
+                                    {order.status === 'completed' ? '🔒 CAR PICKED UP — STATUS PERMANENTLY LOCKED' : 'WORK ORDER REPAIR LIFECYCLE'}
+                                </span>
+                                <span className="current-status-text">
+                                    CURRENT STAGE: <strong style={{ color: order.status === 'completed' ? '#34d399' : undefined }}>{order.status.toUpperCase()}</strong>
+                                </span>
                             </div>
 
                             <div className="pipeline-steps">
@@ -546,13 +554,17 @@ export default function WorkOrderExecution() {
                                     const stepIdx = stepOrder.indexOf(step.key);
                                     const isCurrent = order.status === step.key;
                                     const isPast = currentIdx !== -1 && stepIdx < currentIdx;
+                                    const isLocked = order.status === 'completed';
 
                                     return (
                                         <button
                                             key={step.key}
                                             type="button"
-                                            className={`step-node ${isCurrent ? 'node-active' : ''} ${isPast ? 'node-past' : ''}`}
-                                            onClick={() => handleStatusChange(step.key)}
+                                            className={`step-node ${isCurrent ? 'node-active' : ''} ${isPast ? 'node-past' : ''} ${isLocked ? 'node-locked' : ''}`}
+                                            onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
+                                            disabled={isLocked}
+                                            style={{ cursor: isLocked ? 'not-allowed' : 'pointer' }}
+                                            title={isLocked ? "Car picked up — status is permanently locked" : `Move to ${step.label}`}
                                         >
                                             <span className="step-circle">{idx + 1}</span>
                                             <span className="step-label">{step.label}</span>

@@ -62,6 +62,13 @@ export default function StaffDashboard() {
     const handleQuickAdvance = async (e, orderId, nextStatus) => {
         e.stopPropagation();
         if (isAdvancingId) return;
+
+        const targetOrder = workOrders.find((w) => w.work_order_id === orderId);
+        if (targetOrder?.status === 'completed') {
+            showNotification(`Work Order ${orderId} is completed (car picked up) and cannot be changed.`, 'warning');
+            return;
+        }
+
         setIsAdvancingId(orderId);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${orderId}/status`, {
@@ -72,6 +79,9 @@ export default function StaffDashboard() {
             if (res.ok) {
                 showNotification(`Work Order ${orderId} moved to ${nextStatus.toUpperCase()}!`, 'success');
                 fetchWorkOrders();
+            } else {
+                const errData = await res.json();
+                showNotification(errData.error || 'Failed to update status', 'error');
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');

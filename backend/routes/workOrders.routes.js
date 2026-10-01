@@ -545,7 +545,7 @@ router.patch("/:id/status", async (req, res) => {
         diagnosed: ["in_progress", "received", "cancelled"],
         in_progress: ["ready", "diagnosed", "cancelled"],
         ready: ["completed", "in_progress", "cancelled"],
-        completed: ["ready"],
+        completed: [], // Permanently locked: Once vehicle is picked up (completed), status can never be changed
         cancelled: ["received"],
     };
 
@@ -560,6 +560,14 @@ router.patch("/:id/status", async (req, res) => {
         }
 
         const currentStatus = currentRes.rows[0].status;
+
+        // Hard lock: Neither admin nor anyone else can change the status once car is picked up (completed)
+        if (currentStatus === "completed") {
+            return res.status(403).json({
+                error: "This work order has already been marked as 'Completed (Car Picked Up)'. The status is permanently locked and cannot be changed by anyone.",
+                code: "WORK_ORDER_COMPLETED_LOCKED",
+            });
+        }
 
         if (currentStatus !== status) {
             const allowed = VALID_TRANSITIONS[currentStatus] || [];

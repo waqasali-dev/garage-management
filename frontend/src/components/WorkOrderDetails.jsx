@@ -184,6 +184,10 @@ export default function WorkOrderDetails() {
     // Handle Status Change
     const handleStatusChange = async (newStatus) => {
         if (!order || isUpdatingStatus) return;
+        if (order.status === 'completed') {
+            showNotification('Vehicle has been picked up (Completed). Status is permanently locked and cannot be changed.', 'warning');
+            return;
+        }
         setIsUpdatingStatus(true);
         try {
             const res = await fetch(`${API_BASE_URL}/staff/work-orders/${order.work_order_id}/status`, {
@@ -610,8 +614,9 @@ export default function WorkOrderDetails() {
                                 )}
 
                                 {order.status === 'completed' && (
-                                    <span className="badge badge-success font-mono" style={{ padding: '8px 14px', fontSize: '12px' }}>
-                                        ✓ VEHICLE PICKED UP & COMPLETED
+                                    <span className="badge badge-success font-mono" style={{ padding: '8px 14px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>lock</span>
+                                        <span>✓ CAR PICKED UP — STATUS LOCKED</span>
                                     </span>
                                 )}
                             </div>
@@ -619,7 +624,29 @@ export default function WorkOrderDetails() {
 
                         {/* Active Repair Status Stepper */}
                         <section className="stepper-card">
-                            <h3 className="section-title">Repair Lifecycle Status</h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                                <h3 className="section-title" style={{ margin: 0 }}>Repair Lifecycle Status</h3>
+                                {order.status === 'completed' && (
+                                    <span
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '4px 12px',
+                                            borderRadius: '20px',
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            fontFamily: 'JetBrains Mono, monospace',
+                                            background: 'rgba(16, 185, 129, 0.15)',
+                                            color: '#34d399',
+                                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                                        }}
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>lock</span>
+                                        STATUS PERMANENTLY LOCKED (CAR PICKED UP)
+                                    </span>
+                                )}
+                            </div>
                             <div className="stepper-track">
                                 {/* Connecting background and active progress line */}
                                 <div className="stepper-line-container">
@@ -636,14 +663,15 @@ export default function WorkOrderDetails() {
                                     const isCompleted = currentStepIdx > idx;
                                     const isActive = currentStepIdx === idx;
                                     const isPending = currentStepIdx < idx;
+                                    const isLocked = order.status === 'completed';
 
                                     return (
                                         <div
                                             key={step.key}
-                                            className={`step-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isPending ? 'disabled' : ''}`}
-                                            onClick={() => handleStatusChange(step.key)}
-                                            style={{ cursor: 'pointer' }}
-                                            title={`Click to set status to ${step.label}`}
+                                            className={`step-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isPending ? 'disabled' : ''} ${isLocked ? 'locked' : ''}`}
+                                            onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
+                                            style={{ cursor: isLocked ? 'not-allowed' : 'pointer' }}
+                                            title={isLocked ? "Car picked up — status is permanently locked" : `Click to set status to ${step.label}`}
                                         >
                                             <div className={`step-icon ${isActive ? 'pulse-glow' : ''}`}>
                                                 <span className="material-symbols-outlined">
