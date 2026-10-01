@@ -197,6 +197,102 @@
     transform: scale(0.98);
 }
 
+/* Category Filter Bar */
+.staff-category-container {
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.staff-category-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    background-color: rgba(22, 30, 24, 0.7);
+    border: 1px solid var(--border-glass);
+    border-radius: 10px;
+    backdrop-filter: blur(8px);
+}
+
+.category-tab-btn {
+    height: 34px;
+    padding: 0 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.category-tab-btn:hover {
+    color: var(--text-main);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.category-tab-btn.active {
+    background-color: rgba(255, 216, 95, 0.15);
+    color: var(--accent-yellow);
+    border-color: rgba(255, 216, 95, 0.35);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.category-tab-btn.active.active-suspended {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+.tab-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot-active {
+    background-color: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.dot-suspended {
+    background-color: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: inherit;
+}
+
+.category-tab-btn.active .tab-badge {
+    background-color: rgba(255, 216, 95, 0.25);
+    color: var(--accent-yellow);
+}
+
+.category-tab-btn.active.active-suspended .tab-badge {
+    background-color: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
 /* Staff Bento Grid */
 .staff-grid {
     display: grid;
@@ -213,6 +309,56 @@
     flex-direction: column;
     gap: 16px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    transition: opacity 0.25s ease, filter 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+/* Suspended Account - Fazed Look */
+.staff-card.staff-card-suspended {
+    opacity: 0.62;
+    filter: grayscale(0.4) contrast(0.92);
+    border-color: rgba(239, 68, 68, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.staff-card.staff-card-suspended:hover {
+    opacity: 0.88;
+    filter: grayscale(0.15) contrast(0.96);
+    border-color: rgba(239, 68, 68, 0.5);
+    transform: translateY(-2px);
+}
+
+.staff-empty-category {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+    background-color: rgba(22, 30, 24, 0.4);
+    border: 1px dashed rgba(255, 216, 95, 0.15);
+    border-radius: 12px;
+}
+
+.empty-cat-icon {
+    font-size: 38px !important;
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin-bottom: 8px;
+}
+
+.empty-cat-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 4px 0;
+}
+
+.empty-cat-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 .card-top {
@@ -409,6 +555,78 @@
     border: 1px solid rgba(255, 216, 95, 0.25);
     padding: 3px 8px;
     border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.staff-rate-tag.staff-suspended-tag {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    letter-spacing: 0.06em;
+    font-weight: 800;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.18);
+}
+
+.avatar-box.avatar-suspended {
+    border-color: rgba(239, 68, 68, 0.4);
+    background-color: rgba(239, 68, 68, 0.08);
+}
+
+.avatar-box.avatar-suspended .avatar-initials {
+    color: #f87171;
+}
+
+.fill-suspended {
+    background-color: #64748b;
+}
+
+.card-actions-row {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-glass);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.staff-action-btn {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.staff-suspend-btn {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.staff-suspend-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.staff-reactivate-btn {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.staff-reactivate-btn:hover {
+    background: rgba(16, 185, 129, 0.22);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.6);
 }
 
 .staff-contact-details {

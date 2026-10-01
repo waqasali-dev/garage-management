@@ -40,8 +40,7 @@ router.get("/", async (req, res) => {
                       AND w.status = 'completed'
                 ) AS completed_jobs_count
             FROM staff_data s
-            INNER JOIN users u ON s.staff_id = u.staff_id
-            WHERE s.is_active = TRUE AND u.is_active = TRUE
+            LEFT JOIN users u ON s.staff_id = u.staff_id
             ORDER BY s.full_name ASC;
         `;
         const result = await pool.query(query);
@@ -70,6 +69,7 @@ router.get("/", async (req, res) => {
             }
 
             const efficiency = completedJobs > 0 ? `${Math.min(90 + completedJobs, 99)}%` : "Available";
+            const isSuspended = member.is_active === false || (member.user_id !== null && member.account_active === false);
 
             return {
                 id: member.staff_id,
@@ -80,7 +80,9 @@ router.get("/", async (req, res) => {
                 phone: member.phone_number,
                 address: member.residential_address,
                 hourly_rate: parseFloat(member.hourly_rate || 0).toFixed(2),
-                is_active: member.is_active,
+                is_active: !isSuspended,
+                is_suspended: isSuspended,
+                staff_active: member.is_active,
                 account_active: member.account_active,
                 has_user_account: member.user_id !== null,
                 isLead,

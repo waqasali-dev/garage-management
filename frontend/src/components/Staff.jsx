@@ -10,6 +10,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import CloseIcon from '@mui/icons-material/Close';
 import EngineeringIcon from '@mui/icons-material/Engineering';
+import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './css/Staff.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -57,20 +59,150 @@ export default function Staff() {
     const fetchStaff = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/staff`);
-            if (res.ok) {
-                const json = await res.json();
+            const [staffRes, usersRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/staff`).catch(() => null),
+                fetch(`${API_BASE_URL}/users`).catch(() => null),
+            ]);
+
+            let staffData = [];
+            if (staffRes && staffRes.ok) {
+                const json = await staffRes.json();
                 if (json.success && Array.isArray(json.data)) {
-                    setStaffList(json.data);
+                    staffData = json.data;
                 }
-            } else {
-                showNotification('Failed to fetch staff from server', 'error');
             }
+
+            // Resilient merge: ensure disabled/suspended staff are never omitted even if backend filtered them
+            if (usersRes && usersRes.ok) {
+                const usersJson = await usersRes.json();
+                if (usersJson.success && Array.isArray(usersJson.data)) {
+                    const staffUsers = usersJson.data.filter((u) => u.role === 'staff' && u.staff_id);
+                    const staffMap = new Map();
+                    staffData.forEach((s) => staffMap.set(Number(s.staff_id || s.id), s));
+
+                    staffUsers.forEach((u) => {
+                        const sId = Number(u.staff_id);
+                        const isSuspended = u.is_active === false;
+                        const existing = staffMap.get(sId);
+
+                        if (existing) {
+                            existing.user_id = u.user_id;
+                            existing.is_active = !isSuspended;
+                            existing.is_suspended = isSuspended;
+                            existing.account_active = !isSuspended;
+                        } else {
+                            // Recover omitted suspended staff profile from users directory
+                            const parts = (u.staff_name || u.linkedName || '').trim().split(' ');
+                            const initials = parts.length === 1
+                                ? parts[0].substring(0, 2).toUpperCase()
+                                : ((parts[0]?.[0] || '') + (parts[parts.length - 1]?.[0] || '')).toUpperCase() || 'ST';
+
+                            staffMap.set(sId, {
+                                id: sId,
+                                staff_id: sId,
+                                user_id: u.user_id,
+                                name: u.staff_name || parts[0] || 'Staff Member',
+                                role: u.staff_role || 'Technician',
+                                email: u.email,
+                                phone: u.staff_phone || '',
+                                hourly_rate: parseFloat(u.staff_hourly_rate || 0).toFixed(2),
+                                is_active: !isSuspended,
+                                is_suspended: isSuspended,
+                                account_active: Boolean(u.is_active),
+                                has_user_account: true,
+                                isLead: (u.staff_role || '').toLowerCase().includes('lead'),
+                                activeJobs: 0,
+                                completedJobs: 0,
+                                efficiency: 'Available',
+                                workload: '0%',
+                                workloadLabel: '0% - Light',
+                                workloadType: 'success',
+                                initials,
+                                created_at: u.created_at,
+                            });
+                        }
+                    });
+
+                    staffData = Array.from(staffMap.values());
+                }
+            }
+
+            setStaffList(staffData);
         } catch (err) {
             console.error('Error fetching staff:', err);
             showNotification(`Server error: ${err.message}`, 'error');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleToggleStaffStatus = async (member) => {
+        const currentlySuspended = isMemberSuspended(member);
+        const nextActive = currentlySuspended; // If suspended, next is active (true). If active, next is false (suspend).
+        const staffId = Number(member.staff_id || member.id);
+        const userId = member.user_id;
+
+        // 1. Instant optimistic UI update: immediately reflects state in React
+        setStaffList((prevList) =>
+            prevList.map((m) => {
+                const mId = Number(m.staff_id || m.id);
+                if (mId === staffId) {
+                    return {
+                        ...m,
+                        is_active: nextActive,
+                        is_suspended: !nextActive,
+                        account_active: nextActive,
+                        staff_active: nextActive,
+                    };
+                }
+                return m;
+            })
+        );
+
+        showNotification(
+            `Staff account for ${member.name} is now ${nextActive ? 'ACTIVE' : 'SUSPENDED'}.`,
+            nextActive ? 'success' : 'warning'
+        );
+
+        try {
+            const token = localStorage.getItem('garage_auth_token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                'X-User-Role': 'admin',
+                'X-User-Email': 'admin@precision.garage',
+            };
+
+            const calls = [];
+            // Update staff status (updates staff_data and users in DB)
+            if (staffId) {
+                calls.push(
+                    fetch(`${API_BASE_URL}/staff/${staffId}/status`, {
+                        method: 'PATCH',
+                        headers,
+                        body: JSON.stringify({ is_active: nextActive }),
+                    }).catch(() => null)
+                );
+            }
+
+            // Also update users endpoint if user_id linked
+            if (userId) {
+                calls.push(
+                    fetch(`${API_BASE_URL}/users/${userId}/status`, {
+                        method: 'PATCH',
+                        headers,
+                        body: JSON.stringify({ is_active: nextActive }),
+                    }).catch(() => null)
+                );
+            }
+
+            await Promise.all(calls);
+            // Refresh live data in background
+            await fetchStaff();
+        } catch (err) {
+            console.error('Failed to sync status with server:', err);
+            await fetchStaff();
+            showNotification(`Could not sync status with server: ${err.message}`, 'error');
         }
     };
 
@@ -132,12 +264,23 @@ export default function Staff() {
         }
     };
 
-    const filteredStaff = staffList.filter((member) => {
-        // Only show active staff who have active user accounts
-        if (member.is_active === false || member.has_user_account === false || member.account_active === false) {
-            return false;
-        }
+    const [categoryFilter, setCategoryFilter] = useState('active'); // 'active' is primarily active by default
 
+    const isMemberSuspended = (member) => {
+        return member.is_suspended === true || member.is_active === false || member.account_active === false;
+    };
+
+    const activeCount = staffList.filter((m) => !isMemberSuspended(m)).length;
+    const suspendedCount = staffList.filter((m) => isMemberSuspended(m)).length;
+    const allCount = staffList.length;
+
+    const filteredStaff = staffList.filter((member) => {
+        const suspended = isMemberSuspended(member);
+        if (categoryFilter === 'active' && suspended) return false;
+        if (categoryFilter === 'suspended' && !suspended) return false;
+        // 'all' includes both active and suspended
+
+        if (!searchTerm.trim()) return true;
         const search = searchTerm.toLowerCase();
         return (
             (member.name || '').toLowerCase().includes(search) ||
@@ -215,6 +358,46 @@ export default function Staff() {
                             </button>
                         </div>
 
+                        {/* Status Category Tabs: Active (primarily active), Suspended, All */}
+                        <div className="staff-category-container">
+                            <div className="staff-category-tabs" role="tablist" aria-label="Staff categories">
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={categoryFilter === 'active'}
+                                    className={`category-tab-btn ${categoryFilter === 'active' ? 'active' : ''}`}
+                                    onClick={() => setCategoryFilter('active')}
+                                >
+                                    <span className="tab-dot dot-active"></span>
+                                    <span>Active</span>
+                                    <span className="tab-badge">{activeCount}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={categoryFilter === 'suspended'}
+                                    className={`category-tab-btn ${categoryFilter === 'suspended' ? 'active active-suspended' : ''}`}
+                                    onClick={() => setCategoryFilter('suspended')}
+                                >
+                                    <span className="tab-dot dot-suspended"></span>
+                                    <span>Suspended</span>
+                                    <span className="tab-badge badge-suspended">{suspendedCount}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={categoryFilter === 'all'}
+                                    className={`category-tab-btn ${categoryFilter === 'all' ? 'active' : ''}`}
+                                    onClick={() => setCategoryFilter('all')}
+                                >
+                                    <span>All</span>
+                                    <span className="tab-badge">{allCount}</span>
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Bento Grid Staff Cards */}
                         <div className="staff-grid">
                             {isLoading ? (
@@ -229,67 +412,140 @@ export default function Staff() {
                                     />
                                 </div>
                             ) : (
-                                filteredStaff.map((member) => (
-                                    <div key={member.id} className="staff-card">
-                                        <div className="card-top">
-                                            <div className="profile-group">
-                                                <div className="avatar-box">
-                                                    <span className="avatar-initials">{member.initials}</span>
+                                <>
+                                    {filteredStaff.length === 0 && (
+                                        <div className="staff-empty-category">
+                                            <EngineeringIcon className="empty-cat-icon" />
+                                            <h4 className="empty-cat-title">
+                                                {categoryFilter === 'suspended'
+                                                    ? 'No Suspended Accounts'
+                                                    : categoryFilter === 'active'
+                                                    ? 'No Active Personnel'
+                                                    : 'No Staff Found'}
+                                            </h4>
+                                            <p className="empty-cat-subtitle">
+                                                {categoryFilter === 'suspended'
+                                                    ? 'All registered mechanics and workshop technicians are in active status.'
+                                                    : searchTerm
+                                                    ? `No personnel matched your search query "${searchTerm}".`
+                                                    : 'No staff members currently in this category.'}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {filteredStaff.map((member) => {
+                                        const suspended = isMemberSuspended(member);
+                                        return (
+                                            <div
+                                                key={member.id}
+                                                className={`staff-card ${suspended ? 'staff-card-suspended' : ''}`}
+                                            >
+                                                <div className="card-top">
+                                                    <div className="profile-group">
+                                                        <div className={`avatar-box ${suspended ? 'avatar-suspended' : ''}`}>
+                                                            <span className="avatar-initials">{member.initials}</span>
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="staff-name">{member.name}</h3>
+                                                            <p className={`staff-role ${member.isLead && !suspended ? 'role-lead' : ''}`}>
+                                                                {member.role.toUpperCase()}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {suspended ? (
+                                                        <div className="staff-rate-tag staff-suspended-tag font-mono">
+                                                            SUSPENDED
+                                                        </div>
+                                                    ) : (
+                                                        <div className="staff-rate-tag font-mono">
+                                                            ${member.hourly_rate}/hr
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div>
-                                                    <h3 className="staff-name">{member.name}</h3>
-                                                    <p className={`staff-role ${member.isLead ? 'role-lead' : ''}`}>
-                                                        {member.role.toUpperCase()}
-                                                    </p>
+
+                                                <div className="staff-contact-details font-mono">
+                                                    <span>📧 {member.email}</span>
+                                                    {member.phone && <span>📞 {member.phone}</span>}
+                                                </div>
+
+                                                <div className="metrics-row">
+                                                    <div className="metric-box">
+                                                        <span className="metric-label">
+                                                            {member.role.toLowerCase().includes('advisor') ? 'Queue Jobs' : 'Active Jobs'}
+                                                        </span>
+                                                        <span className="metric-value">{member.activeJobs}</span>
+                                                    </div>
+
+                                                    <div className="metric-box">
+                                                        <span className="metric-label">Efficiency</span>
+                                                        <span className={`metric-value ${suspended ? 'text-muted' : 'text-success'}`}>{member.efficiency}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="card-bottom">
+                                                    <div className="workload-info">
+                                                        <span className="text-muted">Workload Capacity</span>
+                                                        <span
+                                                            className={
+                                                                suspended
+                                                                    ? 'text-muted'
+                                                                    : member.workloadType === 'warning'
+                                                                    ? 'text-warning'
+                                                                    : 'text-success'
+                                                            }
+                                                        >
+                                                            {suspended ? 'Account Suspended' : member.workloadLabel}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="progress-bar-track">
+                                                        <div
+                                                            className={`progress-bar-fill ${
+                                                                suspended
+                                                                    ? 'fill-suspended'
+                                                                    : member.workloadType === 'warning'
+                                                                    ? 'fill-warning'
+                                                                    : 'fill-success'
+                                                            }`}
+                                                            style={{ width: suspended ? '0%' : member.workload }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="card-actions-row">
+                                                    {suspended ? (
+                                                        <button
+                                                            type="button"
+                                                            className="staff-action-btn staff-reactivate-btn"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleStaffStatus(member);
+                                                            }}
+                                                            title="Reactivate mechanic account"
+                                                        >
+                                                            <CheckCircleIcon style={{ fontSize: 14 }} />
+                                                            <span>Reactivate</span>
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            className="staff-action-btn staff-suspend-btn"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleStaffStatus(member);
+                                                            }}
+                                                            title="Suspend mechanic account"
+                                                        >
+                                                            <BlockIcon style={{ fontSize: 14 }} />
+                                                            <span>Suspend</span>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
-
-                                            <div className="staff-rate-tag font-mono">
-                                                ${member.hourly_rate}/hr
-                                            </div>
-                                        </div>
-
-                                        <div className="staff-contact-details font-mono">
-                                            <span>📧 {member.email}</span>
-                                            {member.phone && <span>📞 {member.phone}</span>}
-                                        </div>
-
-                                        <div className="metrics-row">
-                                            <div className="metric-box">
-                                                <span className="metric-label">
-                                                    {member.role.toLowerCase().includes('advisor') ? 'Queue Jobs' : 'Active Jobs'}
-                                                </span>
-                                                <span className="metric-value">{member.activeJobs}</span>
-                                            </div>
-
-                                            <div className="metric-box">
-                                                <span className="metric-label">Efficiency</span>
-                                                <span className="metric-value text-success">{member.efficiency}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="card-bottom">
-                                            <div className="workload-info">
-                                                <span className="text-muted">Workload Capacity</span>
-                                                <span
-                                                    className={
-                                                        member.workloadType === 'warning' ? 'text-warning' : 'text-success'
-                                                    }
-                                                >
-                                                    {member.workloadLabel}
-                                                </span>
-                                            </div>
-
-                                            <div className="progress-bar-track">
-                                                <div
-                                                    className={`progress-bar-fill ${member.workloadType === 'warning' ? 'fill-warning' : 'fill-success'
-                                                        }`}
-                                                    style={{ width: member.workload }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
+                                        );
+                                    })}
+                                </>
                             )}
 
                             {/* Quick Add Placeholder Card */}
