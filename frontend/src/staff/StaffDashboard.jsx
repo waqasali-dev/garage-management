@@ -95,9 +95,13 @@ export default function StaffDashboard() {
         (wo) => wo.status !== 'completed' && wo.status !== 'cancelled'
     );
 
+    // Active in-workshop queue: jobs in active repair pipeline (excluding cars already ready for pickup)
+    const activeStaffOrders = activeGarageOrders.filter((w) => w.status !== 'ready');
+
     const metrics = {
-        total: activeGarageOrders.length,
+        total: activeStaffOrders.length,
         received: activeGarageOrders.filter((w) => w.status === 'received').length,
+        scheduled: activeGarageOrders.filter((w) => w.status === 'scheduled').length,
         diagnosed: activeGarageOrders.filter((w) => w.status === 'diagnosed').length,
         inProgress: activeGarageOrders.filter((w) => w.status === 'in_progress').length,
         ready: activeGarageOrders.filter((w) => w.status === 'ready').length,
@@ -114,7 +118,13 @@ export default function StaffDashboard() {
             (wo.owner_name || '').toLowerCase().includes(query) ||
             (wo.license_plate || '').toLowerCase().includes(query);
 
-        const matchesStatus = statusFilter === 'all' || wo.status === statusFilter;
+        // When viewing 'all' (default), ready for pickup orders should NOT appear in staff hub,
+        // but they remain accessible when explicitly selecting the 'ready' filter.
+        const matchesStatus =
+            statusFilter === 'all'
+                ? wo.status !== 'ready'
+                : wo.status === statusFilter;
+
         return matchesSearch && matchesStatus;
     });
 
@@ -245,14 +255,14 @@ export default function StaffDashboard() {
                                 </div>
                             </div>
 
-                            <div className="metric-card card-ready" onClick={() => setStatusFilter('ready')} style={{ borderColor: 'rgba(45, 212, 191, 0.3)' }}>
+                            <div className="metric-card card-ready" onClick={() => setStatusFilter('ready')} style={{ borderColor: 'rgba(45, 212, 191, 0.3)', cursor: 'pointer' }}>
                                 <div className="metric-icon-wrap" style={{ color: '#2dd4bf', backgroundColor: 'rgba(45, 212, 191, 0.1)', borderColor: 'rgba(45, 212, 191, 0.3)' }}>
                                     <CheckCircleIcon />
                                 </div>
                                 <div>
                                     <div className="metric-label">Ready for Pickup</div>
                                     <div className="metric-val" style={{ color: '#2dd4bf' }}>{metrics.ready}</div>
-                                    <div className="metric-hint">Ready for Customer</div>
+                                    <div className="metric-hint">Ready for Customer (Click to view)</div>
                                 </div>
                             </div>
                         </div>
@@ -274,6 +284,13 @@ export default function StaffDashboard() {
                                     Received ({metrics.received})
                                 </button>
                                 <button
+                                    className={`tab-btn ${statusFilter === 'scheduled' ? 'active' : ''}`}
+                                    onClick={() => setStatusFilter('scheduled')}
+                                    style={statusFilter === 'scheduled' ? { backgroundColor: 'rgba(52, 211, 153, 0.2)', color: '#34d399', borderColor: '#34d399' } : {}}
+                                >
+                                    Scheduled ({metrics.scheduled})
+                                </button>
+                                <button
                                     className={`tab-btn tab-diagnosed ${statusFilter === 'diagnosed' ? 'active' : ''}`}
                                     onClick={() => setStatusFilter('diagnosed')}
                                 >
@@ -290,7 +307,7 @@ export default function StaffDashboard() {
                                     onClick={() => setStatusFilter('ready')}
                                     style={statusFilter === 'ready' ? { backgroundColor: 'rgba(45, 212, 191, 0.2)', color: '#2dd4bf', borderColor: '#2dd4bf' } : {}}
                                 >
-                                    Ready ({metrics.ready})
+                                    Ready for Pickup ({metrics.ready})
                                 </button>
                             </div>
                         </div>
