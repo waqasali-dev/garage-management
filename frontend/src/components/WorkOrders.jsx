@@ -127,10 +127,6 @@ export default function WorkOrders() {
     const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
     const readyPickupCount = workOrders.filter((w) => w.status === 'ready').length;
     const completedCount = workOrders.filter((w) => w.status === 'completed').length;
-    const totalEstRevenue = workOrders.reduce(
-        (sum, w) => sum + (parseFloat(w.total_cost) || parseFloat(w.estimated_cost) || 0),
-        0
-    );
 
     const handleExportCSV = () => {
         if (!filteredOrders.length) {
@@ -276,48 +272,6 @@ export default function WorkOrders() {
                                         )}
                                     </div>
                                 ))}
-                            </div>
-                        </div>
-
-                        {/* Micro Stats Grid */}
-                        <div className="stats-grid">
-                            <div
-                                className={`stat-card ${statusFilter === 'in_progress' ? 'stat-active' : ''}`}
-                                onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <span className="stat-title">In Active Repair</span>
-                                <span className="stat-number text-highlight">{inBayCount}</span>
-                            </div>
-                            <div
-                                className={`stat-card border-warning ${statusFilter === 'received' ? 'stat-active' : ''}`}
-                                onClick={() => setStatusFilter(statusFilter === 'received' ? 'all' : 'received')}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <span className="stat-title">Received Queue</span>
-                                <span className="stat-number text-warning">{receivedCount}</span>
-                            </div>
-                            <div
-                                className={`stat-card ${statusFilter === 'ready' ? 'stat-active' : ''}`}
-                                onClick={() => setStatusFilter(statusFilter === 'ready' ? 'all' : 'ready')}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <span className="stat-title">Ready for Pickup</span>
-                                <span className="stat-number" style={{ color: '#2dd4bf' }}>{readyPickupCount}</span>
-                            </div>
-                            <div
-                                className={`stat-card border-success ${statusFilter === 'completed' ? 'stat-active' : ''}`}
-                                onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <span className="stat-title">Picked Up / Done</span>
-                                <span className="stat-number text-success">{completedCount}</span>
-                            </div>
-                            <div className="stat-card">
-                                <span className="stat-title">Est. Revenue</span>
-                                <span className="stat-number font-mono">
-                                    ${totalEstRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
                             </div>
                         </div>
 
