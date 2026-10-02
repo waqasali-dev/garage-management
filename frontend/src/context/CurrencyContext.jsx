@@ -37,6 +37,14 @@ export function CurrencyProvider({ children }) {
             currency_symbol: '$',
             currency_decimals: 2,
             workshop_name: 'Precision Garage',
+            working_hours: {
+                operating_days: [1, 2, 3, 4, 5, 6],
+                slot_duration_minutes: 60,
+                shifts: [
+                    { id: 'shift-1', start: '08:00', end: '13:00', label: 'Morning Shift' },
+                    { id: 'shift-2', start: '16:00', end: '20:00', label: 'Evening Shift' },
+                ],
+            },
         };
     });
 
@@ -57,6 +65,14 @@ export function CurrencyProvider({ children }) {
                         currency_symbol: json.data.currency_symbol || '$',
                         currency_decimals: json.data.currency_decimals !== undefined ? json.data.currency_decimals : 2,
                         workshop_name: json.data.workshop_name || 'Precision Garage',
+                        working_hours: json.data.working_hours || {
+                            operating_days: [1, 2, 3, 4, 5, 6],
+                            slot_duration_minutes: 60,
+                            shifts: [
+                                { id: 'shift-1', start: '08:00', end: '13:00', label: 'Morning Shift' },
+                                { id: 'shift-2', start: '16:00', end: '20:00', label: 'Evening Shift' },
+                            ],
+                        },
                     };
                     setSettings(data);
                     try {
@@ -134,6 +150,7 @@ export function CurrencyProvider({ children }) {
             currency_symbol: json.data.currency_symbol || '$',
             currency_decimals: json.data.currency_decimals !== undefined ? json.data.currency_decimals : 2,
             workshop_name: json.data.workshop_name || 'Precision Garage',
+            working_hours: json.data.working_hours || newSettings.working_hours || settings.working_hours,
         };
         setSettings(data);
         try {
@@ -141,7 +158,7 @@ export function CurrencyProvider({ children }) {
         } catch (e) {}
 
         return json;
-    }, []);
+    }, [settings.working_hours]);
 
     const currency = {
         code: settings.currency_code,
@@ -156,6 +173,7 @@ export function CurrencyProvider({ children }) {
                 currency,
                 taxPercentage: settings.tax_percentage,
                 workshopName: settings.workshop_name,
+                workingHours: settings.working_hours,
                 formatCurrency,
                 formatRaw,
                 fetchSettings,

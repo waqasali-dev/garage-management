@@ -8,14 +8,16 @@ import PersonIcon from '@mui/icons-material/Person';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SettingsIcon from '@mui/icons-material/Settings';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './css/Scheduling.css';
 import { API_BASE_URL } from '../config/api';
-// Local API URL fallback: 'http://localhost:5000/api'
+import { useCurrency } from '../context/CurrencyContext';
 
-const BAYS = [
-    { id: 'B1', name: 'B1', label: 'Heavy Repair', loadPercent: '80%', loadType: 'error' },
-    { id: 'B2', name: 'B2', label: 'Diagnostics & Elect.', loadPercent: '50%', loadType: 'success' },
-    { id: 'B3', name: 'B3', label: 'Express Lube & Tires', loadPercent: '25%', loadType: 'success' },
+const DEFAULT_BAYS = [
+    { id: 'B1', bay_id: 'B1', name: 'B1', bay_name: 'Bay 1 - Heavy Repair', bay_type: 'heavy_repair', opening_time: '08:00', closing_time: '18:00', slot_duration_minutes: 60, loadPercent: '60%', loadType: 'pending' },
+    { id: 'B2', bay_id: 'B2', name: 'B2', bay_name: 'Bay 2 - Diagnostics & Elect.', bay_type: 'diagnostics', opening_time: '08:00', closing_time: '18:00', slot_duration_minutes: 60, loadPercent: '40%', loadType: 'success' },
+    { id: 'B3', bay_id: 'B3', name: 'B3', bay_name: 'Bay 3 - Express Lube & Tires', bay_type: 'express', opening_time: '08:00', closing_time: '18:00', slot_duration_minutes: 30, loadPercent: '20%', loadType: 'success' },
 ];
 
 const PRIORITY_OPTIONS = [
@@ -37,7 +39,7 @@ const getLocalDateString = (d) => {
 const getWeekDays = (baseDate) => {
     const curr = new Date(baseDate);
     const day = curr.getDay(); // 0 is Sunday, 1 is Monday...
-    const diff = curr.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday to get Monday
+    const diff = curr.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(curr.setDate(diff));
 
     const days = [];
@@ -60,15 +62,16 @@ const getWeekDays = (baseDate) => {
 };
 
 export default function Scheduling() {
+    const { openSettingsModal } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
     const weekDays = getWeekDays(currentDate);
 
-    // Automatically select today's local date
     const todayStr = getLocalDateString(new Date());
     const [selectedDate, setSelectedDate] = useState(todayStr);
 
     const [sidebarTab, setSidebarTab] = useState('selected_day'); // 'selected_day' | 'unscheduled'
+    const [bays, setBays] = useState(DEFAULT_BAYS);
     const [scheduledTasks, setScheduledTasks] = useState([]);
     const [unscheduledWorkOrders, setUnscheduledWorkOrders] = useState([]);
     const [staffList, setStaffList] = useState([]);
@@ -76,7 +79,42 @@ export default function Scheduling() {
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState(null);
 
-    // Modal state for Add Task
+    // ==========================================
+    // APPOINT CAR TO BAY MODAL STATE
+    // ==========================================
+    const [isAppointModalOpen, setIsAppointModalOpen] = useState(false);
+    const [eligibleWorkOrders, setEligibleWorkOrders] = useState([]);
+    const [appointForm, setAppointForm] = useState({
+        work_order_id: '',
+        bay_id: 'B1',
+        appointment_date: todayStr,
+        start_time: '',
+        end_time: '',
+        assigned_staff_id: '',
+        service_type: 'Diagnostics & Intake Service',
+        customer_notes: '',
+    });
+    const [availableSlots, setAvailableSlots] = useState([]);
+    const [isSlotsLoading, setIsSlotsLoading] = useState(false);
+    const [isAppointing, setIsAppointing] = useState(false);
+
+    // ==========================================
+    // BAY CONFIGURATION MODAL STATE
+    // ==========================================
+    const [isBayConfigOpen, setIsBayConfigOpen] = useState(false);
+    const [newBayForm, setNewBayForm] = useState({
+        bay_id: '',
+        bay_name: '',
+        bay_type: 'general',
+        opening_time: '08:00',
+        closing_time: '18:00',
+        slot_duration_minutes: 60,
+    });
+    const [isCreatingBay, setIsCreatingBay] = useState(false);
+
+    // ==========================================
+    // QUICK TASK MODAL STATE
+    // ==========================================
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [taskForm, setTaskForm] = useState({
         task_title: '',
@@ -96,6 +134,62 @@ export default function Scheduling() {
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
         setTimeout(() => setNotification(null), 4500);
+    };
+
+    // Fetch Bays from API
+    const fetchBays = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                    setBays(
+                        json.data.map((b) => ({
+                            ...b,
+                            id: b.bay_id,
+                            name: b.bay_id,
+                            label: b.bay_name,
+                        }))
+                    );
+                }
+            }
+        } catch (err) {
+            console.warn('Using default bays fallback:', err.message);
+        }
+    };
+
+    // Fetch Eligible Work Orders strictly in 'received' or 'diagnosed' phase
+    const fetchEligibleWorkOrders = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/appointments/eligible-work-orders`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data)) {
+                    setEligibleWorkOrders(json.data);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching eligible work orders:', err);
+        }
+    };
+
+    // Fetch Real-Time Slots for Appoint Modal
+    const fetchSlotsForAppoint = async (bayId, date) => {
+        if (!bayId || !date) return;
+        setIsSlotsLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays/${encodeURIComponent(bayId)}/available-slots?date=${date}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.slots)) {
+                    setAvailableSlots(json.slots);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching slots:', err);
+        } finally {
+            setIsSlotsLoading(false);
+        }
     };
 
     // Fetch Tasks, Staff, and Work Orders
@@ -124,7 +218,6 @@ export default function Scheduling() {
                 const woJson = await woRes.json();
                 if (woJson.success && Array.isArray(woJson.data)) {
                     setWorkOrdersList(woJson.data);
-                    // Filter unscheduled work orders
                     const unscheduled = woJson.data.filter(
                         (wo) => !wo.scheduled_start && wo.status !== 'completed' && wo.status !== 'cancelled'
                     );
@@ -140,14 +233,24 @@ export default function Scheduling() {
     };
 
     useEffect(() => {
+        fetchBays();
         fetchSchedules();
+        fetchEligibleWorkOrders();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Update form date when selectedDate changes
     useEffect(() => {
         setTaskForm((prev) => ({ ...prev, scheduled_date: selectedDate }));
+        setAppointForm((prev) => ({ ...prev, appointment_date: selectedDate }));
     }, [selectedDate]);
+
+    // When Appoint Modal opens or bay/date changes, refresh slots
+    useEffect(() => {
+        if (isAppointModalOpen && appointForm.bay_id && appointForm.appointment_date) {
+            fetchSlotsForAppoint(appointForm.bay_id, appointForm.appointment_date);
+        }
+    }, [isAppointModalOpen, appointForm.bay_id, appointForm.appointment_date]);
 
     // Week Navigation
     const handlePrevWeek = () => {
@@ -174,13 +277,11 @@ export default function Scheduling() {
         setSelectedDate(todayStr);
     };
 
-    // Handle Task Form Change
+    // Handle Quick Task Form Change
     const handleFormChange = (e) => {
         const { name, value } = e.target;
         setTaskForm((prev) => {
             const updated = { ...prev, [name]: value };
-
-            // When work order is chosen, auto-fill vehicle
             if (name === 'work_order_id' && value) {
                 const matchedWO = workOrdersList.find((w) => w.work_order_id === value);
                 if (matchedWO) {
@@ -194,7 +295,7 @@ export default function Scheduling() {
         });
     };
 
-    // Submit New Task
+    // Submit Quick Task
     const handleCreateTask = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -211,7 +312,6 @@ export default function Scheduling() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(taskForm),
             });
-
             const json = await res.json();
 
             if (!res.ok) {
@@ -225,7 +325,7 @@ export default function Scheduling() {
                 task_title: '',
                 task_description: '',
                 priority: 'standard',
-                bay_assigned: 'B1',
+                bay_assigned: bays[0]?.bay_id || 'B1',
                 scheduled_date: selectedDate,
                 start_time: '09:00',
                 end_time: '11:00',
@@ -242,6 +342,113 @@ export default function Scheduling() {
         }
     };
 
+    // Submit Admin Appoint Car to Bay
+    const handleAdminAppoint = async (e) => {
+        e.preventDefault();
+        if (isAppointing) return;
+
+        if (!appointForm.work_order_id) {
+            showNotification('Please select a car / work order in received or diagnosed phase.', 'error');
+            return;
+        }
+        if (!appointForm.start_time || !appointForm.end_time) {
+            showNotification('Please select an available time slot for the bay.', 'error');
+            return;
+        }
+
+        setIsAppointing(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/appointments/admin-appoint`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appointForm),
+            });
+            const json = await res.json();
+
+            if (!res.ok) {
+                showNotification(json.error || 'Failed to appoint car to bay', 'error');
+                return;
+            }
+
+            showNotification(json.message || '🎉 Vehicle appointed to bay successfully!', 'success');
+            setIsAppointModalOpen(false);
+            setAppointForm({
+                work_order_id: '',
+                bay_id: bays[0]?.bay_id || 'B1',
+                appointment_date: selectedDate,
+                start_time: '',
+                end_time: '',
+                assigned_staff_id: '',
+                service_type: 'Diagnostics & Intake Service',
+                customer_notes: '',
+            });
+            fetchSchedules();
+            fetchEligibleWorkOrders();
+            fetchBays();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsAppointing(false);
+        }
+    };
+
+    // Create New Workshop Bay (Admin)
+    const handleCreateBay = async (e) => {
+        e.preventDefault();
+        if (isCreatingBay) return;
+        if (!newBayForm.bay_name.trim()) {
+            showNotification('Bay Name is required.', 'error');
+            return;
+        }
+
+        setIsCreatingBay(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newBayForm),
+            });
+            const json = await res.json();
+
+            if (!res.ok) {
+                showNotification(json.error || 'Failed to create workshop bay', 'error');
+                return;
+            }
+
+            showNotification(`🎉 Workshop Bay '${json.data.bay_name}' configured!`, 'success');
+            setNewBayForm({
+                bay_id: '',
+                bay_name: '',
+                bay_type: 'general',
+                opening_time: '08:00',
+                closing_time: '18:00',
+                slot_duration_minutes: 60,
+            });
+            fetchBays();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsCreatingBay(false);
+        }
+    };
+
+    // Toggle Bay Active State
+    const handleToggleBayStatus = async (bay) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays/${bay.bay_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_active: !bay.is_active }),
+            });
+            if (res.ok) {
+                showNotification(`Bay '${bay.bay_name}' status updated`, 'success');
+                fetchBays();
+            }
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        }
+    };
+
     // Delete Task
     const handleDeleteTask = async (taskId, e) => {
         if (e) e.stopPropagation();
@@ -254,6 +461,7 @@ export default function Scheduling() {
             if (res.ok) {
                 showNotification('Task deleted from schedule', 'info');
                 fetchSchedules();
+                fetchEligibleWorkOrders();
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
@@ -269,18 +477,16 @@ export default function Scheduling() {
         ? `${selectedDayObj.name}, ${selectedDayObj.monthName} ${selectedDayObj.dateNumber}`
         : selectedDate;
 
-    // 7-day week header title e.g. "Oct 23 - Oct 29, 2026"
+    // 7-day week header title
     const weekHeaderTitle = `${weekDays[0].monthName} ${weekDays[0].dateNumber} - ${weekDays[6].monthName} ${weekDays[6].dateNumber}, ${weekDays[0].rawDate.getFullYear()}`;
+
+    // Find currently selected WO details for Appoint Modal
+    const selectedWoObj = eligibleWorkOrders.find((w) => w.work_order_id === appointForm.work_order_id);
 
     return (
         <div className="scheduling-layout">
-            {/* Sidebar Component */}
-            <Sidebar
-                isOpen={isSidebarOpen}
-                onClose={() => setIsSidebarOpen(false)}
-            />
+            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-            {/* Main Viewport Container */}
             <div className="scheduling-wrapper">
                 {/* Header Bar */}
                 <header className="scheduling-header">
@@ -296,11 +502,55 @@ export default function Scheduling() {
                     </div>
 
                     <div className="header-actions">
-                        <button className="icon-btn" onClick={fetchSchedules} disabled={isLoading} title="Refresh Schedules">
+                        {/* Manage Bays Button */}
+                        <button
+                            type="button"
+                            className="btn-manage-bays"
+                            onClick={() => setIsBayConfigOpen(true)}
+                            title="Configure Workshop Bays, Timings & Capacity"
+                        >
+                            <SettingsIcon fontSize="small" />
+                            <span>Bays ({bays.length})</span>
+                        </button>
+
+                        {/* Appoint Car to Bay Button */}
+                        <button
+                            type="button"
+                            className="btn-appoint-cta"
+                            onClick={() => {
+                                fetchEligibleWorkOrders();
+                                setIsAppointModalOpen(true);
+                            }}
+                            title="Appoint a received or diagnosed vehicle to a bay slot"
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>car_repair</span>
+                            <span>Appoint Car to Bay</span>
+                        </button>
+
+                        <button className="icon-btn" onClick={() => { fetchSchedules(); fetchBays(); fetchEligibleWorkOrders(); }} disabled={isLoading} title="Refresh Schedules">
                             <RefreshIcon className={isLoading ? 'spinning-icon' : ''} fontSize="small" />
                         </button>
                     </div>
                 </header>
+
+                {/* Toast Notification Banner */}
+                {notification && (
+                    <div style={{
+                        margin: '12px 24px 0 24px',
+                        padding: '10px 16px',
+                        borderRadius: '8px',
+                        background: notification.type === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        border: `1px solid ${notification.type === 'error' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`,
+                        color: notification.type === 'error' ? '#f87171' : '#34d399',
+                        fontSize: '13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: '600'
+                    }}>
+                        <span>{notification.msg}</span>
+                    </div>
+                )}
 
                 {/* Main Interactive Workspace Area */}
                 <main className="scheduling-main">
@@ -354,12 +604,12 @@ export default function Scheduling() {
                                                 type="button"
                                                 className="quick-add-task-btn"
                                                 onClick={() => {
-                                                    setTaskForm((prev) => ({ ...prev, scheduled_date: selectedDate }));
-                                                    setIsModalOpen(true);
+                                                    setAppointForm((prev) => ({ ...prev, appointment_date: selectedDate }));
+                                                    setIsAppointModalOpen(true);
                                                 }}
                                             >
                                                 <AddIcon fontSize="small" />
-                                                <span>Add Task for this Day</span>
+                                                <span>Appoint Car to Bay</span>
                                             </button>
                                         </div>
                                     ) : (
@@ -431,19 +681,17 @@ export default function Scheduling() {
                                                 key={item.work_order_id}
                                                 className="draggable-card"
                                                 onClick={() => {
-                                                    setTaskForm((prev) => ({
+                                                    setAppointForm((prev) => ({
                                                         ...prev,
                                                         work_order_id: item.work_order_id,
-                                                        vehicle_id: item.vehicle_id,
-                                                        task_title: `WO ${item.work_order_id} - ${item.make} ${item.model}`,
-                                                        scheduled_date: selectedDate,
+                                                        appointment_date: selectedDate,
                                                     }));
-                                                    setIsModalOpen(true);
+                                                    setIsAppointModalOpen(true);
                                                 }}
                                             >
                                                 <div className="card-top">
                                                     <span className="wo-code font-mono">{item.work_order_id}</span>
-                                                    <span className="priority-badge badge-pending">
+                                                    <span className={`priority-badge ${item.status === 'diagnosed' ? 'car-badge-diagnosed' : 'car-badge-received'}`}>
                                                         {item.status.toUpperCase()}
                                                     </span>
                                                 </div>
@@ -461,7 +709,7 @@ export default function Scheduling() {
                                                         <span>{item.license_plate || item.vin}</span>
                                                     </div>
                                                     <div className="meta-tag text-yellow font-mono">
-                                                        <span>+ Schedule</span>
+                                                        <span>+ Appoint to Bay</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -495,7 +743,7 @@ export default function Scheduling() {
                                 <div className="bay-status-legend">
                                     <span className="legend-item">
                                         <span className="legend-dot dot-success"></span>
-                                        <span>Bay Available</span>
+                                        <span>Bay Slot Free</span>
                                     </span>
                                     <span className="legend-item">
                                         <span className="legend-dot dot-error"></span>
@@ -512,14 +760,14 @@ export default function Scheduling() {
                                     }}
                                 >
                                     <span className="material-symbols-outlined">add</span>
-                                    <span>Add Task</span>
+                                    <span>Quick Task</span>
                                 </button>
                             </div>
                         </div>
 
                         {/* Calendar Grid Container */}
                         <div className="calendar-scroll-grid">
-                            {/* Days Header (Complete 7 Days) */}
+                            {/* Days Header */}
                             <div className="grid-header-row">
                                 <div className="resource-header-cell">
                                     <span>Resource / Bay</span>
@@ -549,15 +797,18 @@ export default function Scheduling() {
 
                             {/* Resource Rows / Bays */}
                             <div className="grid-body">
-                                {BAYS.map((bay) => (
-                                    <div key={bay.id} className="bay-row">
+                                {bays.map((bay) => (
+                                    <div key={bay.id || bay.bay_id} className="bay-row">
                                         <div className="bay-header-cell">
-                                            <div className="bay-badge font-mono">{bay.name}</div>
-                                            <span className="bay-label">{bay.label}</span>
-                                            <div className="bay-load-bar">
+                                            <div className="bay-badge font-mono">{bay.name || bay.bay_id}</div>
+                                            <span className="bay-label">{bay.bay_name || bay.label}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                                                ⏰ {bay.opening_time || '08:00'} - {bay.closing_time || '18:00'}
+                                            </span>
+                                            <div className="bay-load-bar" style={{ marginTop: '4px' }}>
                                                 <div
-                                                    className={`load-fill ${bay.loadType}`}
-                                                    style={{ width: bay.loadPercent }}
+                                                    className={`load-fill ${bay.loadType || 'success'}`}
+                                                    style={{ width: bay.loadPercent || '30%' }}
                                                 ></div>
                                             </div>
                                         </div>
@@ -566,12 +817,12 @@ export default function Scheduling() {
                                             {weekDays.map((day) => {
                                                 const isSelected = selectedDate === day.fullDate;
                                                 const dayBayTasks = scheduledTasks.filter(
-                                                    (t) => t.scheduled_date === day.fullDate && (t.bay_assigned === bay.id || t.bay_assigned?.startsWith(bay.id))
+                                                    (t) => t.scheduled_date === day.fullDate && (t.bay_assigned === bay.bay_id || t.bay_assigned === bay.id)
                                                 );
 
                                                 return (
                                                     <div
-                                                        key={`${bay.id}-${day.fullDate}`}
+                                                        key={`${bay.bay_id || bay.id}-${day.fullDate}`}
                                                         className={`day-drop-zone ${isSelected ? 'active-day-bg' : ''}`}
                                                         onClick={() => setSelectedDate(day.fullDate)}
                                                         style={{ cursor: 'pointer' }}
@@ -597,8 +848,17 @@ export default function Scheduling() {
                                                                 </div>
                                                             ))
                                                         ) : (
-                                                            <div className="empty-slot-placeholder">
-                                                                <span className="hover-add-icon material-symbols-outlined">
+                                                            <div className="empty-slot-placeholder" onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setAppointForm((prev) => ({
+                                                                    ...prev,
+                                                                    bay_id: bay.bay_id || bay.id,
+                                                                    appointment_date: day.fullDate,
+                                                                }));
+                                                                setSelectedDate(day.fullDate);
+                                                                setIsAppointModalOpen(true);
+                                                            }}>
+                                                                <span className="hover-add-icon material-symbols-outlined" title="Appoint Car to this Bay">
                                                                     add_circle
                                                                 </span>
                                                             </div>
@@ -615,7 +875,362 @@ export default function Scheduling() {
                 </main>
             </div>
 
-            {/* Modal Overlay: Add Task */}
+            {/* ==================================================== */}
+            {/* MODAL 1: APPOINT CAR TO BAY (RECEIVED & DIAGNOSED ONLY) */}
+            {/* ==================================================== */}
+            {isAppointModalOpen && (
+                <div className="schedule-modal-overlay">
+                    <div className="schedule-modal-content" style={{ maxWidth: '640px' }}>
+                        <div className="modal-header">
+                            <div className="modal-title-group">
+                                <span className="material-symbols-outlined modal-icon" style={{ color: '#10b981' }}>car_repair</span>
+                                <div>
+                                    <h3 className="modal-title">Appoint Car to Bay</h3>
+                                    <p className="modal-subtitle">Reserve a workshop bay slot for vehicles in Received or Diagnosed phase</p>
+                                </div>
+                            </div>
+                            <button type="button" className="modal-close-btn" onClick={() => setIsAppointModalOpen(false)}>
+                                <CloseIcon />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAdminAppoint} className="schedule-modal-form">
+                            {/* Step 1: Select Eligible Car */}
+                            <div className="form-group grid-full">
+                                <label>1. SELECT CAR IN RECEIVED OR DIAGNOSED PHASE *</label>
+                                {eligibleWorkOrders.length === 0 ? (
+                                    <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: '#f87171', fontSize: '13px' }}>
+                                        ⚠️ No cars currently in <strong>received</strong> or <strong>diagnosed</strong> phase. Cars must be in intake before booking a bay appointment.
+                                    </div>
+                                ) : (
+                                    <div className="eligible-cars-list">
+                                        {eligibleWorkOrders.map((wo) => {
+                                            const isSelected = appointForm.work_order_id === wo.work_order_id;
+                                            return (
+                                                <div
+                                                    key={wo.work_order_id}
+                                                    className={`eligible-car-card ${isSelected ? 'selected' : ''}`}
+                                                    onClick={() => setAppointForm((prev) => ({ ...prev, work_order_id: wo.work_order_id }))}
+                                                >
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <strong style={{ color: 'var(--text-main)' }}>{wo.year} {wo.make} {wo.model}</strong>
+                                                            <span className="font-mono text-yellow" style={{ fontSize: '12px' }}>({wo.license_plate})</span>
+                                                            <span className={wo.status === 'diagnosed' ? 'car-badge-diagnosed' : 'car-badge-received'}>
+                                                                {wo.status.toUpperCase()}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                            WO: {wo.work_order_id} • Owner: {wo.owner_name} {wo.initial_observations ? `• "${wo.initial_observations.slice(0, 45)}..."` : ''}
+                                                        </div>
+                                                    </div>
+                                                    {isSelected && <CheckCircleIcon style={{ color: '#10b981', fontSize: '20px' }} />}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                                {selectedWoObj && (
+                                    <div style={{ marginTop: '8px', padding: '6px 12px', background: 'rgba(255, 216, 95, 0.1)', border: '1px solid rgba(255, 216, 95, 0.2)', borderRadius: '6px', fontSize: '12px', color: 'var(--accent-yellow)' }}>
+                                        Appointing: <strong>{selectedWoObj.year} {selectedWoObj.make} {selectedWoObj.model}</strong> (Plate: {selectedWoObj.license_plate}) • Owner: {selectedWoObj.owner_name}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Step 2: Select Bay & Date */}
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="appoint_bay">2. TARGET WORKSHOP BAY *</label>
+                                    <select
+                                        id="appoint_bay"
+                                        value={appointForm.bay_id}
+                                        onChange={(e) => setAppointForm((prev) => ({ ...prev, bay_id: e.target.value, start_time: '', end_time: '' }))}
+                                        required
+                                    >
+                                        {bays.map((b) => (
+                                            <option key={b.bay_id || b.id} value={b.bay_id || b.id}>
+                                                {b.bay_name || b.label} ({b.opening_time || '08:00'} - {b.closing_time || '18:00'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="appoint_date">3. APPOINTMENT DATE *</label>
+                                    <input
+                                        type="date"
+                                        id="appoint_date"
+                                        value={appointForm.appointment_date}
+                                        onChange={(e) => setAppointForm((prev) => ({ ...prev, appointment_date: e.target.value, start_time: '', end_time: '' }))}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Step 3: Real-Time Interactive Slot Picker */}
+                            <div className="form-group grid-full">
+                                <div className="slots-container-title">
+                                    <span>4. SELECT AVAILABLE BAY TIME SLOT *</span>
+                                    {appointForm.start_time && (
+                                        <span style={{ color: '#10b981', fontWeight: '700' }}>
+                                            Selected: {appointForm.start_time} - {appointForm.end_time}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {isSlotsLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                                        Loading available bay slots...
+                                    </div>
+                                ) : availableSlots.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                                        No slots available for this bay on this date.
+                                    </div>
+                                ) : (
+                                    <div className="slots-grid">
+                                        {availableSlots.map((slot) => {
+                                            const isSelected = appointForm.start_time === slot.start_time && appointForm.end_time === slot.end_time;
+                                            const statusClass = slot.is_available
+                                                ? isSelected ? 'selected' : 'available'
+                                                : slot.is_past ? 'disabled' : 'booked';
+
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={slot.slot_id}
+                                                    disabled={!slot.is_available}
+                                                    className={`slot-pill ${statusClass}`}
+                                                    onClick={() => {
+                                                        if (slot.is_available) {
+                                                            setAppointForm((prev) => ({
+                                                                ...prev,
+                                                                start_time: slot.start_time,
+                                                                end_time: slot.end_time,
+                                                            }));
+                                                        }
+                                                    }}
+                                                    title={slot.occupant ? `Booked by ${slot.occupant.make || ''} ${slot.occupant.model || ''} (${slot.occupant.license_plate || 'In-Bay'})` : 'Available for appointment'}
+                                                >
+                                                    <span style={{ fontWeight: '700' }}>{slot.start_time} - {slot.end_time}</span>
+                                                    <span className="slot-badge">
+                                                        {slot.is_available
+                                                            ? isSelected ? '✓ Selected' : 'Available'
+                                                            : slot.is_past ? 'Past' : (slot.occupant?.license_plate || 'Booked')}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Step 4: Technician & Observations */}
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="appoint_tech">ASSIGN TECHNICIAN (OPTIONAL)</label>
+                                    <select
+                                        id="appoint_tech"
+                                        value={appointForm.assigned_staff_id}
+                                        onChange={(e) => setAppointForm((prev) => ({ ...prev, assigned_staff_id: e.target.value }))}
+                                    >
+                                        <option value="">-- No Specific Technician --</option>
+                                        {staffList.filter((s) => s.is_active !== false).map((st) => (
+                                            <option key={st.staff_id} value={st.staff_id}>
+                                                {st.full_name} ({st.role})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="appoint_service">SERVICE OBJECTIVE</label>
+                                    <input
+                                        type="text"
+                                        id="appoint_service"
+                                        value={appointForm.service_type}
+                                        onChange={(e) => setAppointForm((prev) => ({ ...prev, service_type: e.target.value }))}
+                                        placeholder="e.g. Diagnostic & Repair Intake"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="modal-actions">
+                                <button type="button" className="btn-modal-cancel" onClick={() => setIsAppointModalOpen(false)}>
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-modal-submit"
+                                    disabled={isAppointing || !appointForm.work_order_id || !appointForm.start_time}
+                                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' }}
+                                >
+                                    {isAppointing ? 'Confirming Appointment...' : 'Confirm Bay Appointment'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ==================================================== */}
+            {/* MODAL 2: WORKSHOP BAY CONFIGURATION & TIMINGS (ADMIN) */}
+            {/* ==================================================== */}
+            {isBayConfigOpen && (
+                <div className="schedule-modal-overlay">
+                    <div className="schedule-modal-content" style={{ maxWidth: '640px' }}>
+                        <div className="modal-header">
+                            <div className="modal-title-group">
+                                <span className="material-symbols-outlined modal-icon" style={{ color: 'var(--accent-yellow)' }}>settings</span>
+                                <div>
+                                    <h3 className="modal-title">Workshop Bays & Capacity</h3>
+                                    <p className="modal-subtitle">Configure bays, daily operating hours, and active statuses</p>
+                                </div>
+                            </div>
+                            <button type="button" className="modal-close-btn" onClick={() => setIsBayConfigOpen(false)}>
+                                <CloseIcon />
+                            </button>
+                        </div>
+
+                        <div className="schedule-modal-form">
+                            {/* Workshop Shifts & Breaks Shortcut */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                background: 'rgba(255, 216, 95, 0.08)',
+                                border: '1px solid rgba(255, 216, 95, 0.25)',
+                                borderRadius: '10px',
+                                padding: '12px 16px',
+                                marginBottom: '16px',
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '13px', fontWeight: '800', color: '#ffd85f', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>⏰ Workshop Operating Shifts & Breaks</span>
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                                        Configure morning/evening shift windows and afternoon breaks in Workshop Settings
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-modal-cancel"
+                                    style={{
+                                        fontSize: '11px',
+                                        padding: '6px 14px',
+                                        background: '#ffd85f',
+                                        color: '#121814',
+                                        fontWeight: '800',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                    }}
+                                    onClick={() => {
+                                        setIsBayConfigOpen(false);
+                                        openSettingsModal();
+                                    }}
+                                >
+                                    Configure Timings
+                                </button>
+                            </div>
+
+                            {/* Current Bays List */}
+                            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                CURRENT WORKSHOP BAYS ({bays.length})
+                            </label>
+                            <div className="bays-list-admin">
+                                {bays.map((b) => (
+                                    <div key={b.bay_id || b.id} className="bay-config-card">
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span className="bay-badge-tag">{b.bay_id || b.id}</span>
+                                                <strong style={{ color: 'var(--text-main)', fontSize: '14px' }}>{b.bay_name || b.label}</strong>
+                                                <span className={`priority-badge ${b.is_active !== false ? 'badge-success' : 'badge-error'}`}>
+                                                    {b.is_active !== false ? 'ACTIVE' : 'MAINTENANCE'}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                                Hours: ⏰ {b.opening_time || '08:00'} - {b.closing_time || '18:00'} • Slot Duration: {b.slot_duration_minutes || 60}m
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="btn-modal-cancel"
+                                            style={{ height: '32px', padding: '0 12px', fontSize: '11px' }}
+                                            onClick={() => handleToggleBayStatus(b)}
+                                        >
+                                            {b.is_active !== false ? 'Set Maintenance' : 'Reactivate'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Add New Bay Section */}
+                            <form onSubmit={handleCreateBay} style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '16px' }}>
+                                <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--accent-yellow)', display: 'block', marginBottom: '12px' }}>
+                                    + ADD NEW WORKSHOP BAY
+                                </label>
+                                <div className="form-grid-2col">
+                                    <div className="form-group">
+                                        <label htmlFor="new_bay_name">BAY NAME *</label>
+                                        <input
+                                            type="text"
+                                            id="new_bay_name"
+                                            placeholder="e.g. Bay 4 - EV & Hybrid"
+                                            value={newBayForm.bay_name}
+                                            onChange={(e) => setNewBayForm((prev) => ({ ...prev, bay_name: e.target.value }))}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label htmlFor="new_bay_type">SPECIALTY / TYPE</label>
+                                        <select
+                                            id="new_bay_type"
+                                            value={newBayForm.bay_type}
+                                            onChange={(e) => setNewBayForm((prev) => ({ ...prev, bay_type: e.target.value }))}
+                                        >
+                                            <option value="general">General Repair</option>
+                                            <option value="heavy_repair">Heavy Repair & Lift</option>
+                                            <option value="diagnostics">Diagnostics & Electrical</option>
+                                            <option value="express">Express Lube & Tires</option>
+                                            <option value="ev_hybrid">EV & Hybrid Tech</option>
+                                            <option value="alignment">Wheel Alignment</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label htmlFor="new_bay_open">OPENING TIME</label>
+                                        <input
+                                            type="time"
+                                            id="new_bay_open"
+                                            value={newBayForm.opening_time}
+                                            onChange={(e) => setNewBayForm((prev) => ({ ...prev, opening_time: e.target.value }))}
+                                            className="font-mono"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label htmlFor="new_bay_close">CLOSING TIME</label>
+                                        <input
+                                            type="time"
+                                            id="new_bay_close"
+                                            value={newBayForm.closing_time}
+                                            onChange={(e) => setNewBayForm((prev) => ({ ...prev, closing_time: e.target.value }))}
+                                            className="font-mono"
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                                    <button type="submit" className="btn-modal-submit" disabled={isCreatingBay}>
+                                        {isCreatingBay ? 'Saving Bay...' : '+ Add Bay'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ==================================================== */}
+            {/* MODAL 3: QUICK TASK / GENERAL TASK MODAL            */}
+            {/* ==================================================== */}
             {isModalOpen && (
                 <div className="schedule-modal-overlay">
                     <div className="schedule-modal-content">
@@ -700,23 +1315,23 @@ export default function Scheduling() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="bay_assigned">WORKSHOP BAY / RESOURCE</label>
+                                    <label htmlFor="bay_assigned">WORKSHOP BAY *</label>
                                     <select
                                         id="bay_assigned"
                                         name="bay_assigned"
                                         value={taskForm.bay_assigned}
                                         onChange={handleFormChange}
                                     >
-                                        <option value="B1">B1 - Heavy Repair</option>
-                                        <option value="B2">B2 - Diagnostics & Electrical</option>
-                                        <option value="B3">B3 - Express Lube & Tires</option>
-                                        <option value="Lift 1">Lift 1 - General Repair</option>
-                                        <option value="Bay 4">Bay 4 - Detailing & Inspection</option>
+                                        {bays.map((bay) => (
+                                            <option key={bay.bay_id || bay.id} value={bay.bay_id || bay.id}>
+                                                {bay.name || bay.bay_id} - {bay.bay_name || bay.label}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="assigned_staff_id">ASSIGN MECHANIC / STAFF</label>
+                                    <label htmlFor="assigned_staff_id">ASSIGNED MECHANIC</label>
                                     <select
                                         id="assigned_staff_id"
                                         name="assigned_staff_id"
@@ -724,75 +1339,39 @@ export default function Scheduling() {
                                         onChange={handleFormChange}
                                     >
                                         <option value="">-- Unassigned --</option>
-                                        {staffList.map((st) => (
-                                            <option key={st.staff_id} value={st.staff_id}>
-                                                {st.full_name} ({st.role})
-                                            </option>
-                                        ))}
+                                        {staffList
+                                            .filter((s) => s.is_active !== false)
+                                            .map((staff) => (
+                                                <option key={staff.staff_id} value={staff.staff_id}>
+                                                    {staff.full_name} ({staff.role})
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
 
                                 <div className="form-group grid-full">
-                                    <label htmlFor="work_order_id">LINK ACTIVE WORK ORDER (OPTIONAL)</label>
-                                    <select
-                                        id="work_order_id"
-                                        name="work_order_id"
-                                        value={taskForm.work_order_id}
-                                        onChange={handleFormChange}
-                                    >
-                                        <option value="">-- Standalone Task / No Work Order --</option>
-                                        {workOrdersList.map((wo) => (
-                                            <option key={wo.work_order_id} value={wo.work_order_id}>
-                                                {wo.work_order_id} • {wo.year} {wo.make} {wo.model} ({wo.owner_name})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="form-group grid-full">
-                                    <label htmlFor="task_description">TASK NOTES / INSTRUCTIONS</label>
-                                    <input
-                                        type="text"
+                                    <label htmlFor="task_description">DETAILED INSTRUCTIONS / PARTS NEEDED</label>
+                                    <textarea
                                         id="task_description"
                                         name="task_description"
-                                        placeholder="Special technician tools required or parts to inspect..."
+                                        rows="2"
+                                        placeholder="Specific diagnostic steps, torque specs, or customer requests..."
                                         value={taskForm.task_description}
                                         onChange={handleFormChange}
-                                    />
+                                    ></textarea>
                                 </div>
                             </div>
 
-                            <div className="modal-footer-actions">
+                            <div className="modal-actions">
                                 <button type="button" className="btn-modal-cancel" onClick={() => setIsModalOpen(false)}>
                                     Cancel
                                 </button>
                                 <button type="submit" className="btn-modal-submit" disabled={isSubmitting}>
-                                    {isSubmitting ? 'Scheduling...' : 'Save Scheduled Task'}
+                                    {isSubmitting ? 'Scheduling...' : 'Confirm Schedule'}
                                 </button>
                             </div>
                         </form>
                     </div>
-                </div>
-            )}
-
-            {/* Global Toast Notification */}
-            {notification && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        bottom: '24px',
-                        right: '24px',
-                        backgroundColor: notification.type === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(255, 216, 95, 0.95)',
-                        color: '#0d1110',
-                        fontWeight: 700,
-                        padding: '12px 20px',
-                        borderRadius: '8px',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                        zIndex: 99999,
-                        fontSize: '13px',
-                    }}
-                >
-                    {notification.msg}
                 </div>
             )}
         </div>

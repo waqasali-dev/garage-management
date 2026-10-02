@@ -2,8 +2,12 @@
 // BACKEND API CONFIGURATION & GLOBAL REQUEST DEDUPLICATION
 // ==============================================================================
 
-// 🔒 SECURE BACKEND API BASE URL (Loaded from environment variables with local fallback)
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const isLocalhost = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+export const API_BASE_URL = isLocalhost 
+    ? 'http://localhost:5000/api'
+    : (process.env.REACT_APP_API_URL || 'https://garage-management-hy5h.onrender.com/api');
 
 // ==============================================================================
 // 🛡️ GLOBAL IN-FLIGHT MUTEX & AUTH / IDEMPOTENCY INTERCEPTOR

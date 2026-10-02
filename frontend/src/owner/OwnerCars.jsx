@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import StyledLoading from '../components/StyledLoading';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -9,23 +9,70 @@ import MenuIcon from '@mui/icons-material/Menu';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SearchIcon from '@mui/icons-material/Search';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CloseIcon from '@mui/icons-material/Close';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import './OwnerCars.css';
 import { API_BASE_URL } from '../config/api';
 
+// Helper to format local date YYYY-MM-DD
+const getLocalDateString = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
+// If current time is after 17:00, default to tomorrow so daytime slots are available
+const getInitialBookingDate = () => {
+    const now = new Date();
+    if (now.getHours() >= 17) {
+        now.setDate(now.getDate() + 1);
+    }
+    return getLocalDateString(now);
+};
+
+const DEFAULT_BAYS = [
+    { bay_id: 'B1', bay_name: 'Bay 1 - Heavy Repair', opening_time: '08:00', closing_time: '18:00', is_active: true },
+    { bay_id: 'B2', bay_name: 'Bay 2 - Diagnostics & Electrical', opening_time: '08:00', closing_time: '18:00', is_active: true },
+    { bay_id: 'B3', bay_name: 'Bay 3 - Express Lube & Tires', opening_time: '08:00', closing_time: '18:00', is_active: true },
+];
+
 export default function OwnerCars() {
     const { user } = useAuth();
     const { formatCurrency } = useCurrency();
+    const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [vehicles, setVehicles] = useState([]);
+    const [bays, setBays] = useState(DEFAULT_BAYS);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState(null);
 
+    // ==========================================
+    // CUSTOMER APPOINTMENT BOOKING STATE
+    // ==========================================
+    const todayStr = getLocalDateString(new Date());
+    const initialBookingDate = getInitialBookingDate();
+    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+    const [bookingForm, setBookingForm] = useState({
+        vehicle_id: '',
+        bay_id: 'B1',
+        appointment_date: initialBookingDate,
+        start_time: '',
+        end_time: '',
+        service_type: 'Routine Service & Inspection',
+        customer_notes: '',
+    });
+    const [availableSlots, setAvailableSlots] = useState([]);
+    const [slotMeta, setSlotMeta] = useState({ shifts: [], breaks: [], isOpen: true, reason: '' });
+    const [isSlotsLoading, setIsSlotsLoading] = useState(false);
+    const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
+
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
-        setTimeout(() => setNotification(null), 4000);
+        setTimeout(() => setNotification(null), 5000);
     };
 
     const fetchOwnerVehicles = async () => {
@@ -41,11 +88,13 @@ export default function OwnerCars() {
             if (vehRes.ok) {
                 const vJson = await vehRes.json();
                 if (vJson.success && Array.isArray(vJson.data)) {
-                    // Strictly isolate to the logged-in owner's vehicles
                     const myVehicles = ownerId
                         ? vJson.data.filter((v) => String(v.owner_id) === String(ownerId))
                         : vJson.data;
                     setVehicles(myVehicles);
+                    if (myVehicles.length > 0 && !bookingForm.vehicle_id) {
+                        setBookingForm((prev) => ({ ...prev, vehicle_id: myVehicles[0].vehicle_id }));
+                    }
                 }
             }
         } catch (err) {
@@ -56,10 +105,154 @@ export default function OwnerCars() {
         }
     };
 
+    const fetchBays = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                    const activeBays = json.data.filter((b) => b.is_active !== false);
+                    if (activeBays.length > 0) {
+                        setBays(activeBays);
+                        setBookingForm((prev) => ({
+                            ...prev,
+                            bay_id: prev.bay_id || activeBays[0].bay_id,
+                        }));
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('Could not load bays from API, retaining default bays:', err.message);
+        }
+    };
+
+    // Load available slots whenever bay or date changes in booking modal
+    const fetchAvailableSlots = async (bayId, date) => {
+        const targetBayId = bayId || bookingForm.bay_id || bays[0]?.bay_id || 'B1';
+        const targetDate = date || bookingForm.appointment_date || initialBookingDate;
+        setIsSlotsLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays/${encodeURIComponent(targetBayId)}/available-slots?date=${targetDate}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success) {
+                    setSlotMeta({
+                        shifts: json.operating_shifts || [],
+                        breaks: json.breaks || [],
+                        isOpen: json.isOpen !== false,
+                        reason: json.reason || '',
+                    });
+                    if (json.isOpen === false) {
+                        setAvailableSlots([]);
+                        return;
+                    }
+                    if (Array.isArray(json.slots)) {
+                        setAvailableSlots(json.slots);
+                        return;
+                    }
+                }
+            }
+            // Fallback generated slots if API offline
+            const fallbackSlots = [
+                { slot_id: `${targetBayId}_0800`, start_time: '08:00', end_time: '09:00', is_available: true },
+                { slot_id: `${targetBayId}_0900`, start_time: '09:00', end_time: '10:00', is_available: true },
+                { slot_id: `${targetBayId}_1000`, start_time: '10:00', end_time: '11:00', is_available: true },
+                { slot_id: `${targetBayId}_1100`, start_time: '11:00', end_time: '12:00', is_available: true },
+                { slot_id: `${targetBayId}_1600`, start_time: '16:00', end_time: '17:00', is_available: true },
+                { slot_id: `${targetBayId}_1700`, start_time: '17:00', end_time: '18:00', is_available: true },
+                { slot_id: `${targetBayId}_1800`, start_time: '18:00', end_time: '19:00', is_available: true },
+                { slot_id: `${targetBayId}_1900`, start_time: '19:00', end_time: '20:00', is_available: true },
+            ];
+            setAvailableSlots(fallbackSlots);
+        } catch (err) {
+            console.error('Error loading available slots:', err);
+        } finally {
+            setIsSlotsLoading(false);
+        }
+    };
+
+    // Load bays on component mount
+    useEffect(() => {
+        fetchBays();
+    }, []);
+
+    // Load vehicles when user auth resolves
     useEffect(() => {
         fetchOwnerVehicles();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.owner_id]);
+
+    useEffect(() => {
+        if (isBookingModalOpen) {
+            fetchAvailableSlots(bookingForm.bay_id, bookingForm.appointment_date);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isBookingModalOpen, bookingForm.bay_id, bookingForm.appointment_date]);
+
+    useEffect(() => {
+        if (location.search.includes('book=true')) {
+            setIsBookingModalOpen(true);
+        }
+    }, [location.search]);
+
+    // Open booking modal for a specific vehicle
+    const handleOpenBooking = (vehicleId = null) => {
+        const targetVehicleId = vehicleId || (vehicles[0]?.vehicle_id || '');
+        const targetBayId = bays[0]?.bay_id || 'B1';
+        const targetDate = getInitialBookingDate();
+        setBookingForm({
+            vehicle_id: targetVehicleId,
+            bay_id: targetBayId,
+            appointment_date: targetDate,
+            start_time: '',
+            end_time: '',
+            service_type: 'Routine Service & Inspection',
+            customer_notes: '',
+        });
+        setIsBookingModalOpen(true);
+        fetchAvailableSlots(targetBayId, targetDate);
+    };
+
+    // Handle Customer Booking Submit
+    const handleCustomerBookingSubmit = async (e) => {
+        e.preventDefault();
+        if (isBookingSubmitting) return;
+
+        if (!bookingForm.vehicle_id) {
+            showNotification('Please select a vehicle to book.', 'error');
+            return;
+        }
+        if (!bookingForm.start_time || !bookingForm.end_time) {
+            showNotification('Please select an available time slot for your appointment.', 'error');
+            return;
+        }
+
+        setIsBookingSubmitting(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/appointments/customer-book`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...bookingForm,
+                    owner_id: user?.owner_id || undefined,
+                }),
+            });
+            const json = await res.json();
+
+            if (!res.ok) {
+                showNotification(json.error || 'Failed to book appointment', 'error');
+                return;
+            }
+
+            showNotification(json.message || '🎉 Your service appointment has been booked!', 'success');
+            setIsBookingModalOpen(false);
+            fetchOwnerVehicles();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsBookingSubmitting(false);
+        }
+    };
 
     // Search filter across Owner Name, License Plate, VIN, and Vehicle details
     const filteredVehicles = vehicles.filter((v) => {
@@ -80,6 +273,8 @@ export default function OwnerCars() {
             year.includes(q)
         );
     });
+
+    const selectedVehicleObj = vehicles.find((v) => v.vehicle_id === bookingForm.vehicle_id);
 
     return (
         <div className="owner-cars-layout">
@@ -123,7 +318,19 @@ export default function OwnerCars() {
                         )}
                     </div>
 
-                    <div className="header-right">
+                    <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {/* Book Service Appointment CTA */}
+                        <button
+                            type="button"
+                            className="btn-book-appointment-header"
+                            onClick={() => handleOpenBooking()}
+                            disabled={vehicles.length === 0}
+                            title="Book a workshop bay appointment for your car"
+                        >
+                            <CalendarMonthIcon fontSize="small" />
+                            <span>Book Appointment</span>
+                        </button>
+
                         <button
                             className="icon-btn"
                             onClick={fetchOwnerVehicles}
@@ -267,12 +474,23 @@ export default function OwnerCars() {
 
                                             {/* Action Buttons */}
                                             <div className="v-card-actions">
+                                                {/* Direct Book Service Button */}
+                                                <button
+                                                    type="button"
+                                                    className="btn-book-card-secondary"
+                                                    onClick={() => handleOpenBooking(vehicle.vehicle_id)}
+                                                    title="Book service slot for this car"
+                                                >
+                                                    <CalendarMonthIcon fontSize="inherit" />
+                                                    <span>Book Service</span>
+                                                </button>
+
                                                 <Link
                                                     to={`/owner/history/${encodeURIComponent(vehicle.vin)}`}
                                                     className="btn-history-primary"
                                                 >
                                                     <HistoryIcon fontSize="small" />
-                                                    <span>View VIN History</span>
+                                                    <span>History</span>
                                                 </Link>
 
                                                 {vehicle.active_work_order_id && (
@@ -294,6 +512,221 @@ export default function OwnerCars() {
                     </div>
                 </main>
             </div>
+
+            {/* ==================================================== */}
+            {/* CUSTOMER SERVICE APPOINTMENT BOOKING MODAL           */}
+            {/* ==================================================== */}
+            {isBookingModalOpen && (
+                <div className="customer-modal-overlay">
+                    <div className="customer-modal-box">
+                        <div className="customer-modal-header">
+                            <div>
+                                <h3>
+                                    <CalendarMonthIcon style={{ color: '#10b981' }} />
+                                    <span>Book Service Appointment</span>
+                                </h3>
+                                <p>Select your vehicle, service request, and an open workshop bay time slot</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="modal-close-btn"
+                                onClick={() => setIsBookingModalOpen(false)}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                            >
+                                <CloseIcon />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleCustomerBookingSubmit} className="customer-modal-form">
+                            {/* 1. Vehicle Selection */}
+                            <div className="customer-form-group">
+                                <label htmlFor="booking_vehicle">1. SELECT VEHICLE *</label>
+                                <select
+                                    id="booking_vehicle"
+                                    value={bookingForm.vehicle_id}
+                                    onChange={(e) => setBookingForm((prev) => ({ ...prev, vehicle_id: e.target.value }))}
+                                    required
+                                >
+                                    {vehicles.map((v) => (
+                                        <option key={v.vehicle_id} value={v.vehicle_id}>
+                                            {v.year} {v.make} {v.model} (Plate: {v.license_plate})
+                                        </option>
+                                    ))}
+                                </select>
+                                {selectedVehicleObj && (
+                                    <div style={{ fontSize: '12px', color: '#10b981', marginTop: '4px' }}>
+                                        Vehicle: <strong>{selectedVehicleObj.year} {selectedVehicleObj.make} {selectedVehicleObj.model}</strong> • Plate: <span className="font-mono">{selectedVehicleObj.license_plate}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 2. Service Category */}
+                            <div className="customer-form-row">
+                                <div className="customer-form-group">
+                                    <label htmlFor="booking_service">2. SERVICE NEEDED *</label>
+                                    <select
+                                        id="booking_service"
+                                        value={bookingForm.service_type}
+                                        onChange={(e) => setBookingForm((prev) => ({ ...prev, service_type: e.target.value }))}
+                                    >
+                                        <option value="Routine Service & Inspection">Routine Service & Inspection</option>
+                                        <option value="Diagnostic Inspection">Diagnostic & Electrical Inspection</option>
+                                        <option value="Brake Service & Pads">Brake Service & Pad Replacement</option>
+                                        <option value="Oil & Filter Change">Express Oil & Filter Change</option>
+                                        <option value="Tire Rotation & Balance">Tire Rotation & Wheel Alignment</option>
+                                        <option value="AC & Climate Control">Air Conditioning & Climate System</option>
+                                        <option value="Transmission & Drivetrain">Transmission & Drivetrain Check</option>
+                                        <option value="Other / Custom Request">Other / Custom Repair Request</option>
+                                    </select>
+                                </div>
+
+                                <div className="customer-form-group">
+                                    <label htmlFor="booking_bay">3. WORKSHOP BAY *</label>
+                                    <select
+                                        id="booking_bay"
+                                        value={bookingForm.bay_id}
+                                        onChange={(e) => {
+                                            const newBay = e.target.value;
+                                            setBookingForm((prev) => ({ ...prev, bay_id: newBay, start_time: '', end_time: '' }));
+                                            fetchAvailableSlots(newBay, bookingForm.appointment_date);
+                                        }}
+                                        required
+                                    >
+                                        {bays.map((b) => (
+                                            <option key={b.bay_id} value={b.bay_id}>
+                                                {b.bay_name || b.bay_id}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* 3. Appointment Date */}
+                            <div className="customer-form-group">
+                                <label htmlFor="booking_date">4. PREFERRED DATE *</label>
+                                <input
+                                    type="date"
+                                    id="booking_date"
+                                    min={todayStr}
+                                    value={bookingForm.appointment_date}
+                                    onChange={(e) => {
+                                        const newDate = e.target.value;
+                                        setBookingForm((prev) => ({ ...prev, appointment_date: newDate, start_time: '', end_time: '' }));
+                                        fetchAvailableSlots(bookingForm.bay_id, newDate);
+                                    }}
+                                    required
+                                    className="font-mono"
+                                />
+                            </div>
+
+                            {/* 4. Slot Selection */}
+                            <div className="customer-form-group">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <label>5. AVAILABLE TIME SLOTS *</label>
+                                    {bookingForm.start_time && (
+                                        <span style={{ fontSize: '11px', color: '#10b981', fontWeight: '700' }}>
+                                            Selected: {bookingForm.start_time} - {bookingForm.end_time}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Shift and Break indicators */}
+                                {slotMeta.shifts.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                                        {slotMeta.shifts.map((s, idx) => (
+                                            <span key={idx} style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '2px 8px', borderRadius: '12px' }}>
+                                                ⏰ {s.label || `Shift ${idx + 1}`}: {s.start} - {s.end}
+                                            </span>
+                                        ))}
+                                        {slotMeta.breaks.map((b, idx) => (
+                                            <span key={idx} style={{ fontSize: '11px', background: 'rgba(245, 158, 11, 0.12)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '2px 8px', borderRadius: '12px' }}>
+                                                ☕ Break: {b.time_label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {isSlotsLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)' }}>
+                                        Checking workshop slot availability...
+                                    </div>
+                                ) : !slotMeta.isOpen ? (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: '#f87171', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                        {slotMeta.reason || 'Workshop is closed on this date. Please choose another operating day.'}
+                                    </div>
+                                ) : availableSlots.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)' }}>
+                                        No open slots available on this date.
+                                    </div>
+                                ) : (
+                                    <div className="customer-slots-grid">
+                                        {availableSlots.map((slot) => {
+                                            const isSelected = bookingForm.start_time === slot.start_time && bookingForm.end_time === slot.end_time;
+                                            const statusClass = slot.is_available
+                                                ? isSelected ? 'selected' : 'available'
+                                                : 'booked';
+
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={slot.slot_id}
+                                                    disabled={!slot.is_available}
+                                                    className={`customer-slot-btn ${statusClass}`}
+                                                    onClick={() => {
+                                                        if (slot.is_available) {
+                                                            setBookingForm((prev) => ({
+                                                                ...prev,
+                                                                start_time: slot.start_time,
+                                                                end_time: slot.end_time,
+                                                            }));
+                                                        }
+                                                    }}
+                                                    title={slot.is_available ? 'Click to select this time' : 'Reserved / Unavailable'}
+                                                >
+                                                    <div>{slot.start_time} - {slot.end_time}</div>
+                                                    <div style={{ fontSize: '10px', marginTop: '2px', opacity: 0.8 }}>
+                                                        {slot.is_available ? (isSelected ? '✓ Picked' : 'Available') : 'Booked'}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 5. Additional Notes */}
+                            <div className="customer-form-group">
+                                <label htmlFor="booking_notes">6. VEHICLE OBSERVATIONS / SYMPTOMS (OPTIONAL)</label>
+                                <textarea
+                                    id="booking_notes"
+                                    rows="2"
+                                    placeholder="Describe any issues you have noticed (e.g. unusual noise, vibrations, warning lights)..."
+                                    value={bookingForm.customer_notes}
+                                    onChange={(e) => setBookingForm((prev) => ({ ...prev, customer_notes: e.target.value }))}
+                                />
+                            </div>
+
+                            <div className="customer-modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn-modal-cancel"
+                                    onClick={() => setIsBookingModalOpen(false)}
+                                    style={{ height: '38px', padding: '0 16px', background: 'none', border: '1px solid var(--border-glass)', borderRadius: '8px', color: 'var(--text-muted)', cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-book-appointment-header"
+                                    disabled={isBookingSubmitting || !bookingForm.start_time || !bookingForm.vehicle_id}
+                                >
+                                    {isBookingSubmitting ? 'Confirming...' : 'Book My Appointment'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

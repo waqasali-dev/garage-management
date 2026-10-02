@@ -26,7 +26,10 @@ import invoicesRoutes from "./routes/invoices.routes.js";
 import exportRoutes from "./routes/export.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
+import baysRoutes from "./routes/bays.routes.js";
+import appointmentsRoutes from "./routes/appointments.routes.js";
 import { migrateSettingsAndTax } from "./migrate_settings.js";
+import { runAppointmentMigration } from "./migrate_appointments.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -121,6 +124,8 @@ app.use("/api/owner", vehiclesRoutes); // Supports /api/owner/vehicles
 
 // Schedules, Audit, Invoices & Reports
 app.use("/api/schedules", schedulesRoutes);
+app.use("/api/bays", baysRoutes);
+app.use("/api/appointments", appointmentsRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/invoices", invoicesRoutes);
 app.use("/api/export", exportRoutes);
@@ -143,5 +148,8 @@ app.listen(port, () => {
     console.log(`🚀 Precision Garage API Server running on http://localhost:${port}`);
     migrateSettingsAndTax().catch((err) => {
         console.warn("⚠️ Automatic settings migration notice:", err.message);
+    });
+    runAppointmentMigration().catch((err) => {
+        console.warn("⚠️ Automatic appointment migration notice:", err.message);
     });
 });

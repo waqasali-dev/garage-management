@@ -116,6 +116,7 @@ export default function Sidebar({ isOpen, onClose }) {
                     {isOwner && (
                         <>
                             {renderNavItem('/owner/cars', 'directions_car', 'My Garage / Cars', null, true)}
+                            {renderNavItem('/owner/cars?book=true', 'calendar_month', 'Book Appointment', 'B', false, { color: '#34d399', fontWeight: '700' })}
                             {renderNavItem('/invoices', 'receipt_long', 'Invoices & Billing', null, true)}
                             {renderNavItem('/ai-reports', 'auto_awesome', 'AI Car Advisor', 'AI', true, { color: '#ffd85f', fontWeight: '700' })}
                         </>
@@ -137,6 +138,13 @@ export default function Sidebar({ isOpen, onClose }) {
                             <span className="material-symbols-outlined">add_circle</span>
                             <span>Vehicle Intake</span>
                             <span className="intake-key-badge">N</span>
+                        </NavLink>
+                    )}
+                    {isOwner && (
+                        <NavLink to="/owner/cars?book=true" className="sidebar-intake-btn" style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#ffffff' }} title="Book a workshop appointment">
+                            <span className="material-symbols-outlined">calendar_month</span>
+                            <span>Book Service</span>
+                            <span className="intake-key-badge" style={{ background: 'rgba(0,0,0,0.2)' }}>B</span>
                         </NavLink>
                     )}
 

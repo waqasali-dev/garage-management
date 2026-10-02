@@ -270,6 +270,48 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
     CONSTRAINT chk_task_id_format CHECK (task_id ~ '^TSK-\d{4}-\d{4}$')
 );
 
+-- Workshop Bays & Configuration
+CREATE TABLE IF NOT EXISTS workshop_bays (
+    bay_id VARCHAR(30) PRIMARY KEY,
+    bay_name VARCHAR(100) NOT NULL,
+    bay_type VARCHAR(50) DEFAULT 'general',
+    opening_time TIME NOT NULL DEFAULT '08:00:00',
+    closing_time TIME NOT NULL DEFAULT '18:00:00',
+    slot_duration_minutes INT NOT NULL DEFAULT 60 CHECK (slot_duration_minutes >= 15),
+    operating_days INT[] DEFAULT '{1,2,3,4,5,6}',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Appointments & Vehicle Bookings
+CREATE SEQUENCE IF NOT EXISTS appointment_seq START WITH 1 INCREMENT BY 1;
+
+CREATE OR REPLACE FUNCTION generate_appointment_id()
+RETURNS TEXT AS $$
+BEGIN
+    RETURN 'APT-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-' || LPAD(NEXTVAL('appointment_seq')::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TABLE IF NOT EXISTS appointments (
+    appointment_id VARCHAR(30) PRIMARY KEY DEFAULT generate_appointment_id(),
+    owner_id VARCHAR(30) NOT NULL REFERENCES car_owners(owner_id) ON DELETE CASCADE,
+    vehicle_id VARCHAR(30) NOT NULL REFERENCES vehicles(vehicle_id) ON DELETE CASCADE,
+    bay_id VARCHAR(30) NOT NULL REFERENCES workshop_bays(bay_id) ON DELETE RESTRICT,
+    work_order_id VARCHAR(30) REFERENCES work_order_data(work_order_id) ON DELETE SET NULL,
+    appointment_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    service_type VARCHAR(100) NOT NULL DEFAULT 'Diagnostic & Inspection',
+    customer_notes TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'in_bay', 'completed', 'cancelled', 'no_show')),
+    booked_by VARCHAR(30) NOT NULL DEFAULT 'admin' CHECK (booked_by IN ('admin', 'customer', 'staff')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_time_window CHECK (end_time > start_time)
+);
+
 -- Workshop & System Settings
 CREATE TABLE IF NOT EXISTS workshop_settings (
     id INT PRIMARY KEY DEFAULT 1,
@@ -278,6 +320,14 @@ CREATE TABLE IF NOT EXISTS workshop_settings (
     currency_symbol VARCHAR(10) NOT NULL DEFAULT '$',
     currency_decimals INT NOT NULL DEFAULT 2,
     workshop_name VARCHAR(100) DEFAULT 'Precision Garage',
+    working_hours JSONB DEFAULT '{
+        "operating_days": [1, 2, 3, 4, 5, 6],
+        "slot_duration_minutes": 60,
+        "shifts": [
+            { "id": "shift-1", "start": "08:00", "end": "13:00", "label": "Morning Shift" },
+            { "id": "shift-2", "start": "16:00", "end": "20:00", "label": "Evening Shift" }
+        ]
+    }'::JSONB,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_single_settings CHECK (id = 1)
 );
@@ -298,3 +348,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON scheduled_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_inventory_reorder ON inventory_data(stock_quantity, reorder_threshold);
 CREATE INDEX IF NOT EXISTS idx_invoice_status ON invoice_data(status);
 CREATE INDEX IF NOT EXISTS idx_audit_json ON audit_logs USING GIN (payload_json);
+CREATE INDEX IF NOT EXISTS idx_appointments_date_bay ON appointments(appointment_date, bay_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_vehicle ON appointments(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_owner ON appointments(owner_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+CREATE INDEX IF NOT EXISTS idx_workshop_bays_active ON workshop_bays(is_active);
