@@ -8,6 +8,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './css/Scheduling.css';
@@ -130,6 +131,26 @@ export default function Scheduling() {
         work_order_id: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // ==========================================
+    // EDIT TASK / SCHEDULE MODAL STATE
+    // ==========================================
+    const [isEditTaskModalOpen, setIsEditTaskModalOpen] = useState(false);
+    const [editTaskForm, setEditTaskForm] = useState({
+        task_id: '',
+        work_order_id: '',
+        bay_assigned: 'B1',
+        scheduled_date: todayStr,
+        start_time: '09:00',
+        end_time: '11:00',
+        assigned_staff_id: '',
+        task_title: '',
+        priority: 'standard',
+        task_description: '',
+    });
+    const [editSlots, setEditSlots] = useState([]);
+    const [isEditSlotsLoading, setIsEditSlotsLoading] = useState(false);
+    const [isSavingEditTask, setIsSavingEditTask] = useState(false);
 
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
@@ -468,6 +489,77 @@ export default function Scheduling() {
         }
     };
 
+    // Edit Task / Reschedule Handlers
+    const fetchSlotsForEditTask = async (bayId, date) => {
+        if (!bayId || !date) return;
+        setIsEditSlotsLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays/${encodeURIComponent(bayId)}/available-slots?date=${date}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.slots)) {
+                    setEditSlots(json.slots);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching edit slots:', err);
+        } finally {
+            setIsEditSlotsLoading(false);
+        }
+    };
+
+    const handleOpenEditTask = (task, e) => {
+        if (e) e.stopPropagation();
+        const initialBay = task.bay_assigned || bays[0]?.bay_id || 'B1';
+        const initialDate = task.scheduled_date || selectedDate;
+        setEditTaskForm({
+            task_id: task.task_id,
+            work_order_id: task.work_order_id || '',
+            bay_assigned: initialBay,
+            scheduled_date: initialDate,
+            start_time: task.start_time || '09:00',
+            end_time: task.end_time || '10:00',
+            assigned_staff_id: task.assigned_staff_id || '',
+            task_title: task.task_title || '',
+            priority: task.priority || 'standard',
+            task_description: task.task_description || '',
+        });
+        setIsEditTaskModalOpen(true);
+        fetchSlotsForEditTask(initialBay, initialDate);
+    };
+
+    const handleSaveEditTask = async (e) => {
+        e.preventDefault();
+        if (isSavingEditTask) return;
+        if (!editTaskForm.bay_assigned || !editTaskForm.scheduled_date || !editTaskForm.start_time || !editTaskForm.end_time) {
+            showNotification('Bay, date, and time slot are required.', 'error');
+            return;
+        }
+
+        setIsSavingEditTask(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/schedules/${editTaskForm.task_id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editTaskForm),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                showNotification(json.error || 'Failed to update scheduled task', 'error');
+                return;
+            }
+
+            showNotification('🎉 Scheduled task updated successfully!', 'success');
+            setIsEditTaskModalOpen(false);
+            fetchSchedules();
+            fetchEligibleWorkOrders();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsSavingEditTask(false);
+        }
+    };
+
     // Filter tasks for the currently selected day
     const tasksForSelectedDay = scheduledTasks.filter((t) => t.scheduled_date === selectedDate);
 
@@ -630,6 +722,15 @@ export default function Scheduling() {
                                                         >
                                                             {task.priority.toUpperCase()}
                                                         </span>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-card-del"
+                                                            title="Edit / Reschedule task"
+                                                            style={{ color: '#10b981' }}
+                                                            onClick={(e) => handleOpenEditTask(task, e)}
+                                                        >
+                                                            <EditIcon fontSize="inherit" />
+                                                        </button>
                                                         <button
                                                             type="button"
                                                             className="btn-card-del"
@@ -835,11 +936,20 @@ export default function Scheduling() {
                                                                             ? 'status-yellow-border'
                                                                             : 'status-success-border'
                                                                         }`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleOpenEditTask(task, e);
+                                                                    }}
+                                                                    title="Click to Edit / Reschedule"
+                                                                    style={{ cursor: 'pointer' }}
                                                                 >
                                                                     {isSelected && <span className="live-dot animate-pulse"></span>}
-                                                                    <span className="slot-time highlight font-mono">
-                                                                        {task.work_order_id || task.task_id} • {task.start_time || '09:00'} - {task.end_time || '11:00'}
-                                                                    </span>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <span className="slot-time highlight font-mono">
+                                                                            {task.work_order_id || task.task_id} • {task.start_time || '09:00'} - {task.end_time || '11:00'}
+                                                                        </span>
+                                                                        <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#10b981', opacity: 0.85 }}>edit</span>
+                                                                    </div>
                                                                     <h5 className="slot-title">{task.task_title}</h5>
                                                                     <p className="slot-tech">
                                                                         <span className="material-symbols-outlined">person</span>{' '}
@@ -1395,6 +1505,230 @@ export default function Scheduling() {
                                 <button type="submit" className="btn-modal-submit" disabled={isSubmitting}>
                                     {isSubmitting ? 'Scheduling...' : 'Confirm Schedule'}
                                 </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ==================================================== */}
+            {/* MODAL 3: EDIT / RESCHEDULE TASK */}
+            {/* ==================================================== */}
+            {isEditTaskModalOpen && (
+                <div className="schedule-modal-overlay">
+                    <div className="schedule-modal-content" style={{ maxWidth: '640px' }}>
+                        <div className="modal-header">
+                            <div className="modal-title-group">
+                                <span className="material-symbols-outlined modal-icon" style={{ color: '#10b981' }}>edit_calendar</span>
+                                <div>
+                                    <h3 className="modal-title">Edit / Reschedule Task</h3>
+                                    <p className="modal-subtitle">
+                                        Update bay, operating shift slot, priority, or technician assignment
+                                        {editTaskForm.work_order_id ? ` (Work Order: ${editTaskForm.work_order_id})` : ''}
+                                    </p>
+                                </div>
+                            </div>
+                            <button type="button" className="modal-close-btn" onClick={() => setIsEditTaskModalOpen(false)}>
+                                <CloseIcon />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveEditTask} className="schedule-modal-form">
+                            <div className="form-group grid-full">
+                                <label htmlFor="edit_task_title">TASK TITLE *</label>
+                                <input
+                                    type="text"
+                                    id="edit_task_title"
+                                    value={editTaskForm.task_title}
+                                    onChange={(e) => setEditTaskForm((prev) => ({ ...prev, task_title: e.target.value }))}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="edit_bay_assigned">WORKSHOP BAY *</label>
+                                    <select
+                                        id="edit_bay_assigned"
+                                        value={editTaskForm.bay_assigned}
+                                        onChange={(e) => {
+                                            const bay = e.target.value;
+                                            setEditTaskForm((prev) => ({ ...prev, bay_assigned: bay }));
+                                            fetchSlotsForEditTask(bay, editTaskForm.scheduled_date);
+                                        }}
+                                        required
+                                    >
+                                        {bays.map((bay) => (
+                                            <option key={bay.bay_id || bay.id} value={bay.bay_id || bay.id}>
+                                                {bay.name || bay.bay_id} - {bay.bay_name || bay.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_scheduled_date">SCHEDULED DATE *</label>
+                                    <input
+                                        type="date"
+                                        id="edit_scheduled_date"
+                                        value={editTaskForm.scheduled_date}
+                                        onChange={(e) => {
+                                            const d = e.target.value;
+                                            setEditTaskForm((prev) => ({ ...prev, scheduled_date: d }));
+                                            fetchSlotsForEditTask(editTaskForm.bay_assigned, d);
+                                        }}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Slot Picker based on operating shift hours */}
+                            <div className="form-group grid-full">
+                                <div className="slots-container-title">
+                                    <span>OPERATING SHIFTS / BAY SLOTS</span>
+                                    {editTaskForm.start_time && (
+                                        <span style={{ color: '#10b981', fontWeight: '700' }}>
+                                            Current: {editTaskForm.start_time} - {editTaskForm.end_time}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {isEditSlotsLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-muted)' }}>
+                                        Loading bay shift slots...
+                                    </div>
+                                ) : editSlots.length > 0 ? (
+                                    <div className="slots-grid">
+                                        {editSlots.map((slot, idx) => {
+                                            const isSelected =
+                                                editTaskForm.start_time === slot.start &&
+                                                editTaskForm.end_time === slot.end;
+                                            const canSelect = slot.available || isSelected;
+
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    disabled={!canSelect}
+                                                    className={`bay-slot-chip ${isSelected ? 'selected' : ''} ${!canSelect ? 'disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (canSelect) {
+                                                            setEditTaskForm((prev) => ({
+                                                                ...prev,
+                                                                start_time: slot.start,
+                                                                end_time: slot.end,
+                                                            }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <span className="slot-chip-time">{slot.label}</span>
+                                                    <span className="slot-chip-status">
+                                                        {isSelected ? '✓ Selected' : slot.available ? 'Available' : 'Booked'}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div style={{ padding: '10px 14px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        No predefined slots available for this bay. Use manual times below.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="edit_start_time">START TIME *</label>
+                                    <input
+                                        type="time"
+                                        id="edit_start_time"
+                                        value={editTaskForm.start_time}
+                                        onChange={(e) => setEditTaskForm((prev) => ({ ...prev, start_time: e.target.value }))}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_end_time">END TIME *</label>
+                                    <input
+                                        type="time"
+                                        id="edit_end_time"
+                                        value={editTaskForm.end_time}
+                                        onChange={(e) => setEditTaskForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="edit_priority">PRIORITY</label>
+                                    <select
+                                        id="edit_priority"
+                                        value={editTaskForm.priority}
+                                        onChange={(e) => setEditTaskForm((prev) => ({ ...prev, priority: e.target.value }))}
+                                    >
+                                        {PRIORITY_OPTIONS.map((p) => (
+                                            <option key={p.value} value={p.value}>{p.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="edit_assigned_staff_id">ASSIGNED MECHANIC</label>
+                                    <select
+                                        id="edit_assigned_staff_id"
+                                        value={editTaskForm.assigned_staff_id}
+                                        onChange={(e) => setEditTaskForm((prev) => ({ ...prev, assigned_staff_id: e.target.value }))}
+                                    >
+                                        <option value="">-- Unassigned --</option>
+                                        {staffList
+                                            .filter((s) => s.is_active !== false)
+                                            .map((staff) => (
+                                                <option key={staff.staff_id} value={staff.staff_id}>
+                                                    {staff.full_name} ({staff.role})
+                                                </option>
+                                            ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group grid-full">
+                                <label htmlFor="edit_task_description">NOTES / INSTRUCTIONS</label>
+                                <textarea
+                                    id="edit_task_description"
+                                    rows="2"
+                                    value={editTaskForm.task_description}
+                                    onChange={(e) => setEditTaskForm((prev) => ({ ...prev, task_description: e.target.value }))}
+                                    placeholder="Add any specific technician instructions or part notes..."
+                                ></textarea>
+                            </div>
+
+                            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    className="btn-modal-cancel"
+                                    style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                                    onClick={(e) => {
+                                        if (window.confirm('Are you sure you want to remove this scheduled appointment/task?')) {
+                                            handleDeleteTask(editTaskForm.task_id, e);
+                                            setIsEditTaskModalOpen(false);
+                                        }
+                                    }}
+                                >
+                                    Delete Task / Free Bay
+                                </button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button type="button" className="btn-modal-cancel" onClick={() => setIsEditTaskModalOpen(false)}>
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn-modal-submit" disabled={isSavingEditTask}>
+                                        {isSavingEditTask ? 'Saving Changes...' : 'Save Schedule'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>

@@ -23,12 +23,22 @@ import './WorkOrderExecution.css';
 import { API_BASE_URL } from '../config/api';
 import { useCurrency } from '../context/CurrencyContext';
 
-const STATUS_STEPS = [
+const CUSTOMER_EXEC_STEPS = [
+    { key: 'scheduled', label: '1. SCHEDULED (ONLINE)', icon: 'calendar_month' },
+    { key: 'received', label: '2. RECEIVED (INTAKE)', icon: 'pending_actions' },
+    { key: 'diagnosed', label: '3. DIAGNOSED', icon: 'handyman' },
+    { key: 'in_progress', label: '4. IN PROGRESS', icon: 'build' },
+    { key: 'ready', label: '5. READY FOR PICKUP', icon: 'task_alt' },
+    { key: 'completed', label: '6. COMPLETED (PICKED UP)', icon: 'check_circle' },
+];
+
+const SHOP_EXEC_STEPS = [
     { key: 'received', label: '1. RECEIVED', icon: 'pending_actions' },
-    { key: 'diagnosed', label: '2. DIAGNOSED', icon: 'handyman' },
-    { key: 'in_progress', label: '3. IN PROGRESS', icon: 'build' },
-    { key: 'ready', label: '4. READY FOR PICKUP', icon: 'task_alt' },
-    { key: 'completed', label: '5. COMPLETED (PICKED UP)', icon: 'check_circle' },
+    { key: 'scheduled', label: '2. SCHEDULED', icon: 'calendar_month' },
+    { key: 'diagnosed', label: '3. DIAGNOSED', icon: 'handyman' },
+    { key: 'in_progress', label: '4. IN PROGRESS', icon: 'build' },
+    { key: 'ready', label: '5. READY FOR PICKUP', icon: 'task_alt' },
+    { key: 'completed', label: '6. COMPLETED (PICKED UP)', icon: 'check_circle' },
 ];
 
 const BAY_OPTIONS = [
@@ -548,29 +558,33 @@ export default function WorkOrderExecution() {
                             </div>
 
                             <div className="pipeline-steps">
-                                {STATUS_STEPS.map((step, idx) => {
-                                    const stepOrder = ['received', 'diagnosed', 'in_progress', 'ready', 'completed'];
+                                {(() => {
+                                    const activeSteps = order.booked_by === 'customer' ? CUSTOMER_EXEC_STEPS : SHOP_EXEC_STEPS;
+                                    const stepOrder = activeSteps.map((s) => s.key);
                                     const currentIdx = stepOrder.indexOf(order.status);
-                                    const stepIdx = stepOrder.indexOf(step.key);
-                                    const isCurrent = order.status === step.key;
-                                    const isPast = currentIdx !== -1 && stepIdx < currentIdx;
-                                    const isLocked = order.status === 'completed';
 
-                                    return (
-                                        <button
-                                            key={step.key}
-                                            type="button"
-                                            className={`step-node ${isCurrent ? 'node-active' : ''} ${isPast ? 'node-past' : ''} ${isLocked ? 'node-locked' : ''}`}
-                                            onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
-                                            disabled={isLocked}
-                                            style={{ cursor: isLocked ? 'not-allowed' : 'pointer' }}
-                                            title={isLocked ? "Car picked up — status is permanently locked" : `Move to ${step.label}`}
-                                        >
-                                            <span className="step-circle">{idx + 1}</span>
-                                            <span className="step-label">{step.label}</span>
-                                        </button>
-                                    );
-                                })}
+                                    return activeSteps.map((step, idx) => {
+                                        const stepIdx = stepOrder.indexOf(step.key);
+                                        const isCurrent = order.status === step.key;
+                                        const isPast = currentIdx !== -1 && stepIdx < currentIdx;
+                                        const isLocked = order.status === 'completed';
+
+                                        return (
+                                            <button
+                                                key={step.key}
+                                                type="button"
+                                                className={`step-node ${isCurrent ? 'node-active' : ''} ${isPast ? 'node-past' : ''} ${isLocked ? 'node-locked' : ''}`}
+                                                onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
+                                                disabled={isLocked}
+                                                style={{ cursor: isLocked ? 'not-allowed' : 'pointer' }}
+                                                title={isLocked ? "Car picked up — status is permanently locked" : `Move to ${step.label}`}
+                                            >
+                                                <span className="step-circle">{idx + 1}</span>
+                                                <span className="step-label">{step.label}</span>
+                                            </button>
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
 

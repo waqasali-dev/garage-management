@@ -30,7 +30,16 @@ const MEDIA_TYPE_META = {
     },
 };
 
-const STATUS_STEPS = [
+const CUSTOMER_STATUS_STEPS = [
+    { key: 'scheduled', label: 'Scheduled (Online)', icon: 'calendar_month' },
+    { key: 'received', label: 'Received (Vehicle Intake)', icon: 'pending_actions' },
+    { key: 'diagnosed', label: 'Diagnosed', icon: 'handyman' },
+    { key: 'in_progress', label: 'In Progress', icon: 'build' },
+    { key: 'ready', label: 'Ready for Pickup', icon: 'task_alt' },
+    { key: 'completed', label: 'Completed (Picked Up)', icon: 'check_circle' },
+];
+
+const SHOP_STATUS_STEPS = [
     { key: 'received', label: 'Received', icon: 'pending_actions' },
     { key: 'scheduled', label: 'Scheduled', icon: 'calendar_month' },
     { key: 'diagnosed', label: 'Diagnosed', icon: 'handyman' },
@@ -76,6 +85,21 @@ export default function WorkOrderDetails() {
     const [isDeletingItem, setIsDeletingItem] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Edit Schedule Modal State (Admin)
+    const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false);
+    const [baysList, setBaysList] = useState([]);
+    const [staffList, setStaffList] = useState([]);
+    const [editScheduleForm, setEditScheduleForm] = useState({
+        bay_id: 'B1',
+        appointment_date: '',
+        start_time: '',
+        end_time: '',
+        assigned_staff_id: '',
+    });
+    const [scheduleSlots, setScheduleSlots] = useState([]);
+    const [isSlotsLoading, setIsSlotsLoading] = useState(false);
+    const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
     const showNotification = (msg, type = 'success') => {
         setNotification({ msg, type });
@@ -181,6 +205,152 @@ export default function WorkOrderDetails() {
         fetchInventoryForPicker();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
+
+    // Fetch bays and staff for Edit Schedule modal
+    const fetchBaysAndStaff = async () => {
+        try {
+            const [baysRes, staffRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/bays`),
+                fetch(`${API_BASE_URL}/staff`),
+            ]);
+            if (baysRes.ok) {
+                const bJson = await baysRes.json();
+                if (bJson.success && Array.isArray(bJson.data)) {
+                    setBaysList(bJson.data.filter((b) => b.is_active !== false));
+                }
+            }
+            if (staffRes.ok) {
+                const sJson = await staffRes.json();
+                if (sJson.success && Array.isArray(sJson.data)) {
+                    setStaffList(sJson.data.filter((s) => s.status !== 'suspended'));
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching bays and staff:', err);
+        }
+    };
+
+    const fetchSlotsForEditSchedule = async (bayId, date) => {
+        if (!bayId || !date) return;
+        setIsSlotsLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/bays/${encodeURIComponent(bayId)}/available-slots?date=${date}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.slots)) {
+                    setScheduleSlots(json.slots);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching slots for edit schedule:', err);
+        } finally {
+            setIsSlotsLoading(false);
+        }
+    };
+
+    const handleOpenEditSchedule = () => {
+        fetchBaysAndStaff();
+        const initialBay = order?.appointment?.bay_id || order?.bay_assigned || 'B1';
+        const initialDate = order?.appointment?.appointment_date || (order?.scheduled_start ? order.scheduled_start.substring(0, 10) : new Date().toISOString().substring(0, 10));
+        const initialStart = order?.appointment?.start_time || (order?.scheduled_start ? order.scheduled_start.substring(11, 16) : '');
+        const initialEnd = order?.appointment?.end_time || (order?.scheduled_end ? order.scheduled_end.substring(11, 16) : '');
+        const initialStaff = order?.assigned_staff_id || '';
+
+        setEditScheduleForm({
+            bay_id: initialBay,
+            appointment_date: initialDate,
+            start_time: initialStart,
+            end_time: initialEnd,
+            assigned_staff_id: initialStaff,
+        });
+        setIsEditScheduleModalOpen(true);
+        fetchSlotsForEditSchedule(initialBay, initialDate);
+    };
+
+    const handleSaveScheduleSubmit = async (e) => {
+        e.preventDefault();
+        if (!editScheduleForm.bay_id || !editScheduleForm.appointment_date || !editScheduleForm.start_time || !editScheduleForm.end_time) {
+            showNotification('Please select bay, date, and time slot.', 'error');
+            return;
+        }
+
+        setIsSavingSchedule(true);
+        try {
+            if (order.appointment?.appointment_id) {
+                const res = await fetch(`${API_BASE_URL}/appointments/${encodeURIComponent(order.appointment.appointment_id)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(editScheduleForm),
+                });
+                const json = await res.json();
+                if (!res.ok) {
+                    showNotification(json.error || 'Failed to update appointment', 'error');
+                    return;
+                }
+                showNotification('🎉 Appointment schedule updated successfully!', 'success');
+            } else {
+                const res = await fetch(`${API_BASE_URL}/appointments/admin-appoint`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        work_order_id: order.work_order_id,
+                        bay_id: editScheduleForm.bay_id,
+                        appointment_date: editScheduleForm.appointment_date,
+                        start_time: editScheduleForm.start_time,
+                        end_time: editScheduleForm.end_time,
+                        assigned_staff_id: editScheduleForm.assigned_staff_id,
+                    }),
+                });
+                const json = await res.json();
+                if (!res.ok) {
+                    showNotification(json.error || 'Failed to assign bay schedule', 'error');
+                    return;
+                }
+                showNotification('🎉 Vehicle scheduled to bay successfully!', 'success');
+            }
+            setIsEditScheduleModalOpen(false);
+            fetchOrderDetails();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsSavingSchedule(false);
+        }
+    };
+
+    const handleFreeBaySchedule = async () => {
+        if (!window.confirm('Are you sure you want to remove this schedule? The bay slot will be freed and status reverted to Received.')) return;
+        setIsSavingSchedule(true);
+        try {
+            if (order.appointment?.appointment_id) {
+                const res = await fetch(`${API_BASE_URL}/appointments/${encodeURIComponent(order.appointment.appointment_id)}?delete_work_order=false`, {
+                    method: 'DELETE',
+                });
+                if (res.ok) {
+                    showNotification('Appointment removed and bay slot freed!', 'info');
+                    setIsEditScheduleModalOpen(false);
+                    fetchOrderDetails();
+                } else {
+                    const json = await res.json();
+                    showNotification(json.error || 'Failed to remove appointment', 'error');
+                }
+            } else {
+                const res = await fetch(`${API_BASE_URL}/staff/work-orders/${encodeURIComponent(order.work_order_id)}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'received' }),
+                });
+                if (res.ok) {
+                    showNotification('Work order reverted to received phase!', 'info');
+                    setIsEditScheduleModalOpen(false);
+                    fetchOrderDetails();
+                }
+            }
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsSavingSchedule(false);
+        }
+    };
 
     // Handle Status Change
     const handleStatusChange = async (newStatus) => {
@@ -439,8 +609,9 @@ export default function WorkOrderDetails() {
     // Timeline list
     const timelineList = order.timeline || [];
 
-    // Current step index
-    const currentStepIdx = STATUS_STEPS.findIndex((s) => s.key === order.status);
+    // Current step index dynamically selected based on customer booking vs shop intake
+    const statusSteps = order.booked_by === 'customer' ? CUSTOMER_STATUS_STEPS : SHOP_STATUS_STEPS;
+    const currentStepIdx = statusSteps.findIndex((s) => s.key === order.status);
 
     return (
         <div className="wo-details-layout">
@@ -589,6 +760,33 @@ export default function WorkOrderDetails() {
                                     </button>
                                 )}
 
+                                {/* Edit Schedule / Bay Assignment Button */}
+                                {(order.status === 'scheduled' || order.bay_assigned || order.scheduled_start || order.appointment) && (
+                                    <button
+                                        type="button"
+                                        onClick={handleOpenEditSchedule}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            backgroundColor: 'rgba(52, 211, 153, 0.12)',
+                                            border: '1px solid rgba(52, 211, 153, 0.4)',
+                                            color: '#34d399',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: '12px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                        title="Edit bay assignment, date, time slot or assigned technician"
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit_calendar</span>
+                                        <span>Edit Schedule</span>
+                                    </button>
+                                )}
+
                                 {order.status !== 'ready' && order.status !== 'completed' && (
                                     <button
                                         type="button"
@@ -626,7 +824,14 @@ export default function WorkOrderDetails() {
                         {/* Active Repair Status Stepper */}
                         <section className="stepper-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-                                <h3 className="section-title" style={{ margin: 0 }}>Repair Lifecycle Status</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <h3 className="section-title" style={{ margin: 0 }}>Repair Lifecycle Status</h3>
+                                    {order.booked_by === 'customer' && (
+                                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.35)', fontWeight: 600 }}>
+                                            🌐 Customer Online Booking
+                                        </span>
+                                    )}
+                                </div>
                                 {order.status === 'completed' && (
                                     <span
                                         style={{
@@ -655,12 +860,12 @@ export default function WorkOrderDetails() {
                                     <div
                                         className="stepper-line-fill"
                                         style={{
-                                            width: currentStepIdx >= 0 ? `${(currentStepIdx / (STATUS_STEPS.length - 1)) * 100}%` : '0%',
+                                            width: currentStepIdx >= 0 ? `${(currentStepIdx / (statusSteps.length - 1)) * 100}%` : '0%',
                                         }}
                                     ></div>
                                 </div>
 
-                                {STATUS_STEPS.map((step, idx) => {
+                                {statusSteps.map((step, idx) => {
                                     const isCompleted = currentStepIdx > idx;
                                     const isActive = currentStepIdx === idx;
                                     const isPending = currentStepIdx < idx;
@@ -1525,6 +1730,244 @@ export default function WorkOrderDetails() {
                                 Work Order: <strong>{order?.work_order_id}</strong> • Vehicle: <strong>{order?.make} {order?.model} ({order?.license_plate})</strong>
                             </span>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Schedule / Bay Appointment Modal (Admin) */}
+            {isEditScheduleModalOpen && (
+                <div
+                    className="modal-overlay"
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        padding: '16px',
+                    }}
+                    onClick={() => setIsEditScheduleModalOpen(false)}
+                >
+                    <div
+                        style={{
+                            width: '100%',
+                            maxWidth: '560px',
+                            backgroundColor: '#161e18',
+                            border: '1px solid rgba(52, 211, 153, 0.3)',
+                            borderRadius: '14px',
+                            padding: '24px',
+                            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)',
+                            color: '#f1f5f9',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: '26px', color: '#34d399' }}>edit_calendar</span>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '18px' }}>Edit Workshop Schedule</h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        Reassign bay, date, operating shift slot, and technician for {order.work_order_id}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                                onClick={() => setIsEditScheduleModalOpen(false)}
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveScheduleSubmit}>
+                            {/* Bay Selection */}
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                    Workshop Bay *
+                                </label>
+                                <select
+                                    value={editScheduleForm.bay_id}
+                                    onChange={(e) => {
+                                        const newBay = e.target.value;
+                                        setEditScheduleForm((prev) => ({ ...prev, bay_id: newBay, start_time: '', end_time: '' }));
+                                        fetchSlotsForEditSchedule(newBay, editScheduleForm.appointment_date);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        background: 'rgba(0, 0, 0, 0.4)',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '8px',
+                                        color: '#f1f5f9',
+                                    }}
+                                    required
+                                >
+                                    {baysList.map((b) => (
+                                        <option key={b.bay_id} value={b.bay_id}>
+                                            {b.bay_name || b.bay_id} ({b.opening_time} - {b.closing_time})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Date Selection */}
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                    Appointment Date *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={editScheduleForm.appointment_date}
+                                    onChange={(e) => {
+                                        const newDate = e.target.value;
+                                        setEditScheduleForm((prev) => ({ ...prev, appointment_date: newDate, start_time: '', end_time: '' }));
+                                        fetchSlotsForEditSchedule(editScheduleForm.bay_id, newDate);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        background: 'rgba(0, 0, 0, 0.4)',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '8px',
+                                        color: '#f1f5f9',
+                                        fontFamily: 'monospace',
+                                    }}
+                                    required
+                                />
+                            </div>
+
+                            {/* Slot Selection */}
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                                    Select Bay Time Slot * {editScheduleForm.start_time && <span style={{ color: '#34d399' }}>({editScheduleForm.start_time} - {editScheduleForm.end_time})</span>}
+                                </label>
+                                {isSlotsLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                                        Loading open slots for selected bay & date...
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px', maxHeight: '140px', overflowY: 'auto', padding: '6px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                                        {scheduleSlots.map((slot) => {
+                                            const isSelected = editScheduleForm.start_time === slot.start_time && editScheduleForm.end_time === slot.end_time;
+                                            return (
+                                                <button
+                                                    key={slot.slot_id}
+                                                    type="button"
+                                                    disabled={!slot.is_available && !isSelected}
+                                                    onClick={() => {
+                                                        if (slot.is_available || isSelected) {
+                                                            setEditScheduleForm((prev) => ({
+                                                                ...prev,
+                                                                start_time: slot.start_time,
+                                                                end_time: slot.end_time,
+                                                            }));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 4px',
+                                                        borderRadius: '6px',
+                                                        border: isSelected ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                                                        background: isSelected ? '#10b981' : slot.is_available ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+                                                        color: isSelected ? '#000' : slot.is_available ? '#34d399' : 'var(--text-muted)',
+                                                        fontWeight: isSelected ? 700 : 500,
+                                                        cursor: slot.is_available || isSelected ? 'pointer' : 'not-allowed',
+                                                        fontSize: '11px',
+                                                        fontFamily: 'monospace',
+                                                    }}
+                                                >
+                                                    {slot.start_time} - {slot.end_time}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Assign Technician */}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                    Assign Technician (Optional)
+                                </label>
+                                <select
+                                    value={editScheduleForm.assigned_staff_id}
+                                    onChange={(e) => setEditScheduleForm((prev) => ({ ...prev, assigned_staff_id: e.target.value }))}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        background: 'rgba(0, 0, 0, 0.4)',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '8px',
+                                        color: '#f1f5f9',
+                                    }}
+                                >
+                                    <option value="">Unassigned</option>
+                                    {staffList.map((s) => (
+                                        <option key={s.staff_id} value={s.staff_id}>
+                                            {s.full_name} ({s.role})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '16px' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleFreeBaySchedule}
+                                    disabled={isSavingSchedule}
+                                    style={{
+                                        background: 'none',
+                                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                                        color: '#f87171',
+                                        padding: '8px 14px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                    title="Cancel schedule and free bay slot"
+                                >
+                                    Free Bay / Remove Schedule
+                                </button>
+
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsEditScheduleModalOpen(false)}
+                                        style={{
+                                            background: 'none',
+                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                            color: 'var(--text-muted)',
+                                            padding: '8px 16px',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingSchedule || !editScheduleForm.start_time}
+                                        style={{
+                                            background: '#10b981',
+                                            border: 'none',
+                                            color: '#000',
+                                            fontWeight: 700,
+                                            padding: '8px 18px',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            cursor: isSavingSchedule || !editScheduleForm.start_time ? 'not-allowed' : 'pointer',
+                                        }}
+                                    >
+                                        {isSavingSchedule ? 'Saving...' : 'Save Schedule'}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

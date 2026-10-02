@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS work_order_data (
     initial_observations TEXT,
     estimated_cost NUMERIC(10, 2) DEFAULT 0.00,
     total_cost NUMERIC(10, 2) DEFAULT 0.00,
+    booked_by VARCHAR(30) DEFAULT 'admin',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_work_order_id_format CHECK (work_order_id ~ '^WO-\d{4}-\d{4}$')

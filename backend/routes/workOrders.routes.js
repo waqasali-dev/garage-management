@@ -269,6 +269,7 @@ export const handleGetWorkOrdersList = async (req, res) => {
                 w.initial_observations,
                 w.estimated_cost,
                 w.total_cost,
+                w.booked_by,
                 w.created_at,
                 w.updated_at,
                 v.vin,
@@ -413,12 +414,33 @@ export const handleGetSingleWorkOrder = async (req, res) => {
             scheduledTasks = [];
         }
 
+        let appointment = null;
+        try {
+            const appRes = await pool.query(
+                `SELECT a.appointment_id, a.bay_id, b.bay_name, b.bay_type,
+                        TO_CHAR(a.appointment_date, 'YYYY-MM-DD') AS appointment_date,
+                        TO_CHAR(a.start_time, 'HH24:MI') AS start_time,
+                        TO_CHAR(a.end_time, 'HH24:MI') AS end_time,
+                        a.status, a.service_type, a.customer_notes, a.booked_by
+                 FROM appointments a
+                 LEFT JOIN workshop_bays b ON a.bay_id = b.bay_id
+                 WHERE a.work_order_id = $1
+                 ORDER BY a.appointment_date DESC, a.start_time DESC
+                 LIMIT 1;`,
+                [canonicalId]
+            );
+            appointment = appRes.rows[0] || null;
+        } catch (appErr) {
+            appointment = null;
+        }
+
         const fullData = {
             ...workOrder,
             items: itemsResult.rows,
             media: mediaResult.rows,
             timeline: timelineResult.rows,
             scheduled_tasks: scheduledTasks,
+            appointment: appointment,
         };
 
         await setCache(cacheKey, fullData, 300);
@@ -513,6 +535,7 @@ router.delete("/:id", async (req, res) => {
         await client.query("DELETE FROM work_order_media WHERE work_order_id = $1;", [id]);
         await client.query("DELETE FROM invoice_data WHERE work_order_id = $1;", [id]);
         await client.query("DELETE FROM scheduled_tasks WHERE work_order_id = $1;", [id]);
+        await client.query("DELETE FROM appointments WHERE work_order_id = $1;", [id]);
         await client.query("DELETE FROM audit_logs WHERE work_order_id = $1;", [id]);
         await client.query("DELETE FROM work_order_data WHERE work_order_id = $1;", [id]);
 
@@ -524,6 +547,8 @@ router.delete("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:dashboard:*");
         await deleteCachePattern("garage:cache:inventory:*");
         await deleteCachePattern("garage:cache:schedules:*");
+        await deleteCachePattern("garage:cache:appointments:*");
+        await deleteCachePattern("garage:cache:bays:*");
         await deleteCachePattern("garage:cache:owner:vehicles:*");
         await deleteCachePattern("garage:cache:vehicle:*");
         await deleteCachePattern("garage:cache:owners:*");

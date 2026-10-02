@@ -241,12 +241,42 @@ router.patch("/:id", async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ error: "Scheduled task not found" });
         }
+        const task = result.rows[0];
 
+        if (task.work_order_id) {
+            const schedStart = task.scheduled_date && task.start_time ? `${task.scheduled_date}T${task.start_time}:00` : null;
+            const schedEnd = task.scheduled_date && task.end_time ? `${task.scheduled_date}T${task.end_time}:00` : null;
+
+            await pool.query(
+                `UPDATE work_order_data
+                 SET bay_assigned = COALESCE($1, bay_assigned),
+                     scheduled_start = COALESCE($2::TIMESTAMP, scheduled_start),
+                     scheduled_end = COALESCE($3::TIMESTAMP, scheduled_end),
+                     assigned_staff_id = COALESCE($4, assigned_staff_id),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE work_order_id = $5;`,
+                [task.bay_assigned, schedStart, schedEnd, task.assigned_staff_id, task.work_order_id]
+            );
+
+            await pool.query(
+                `UPDATE appointments
+                 SET bay_id = COALESCE($1, bay_id),
+                     appointment_date = COALESCE($2::DATE, appointment_date),
+                     start_time = COALESCE($3::TIME, start_time),
+                     end_time = COALESCE($4::TIME, end_time),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE work_order_id = $5;`,
+                [task.bay_assigned, task.scheduled_date, task.start_time, task.end_time, task.work_order_id]
+            );
+        }
+
+        await deleteCachePattern("garage:cache:appointments:*");
         await deleteCachePattern("garage:cache:schedules:*");
-        await deleteCachePattern("garage:cache:workorder:details:*");
+        await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:owner:*");
 
-        res.json({ success: true, message: "Task updated successfully", data: result.rows[0] });
+        res.json({ success: true, message: "Task updated successfully", data: task });
     } catch (err) {
         console.error("Error updating scheduled task:", err);
         res.status(500).json({ error: "Failed to update scheduled task", details: err.message });
@@ -262,12 +292,32 @@ router.delete("/:id", async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ error: "Scheduled task not found" });
         }
+        const task = result.rows[0];
 
+        if (task.work_order_id) {
+            // Delete linked appointment
+            await pool.query("DELETE FROM appointments WHERE work_order_id = $1;", [task.work_order_id]);
+
+            // Revert work order if it was scheduled
+            await pool.query(
+                `UPDATE work_order_data
+                 SET status = 'received',
+                     bay_assigned = NULL,
+                     scheduled_start = NULL,
+                     scheduled_end = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE work_order_id = $1 AND status = 'scheduled';`,
+                [task.work_order_id]
+            );
+        }
+
+        await deleteCachePattern("garage:cache:appointments:*");
         await deleteCachePattern("garage:cache:schedules:*");
-        await deleteCachePattern("garage:cache:workorder:details:*");
+        await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:owner:*");
 
-        res.json({ success: true, message: "Scheduled task deleted", data: result.rows[0] });
+        res.json({ success: true, message: "Scheduled task deleted and bay slot freed", data: task });
     } catch (err) {
         console.error("Error deleting scheduled task:", err);
         res.status(500).json({ error: "Failed to delete scheduled task", details: err.message });

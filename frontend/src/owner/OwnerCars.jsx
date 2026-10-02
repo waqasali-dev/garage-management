@@ -46,6 +46,7 @@ export default function OwnerCars() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [vehicles, setVehicles] = useState([]);
     const [bays, setBays] = useState(DEFAULT_BAYS);
+    const [customerAppointments, setCustomerAppointments] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState(null);
@@ -75,6 +76,46 @@ export default function OwnerCars() {
         setTimeout(() => setNotification(null), 5000);
     };
 
+    const fetchCustomerAppointments = async () => {
+        try {
+            const ownerId = user?.owner_id;
+            const url = ownerId
+                ? `${API_BASE_URL}/appointments?owner_id=${encodeURIComponent(ownerId)}`
+                : `${API_BASE_URL}/appointments`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data)) {
+                    // Filter out cancelled bookings so user sees active confirmed/pending ones
+                    setCustomerAppointments(json.data.filter((a) => a.status !== 'cancelled'));
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching customer appointments:', err);
+        }
+    };
+
+    const handleCancelAppointment = async (appointmentId) => {
+        if (!window.confirm('Are you sure you want to cancel this workshop appointment? The reserved bay slot will be released.')) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/cancel`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cancellation_reason: 'Cancelled by customer from portal' }),
+            });
+            const json = await res.json();
+            if (res.ok) {
+                showNotification('Appointment cancelled and bay slot released.', 'info');
+                fetchOwnerVehicles();
+                fetchCustomerAppointments();
+            } else {
+                showNotification(json.error || 'Failed to cancel appointment', 'error');
+            }
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        }
+    };
+
     const fetchOwnerVehicles = async () => {
         setIsLoading(true);
         try {
@@ -93,10 +134,12 @@ export default function OwnerCars() {
                         : vJson.data;
                     setVehicles(myVehicles);
                     if (myVehicles.length > 0 && !bookingForm.vehicle_id) {
-                        setBookingForm((prev) => ({ ...prev, vehicle_id: myVehicles[0].vehicle_id }));
+                        const firstAvailable = myVehicles.find((v) => !v.has_active_booking) || myVehicles[0];
+                        setBookingForm((prev) => ({ ...prev, vehicle_id: firstAvailable.vehicle_id }));
                     }
                 }
             }
+            fetchCustomerAppointments();
         } catch (err) {
             console.error('Error loading owner vehicles:', err);
             showNotification('Failed to fetch vehicle data', 'error');
@@ -197,7 +240,35 @@ export default function OwnerCars() {
 
     // Open booking modal for a specific vehicle
     const handleOpenBooking = (vehicleId = null) => {
-        const targetVehicleId = vehicleId || (vehicles[0]?.vehicle_id || '');
+        if (vehicleId) {
+            const targetV = vehicles.find((v) => v.vehicle_id === vehicleId);
+            if (targetV?.has_active_booking) {
+                showNotification(
+                    `This vehicle already has an active confirmed appointment booked on ${targetV.upcoming_appointment?.appointment_date || 'scheduled date'} at ${targetV.upcoming_appointment?.start_time || ''}! You cannot book another schedule until that date and time has passed.`,
+                    'error'
+                );
+                return;
+            }
+        }
+
+        const unbookedVeh = vehicleId
+            ? vehicles.find((v) => v.vehicle_id === vehicleId)
+            : vehicles.find((v) => !v.has_active_booking) || vehicles[0];
+
+        if (!unbookedVeh) {
+            showNotification('No vehicles available to book.', 'error');
+            return;
+        }
+
+        if (unbookedVeh.has_active_booking && !vehicleId) {
+            showNotification(
+                'All your vehicles already have confirmed appointments that have not passed yet.',
+                'error'
+            );
+            return;
+        }
+
+        const targetVehicleId = unbookedVeh.vehicle_id;
         const targetBayId = bays[0]?.bay_id || 'B1';
         const targetDate = getInitialBookingDate();
         setBookingForm({
@@ -222,6 +293,16 @@ export default function OwnerCars() {
             showNotification('Please select a vehicle to book.', 'error');
             return;
         }
+
+        const targetVehicleObj = vehicles.find((v) => v.vehicle_id === bookingForm.vehicle_id);
+        if (targetVehicleObj?.has_active_booking) {
+            showNotification(
+                `This vehicle already has a scheduled appointment booked on ${targetVehicleObj.upcoming_appointment?.appointment_date} at ${targetVehicleObj.upcoming_appointment?.start_time}. Another appointment cannot be booked until that time passes.`,
+                'error'
+            );
+            return;
+        }
+
         if (!bookingForm.start_time || !bookingForm.end_time) {
             showNotification('Please select an available time slot for your appointment.', 'error');
             return;
@@ -247,6 +328,7 @@ export default function OwnerCars() {
             showNotification(json.message || '🎉 Your service appointment has been booked!', 'success');
             setIsBookingModalOpen(false);
             fetchOwnerVehicles();
+            fetchCustomerAppointments();
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
         } finally {
@@ -368,6 +450,84 @@ export default function OwnerCars() {
                             </div>
                         </div>
 
+                        {/* Confirmed Customer Bay Bookings Section */}
+                        {customerAppointments.length > 0 && (
+                            <section className="customer-bookings-section">
+                                <div className="bookings-section-header">
+                                    <div className="section-title-wrap">
+                                        <CalendarMonthIcon style={{ color: '#10b981', fontSize: '22px' }} />
+                                        <h2 className="section-title">My Confirmed Workshop Appointments</h2>
+                                        <span className="bookings-count-pill font-mono">{customerAppointments.length} Active</span>
+                                    </div>
+                                    <p className="section-desc">
+                                        Reserved workshop bay slots and scheduled maintenance appointments for your vehicles.
+                                    </p>
+                                </div>
+
+                                <div className="bookings-cards-grid">
+                                    {customerAppointments.map((apt) => {
+                                        const isToday = apt.appointment_date === todayStr;
+                                        return (
+                                            <div key={apt.appointment_id} className="booking-ticket-card">
+                                                <div className="ticket-top">
+                                                    <div className="ticket-time-badge">
+                                                        <span className="ticket-date font-mono">📅 {apt.appointment_date}</span>
+                                                        <span className="ticket-time font-mono">⏰ {apt.start_time} - {apt.end_time}</span>
+                                                        {isToday && <span className="today-badge font-mono">TODAY</span>}
+                                                    </div>
+                                                    <span className={`apt-status-badge ${apt.status === 'confirmed' ? 'status-confirmed' : 'status-pending'}`}>
+                                                        {apt.status.toUpperCase()}
+                                                    </span>
+                                                </div>
+
+                                                <div className="ticket-car">
+                                                    <div className="ticket-car-name">
+                                                        🚗 {apt.year} {apt.make} {apt.model}
+                                                    </div>
+                                                    <div className="ticket-plate font-mono">
+                                                        PLATE: {apt.license_plate || 'N/A'}
+                                                    </div>
+                                                </div>
+
+                                                <div className="ticket-meta-row">
+                                                    <div className="ticket-bay">
+                                                        <span className="lbl">BAY:</span>
+                                                        <span className="val font-mono">{apt.bay_name || apt.bay_id}</span>
+                                                    </div>
+                                                    <div className="ticket-service">
+                                                        <span className="lbl">SERVICE:</span>
+                                                        <span className="val">{apt.service_type || 'Routine Service'}</span>
+                                                    </div>
+                                                </div>
+
+                                                {apt.customer_notes && (
+                                                    <div className="ticket-notes">
+                                                        <span className="lbl">Notes:</span> "{apt.customer_notes}"
+                                                    </div>
+                                                )}
+
+                                                <div className="ticket-footer">
+                                                    {apt.work_order_id ? (
+                                                        <Link to={`/work-orders/${apt.work_order_id}`} className="ticket-wo-link font-mono">
+                                                            📋 {apt.work_order_id} →
+                                                        </Link>
+                                                    ) : <span></span>}
+                                                    <button
+                                                        type="button"
+                                                        className="btn-cancel-booking"
+                                                        onClick={() => handleCancelAppointment(apt.appointment_id)}
+                                                        title="Cancel this appointment and free the bay slot"
+                                                    >
+                                                        Cancel Booking
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
                         {/* Vehicles Cards Grid */}
                         <div className="vehicles-grid">
                             {isLoading ? (
@@ -452,6 +612,21 @@ export default function OwnerCars() {
                                                 </div>
                                             </div>
 
+                                            {/* Active Scheduled Appointment Banner Strip */}
+                                            {vehicle.has_active_booking && vehicle.upcoming_appointment && (
+                                                <div className="v-active-schedule-strip">
+                                                    <div className="schedule-strip-left">
+                                                        <span className="schedule-dot animate-pulse"></span>
+                                                        <span className="font-mono">
+                                                            📅 {vehicle.upcoming_appointment.appointment_date} • {vehicle.upcoming_appointment.start_time}-{vehicle.upcoming_appointment.end_time}
+                                                        </span>
+                                                    </div>
+                                                    <span className="schedule-bay-pill font-mono">
+                                                        {vehicle.upcoming_appointment.bay_name || vehicle.upcoming_appointment.bay_id}
+                                                    </span>
+                                                </div>
+                                            )}
+
                                             {/* Micro Metrics */}
                                             <div className="v-metrics-row">
                                                 <div className="v-metric-item">
@@ -474,16 +649,28 @@ export default function OwnerCars() {
 
                                             {/* Action Buttons */}
                                             <div className="v-card-actions">
-                                                {/* Direct Book Service Button */}
-                                                <button
-                                                    type="button"
-                                                    className="btn-book-card-secondary"
-                                                    onClick={() => handleOpenBooking(vehicle.vehicle_id)}
-                                                    title="Book service slot for this car"
-                                                >
-                                                    <CalendarMonthIcon fontSize="inherit" />
-                                                    <span>Book Service</span>
-                                                </button>
+                                                {/* Direct Book Service Button or Disabled Already Scheduled */}
+                                                {vehicle.has_active_booking ? (
+                                                    <button
+                                                        type="button"
+                                                        className="btn-book-card-secondary is-already-booked"
+                                                        disabled
+                                                        title={`This vehicle already has an active appointment booked on ${vehicle.upcoming_appointment?.appointment_date} at ${vehicle.upcoming_appointment?.start_time}. Another appointment cannot be booked until that time passes.`}
+                                                    >
+                                                        <CalendarMonthIcon fontSize="inherit" />
+                                                        <span>Already Scheduled</span>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        className="btn-book-card-secondary"
+                                                        onClick={() => handleOpenBooking(vehicle.vehicle_id)}
+                                                        title="Book service slot for this car"
+                                                    >
+                                                        <CalendarMonthIcon fontSize="inherit" />
+                                                        <span>Book Service</span>
+                                                    </button>
+                                                )}
 
                                                 <Link
                                                     to={`/owner/history/${encodeURIComponent(vehicle.vin)}`}
@@ -548,12 +735,26 @@ export default function OwnerCars() {
                                     required
                                 >
                                     {vehicles.map((v) => (
-                                        <option key={v.vehicle_id} value={v.vehicle_id}>
-                                            {v.year} {v.make} {v.model} (Plate: {v.license_plate})
+                                        <option key={v.vehicle_id} value={v.vehicle_id} disabled={v.has_active_booking}>
+                                            {v.year} {v.make} {v.model} (Plate: {v.license_plate}) {v.has_active_booking ? '— 🔒 [Active Schedule Booked]' : ''}
                                         </option>
                                     ))}
                                 </select>
-                                {selectedVehicleObj && (
+                                {selectedVehicleObj?.has_active_booking && (
+                                    <div className="active-booking-warning-banner">
+                                        <div className="warning-title">
+                                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>lock_clock</span>
+                                            <strong>Active Appointment Already Booked</strong>
+                                        </div>
+                                        <p>
+                                            This {selectedVehicleObj.year} {selectedVehicleObj.make} {selectedVehicleObj.model} (Plate: {selectedVehicleObj.license_plate}) already has a confirmed appointment on <strong>{selectedVehicleObj.upcoming_appointment?.appointment_date}</strong> from <strong>{selectedVehicleObj.upcoming_appointment?.start_time} to {selectedVehicleObj.upcoming_appointment?.end_time}</strong> in <strong>{selectedVehicleObj.upcoming_appointment?.bay_name || selectedVehicleObj.upcoming_appointment?.bay_id}</strong>.
+                                        </p>
+                                        <p className="warning-sub">
+                                            You cannot book another schedule for this car until the existing appointment date and time has passed.
+                                        </p>
+                                    </div>
+                                )}
+                                {selectedVehicleObj && !selectedVehicleObj.has_active_booking && (
                                     <div style={{ fontSize: '12px', color: '#10b981', marginTop: '4px' }}>
                                         Vehicle: <strong>{selectedVehicleObj.year} {selectedVehicleObj.make} {selectedVehicleObj.model}</strong> • Plate: <span className="font-mono">{selectedVehicleObj.license_plate}</span>
                                     </div>
@@ -718,9 +919,18 @@ export default function OwnerCars() {
                                 <button
                                     type="submit"
                                     className="btn-book-appointment-header"
-                                    disabled={isBookingSubmitting || !bookingForm.start_time || !bookingForm.vehicle_id}
+                                    disabled={
+                                        isBookingSubmitting ||
+                                        !bookingForm.start_time ||
+                                        !bookingForm.vehicle_id ||
+                                        Boolean(selectedVehicleObj?.has_active_booking)
+                                    }
                                 >
-                                    {isBookingSubmitting ? 'Confirming...' : 'Book My Appointment'}
+                                    {isBookingSubmitting
+                                        ? 'Confirming...'
+                                        : selectedVehicleObj?.has_active_booking
+                                        ? '🔒 Vehicle Already Scheduled'
+                                        : 'Book My Appointment'}
                                 </button>
                             </div>
                         </form>

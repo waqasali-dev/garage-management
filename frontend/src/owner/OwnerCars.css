@@ -836,3 +836,301 @@
     border-top: 1px solid var(--border-glass);
 }
 
+/* ==================================================== */
+/* CUSTOMER DASHBOARD: CONFIRMED BOOKINGS SECTION      */
+/* ==================================================== */
+.customer-bookings-section {
+    margin-bottom: 28px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(22, 30, 24, 0.7) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 14px;
+    padding: 20px 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.bookings-section-header {
+    margin-bottom: 16px;
+}
+
+.section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.bookings-count-pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    font-weight: 700;
+}
+
+.section-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 4px 0 0 0;
+}
+
+.bookings-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+}
+
+.booking-ticket-card {
+    background: rgba(18, 24, 20, 0.85);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.booking-ticket-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+.ticket-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ticket-time-badge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.ticket-date {
+    font-size: 12px;
+    font-weight: 700;
+    color: #34d399;
+}
+
+.ticket-time {
+    font-size: 12px;
+    color: #e2e8f0;
+}
+
+.today-badge {
+    font-size: 10px;
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+.apt-status-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.apt-status-badge.status-confirmed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.apt-status-badge.status-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.ticket-car {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.ticket-car-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.ticket-plate {
+    font-size: 11px;
+    color: var(--accent-yellow);
+    background: rgba(255, 216, 95, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 216, 95, 0.2);
+}
+
+.ticket-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.ticket-meta-row .lbl {
+    color: var(--text-muted);
+    margin-right: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ticket-meta-row .val {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.ticket-notes {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left: 2px solid rgba(16, 185, 129, 0.5);
+}
+
+.ticket-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 6px;
+    margin-top: auto;
+}
+
+.ticket-wo-link {
+    font-size: 11px;
+    color: #38bdf8;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s ease;
+}
+
+.ticket-wo-link:hover {
+    color: #7dd3fc;
+    text-decoration: underline;
+}
+
+.btn-cancel-booking {
+    background: none;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-cancel-booking:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+/* ==================================================== */
+/* VEHICLE CARD ACTIVE SCHEDULE STRIP & BUTTON         */
+/* ==================================================== */
+.v-active-schedule-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    margin: 8px 0;
+    font-size: 11px;
+}
+
+.schedule-strip-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #34d399;
+    font-weight: 600;
+}
+
+.schedule-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #10b981;
+    box-shadow: 0 0 6px #10b981;
+}
+
+.schedule-bay-pill {
+    font-size: 10px;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.btn-book-card-secondary.is-already-booked {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--text-muted) !important;
+    cursor: not-allowed !important;
+    opacity: 0.7;
+}
+
+/* Modal Warning Banner when vehicle is already booked */
+.active-booking-warning-banner {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 8px;
+    color: #fde68a;
+    font-size: 12px;
+}
+
+.active-booking-warning-banner .warning-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #fbbf24;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.active-booking-warning-banner p {
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
+.active-booking-warning-banner .warning-sub {
+    font-size: 11px;
+    color: #fcd34d;
+    opacity: 0.9;
+    font-style: italic;
+}
+
+

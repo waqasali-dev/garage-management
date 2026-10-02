@@ -82,6 +82,26 @@ router.get(["/", "/vehicles"], async (req, res) => {
                     WHERE w.vehicle_id = v.vehicle_id
                 ) AS total_spent,
                 (
+                    SELECT json_build_object(
+                        'appointment_id', a.appointment_id,
+                        'bay_id', a.bay_id,
+                        'bay_name', wb.bay_name,
+                        'appointment_date', TO_CHAR(a.appointment_date, 'YYYY-MM-DD'),
+                        'start_time', TO_CHAR(a.start_time, 'HH24:MI'),
+                        'end_time', TO_CHAR(a.end_time, 'HH24:MI'),
+                        'service_type', a.service_type,
+                        'status', a.status,
+                        'work_order_id', a.work_order_id
+                    )
+                    FROM appointments a
+                    LEFT JOIN workshop_bays wb ON a.bay_id = wb.bay_id
+                    WHERE a.vehicle_id = v.vehicle_id
+                      AND a.status NOT IN ('cancelled', 'completed')
+                      AND (a.appointment_date > CURRENT_DATE OR (a.appointment_date = CURRENT_DATE AND a.end_time > CURRENT_TIME))
+                    ORDER BY a.appointment_date ASC, a.start_time ASC
+                    LIMIT 1
+                ) AS upcoming_appointment,
+                (
                     SELECT TO_CHAR(MAX(w.created_at), 'YYYY-MM-DD') 
                     FROM work_order_data w 
                     WHERE w.vehicle_id = v.vehicle_id
@@ -98,6 +118,7 @@ router.get(["/", "/vehicles"], async (req, res) => {
             total_services_count: parseInt(row.total_services_count, 10) || 0,
             total_spent: parseFloat(row.total_spent) || 0.0,
             has_active_order: Boolean(row.active_work_order_id),
+            has_active_booking: Boolean(row.upcoming_appointment),
         }));
 
         await setCache(cacheKey, formatted, 180);

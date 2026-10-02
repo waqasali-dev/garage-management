@@ -158,6 +158,7 @@ router.get("/eligible-work-orders", async (req, res) => {
                 w.scheduled_end,
                 w.initial_observations,
                 w.assigned_staff_id,
+                w.booked_by,
                 v.make,
                 v.model,
                 v.year,
@@ -554,6 +555,34 @@ router.post("/customer-book", async (req, res) => {
         const vehicle = vehRes.rows[0];
         const resolvedOwnerId = owner_id || vehicle.owner_id;
 
+        // STEP 1.5: Verify vehicle does not already have an active upcoming booking that has not passed
+        const existingAppQuery = `
+            SELECT 
+                a.appointment_id,
+                a.bay_id,
+                wb.bay_name,
+                TO_CHAR(a.appointment_date, 'YYYY-MM-DD') AS appointment_date,
+                TO_CHAR(a.start_time, 'HH24:MI') AS start_time,
+                TO_CHAR(a.end_time, 'HH24:MI') AS end_time,
+                a.service_type
+            FROM appointments a
+            LEFT JOIN workshop_bays wb ON a.bay_id = wb.bay_id
+            WHERE a.vehicle_id = $1
+              AND a.status NOT IN ('cancelled', 'completed')
+              AND (a.appointment_date > CURRENT_DATE OR (a.appointment_date = CURRENT_DATE AND a.end_time > CURRENT_TIME))
+            LIMIT 1;
+        `;
+        const existingAppRes = await client.query(existingAppQuery, [vehicle.vehicle_id]);
+        if (existingAppRes.rows.length > 0) {
+            const existing = existingAppRes.rows[0];
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+                error: `This vehicle (${vehicle.make} ${vehicle.model} - ${vehicle.license_plate}) already has an active upcoming appointment for ${existing.bay_name || 'Workshop Bay'} on ${existing.appointment_date} from ${existing.start_time} to ${existing.end_time}. You cannot book another schedule for this car until that appointment has passed or is cancelled.`,
+                code: "VEHICLE_ALREADY_SCHEDULED",
+                activeAppointment: existing,
+            });
+        }
+
         // STEP 2: Verify Bay exists and is active
         const bayRes = await client.query(
             `SELECT bay_id, bay_name, opening_time, closing_time, is_active FROM workshop_bays WHERE bay_id = $1;`,
@@ -628,9 +657,10 @@ router.post("/customer-book", async (req, res) => {
                 scheduled_end,
                 initial_observations,
                 estimated_cost,
-                total_cost
+                total_cost,
+                booked_by
             )
-            VALUES ($1, 'scheduled', $2, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ, $5, 0.00, 0.00)
+            VALUES ($1, 'scheduled', $2, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ, $5, 0.00, 0.00, 'customer')
             RETURNING work_order_id;
         `;
         const woRes = await client.query(insertWoQuery, [
@@ -808,6 +838,260 @@ router.patch("/:id/cancel", async (req, res) => {
         await client.query("ROLLBACK");
         console.error("Error cancelling appointment:", err);
         res.status(500).json({ error: "Failed to cancel appointment", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================
+// 6. PUT /api/appointments/:id - Admin Edit / Reschedule Appointment
+// ==========================================
+router.put("/:id", async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        const {
+            bay_id,
+            appointment_date,
+            start_time,
+            end_time,
+            service_type,
+            customer_notes,
+            assigned_staff_id,
+            status,
+        } = req.body;
+
+        const appRes = await client.query(
+            `SELECT a.*, v.license_plate, v.make, v.model, v.owner_id 
+             FROM appointments a
+             JOIN vehicles v ON a.vehicle_id = v.vehicle_id
+             WHERE a.appointment_id = $1;`,
+            [id]
+        );
+
+        if (appRes.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Appointment not found." });
+        }
+
+        const app = appRes.rows[0];
+        const targetBayId = bay_id || app.bay_id;
+        const targetDate = appointment_date || app.appointment_date;
+        const targetStart = start_time || app.start_time;
+        const targetEnd = end_time || app.end_time;
+
+        // Verify bay
+        const bayRes = await client.query("SELECT bay_name, is_active FROM workshop_bays WHERE bay_id = $1;", [targetBayId]);
+        if (bayRes.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: `Workshop bay '${targetBayId}' not found.` });
+        }
+        const bay = bayRes.rows[0];
+
+        // Verify hours
+        const hoursCheck = await validateWithinWorkshopHours(client, targetDate, targetStart, targetEnd);
+        if (!hoursCheck.valid) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ error: hoursCheck.error });
+        }
+
+        // Conflict check on Bay (excluding this appointment & this work order's task)
+        const bayConflictQuery = `
+            SELECT 'appointment' as source, a.appointment_id as id, TO_CHAR(a.start_time, 'HH24:MI') as start_time, TO_CHAR(a.end_time, 'HH24:MI') as end_time
+            FROM appointments a
+            WHERE a.bay_id = $1 
+              AND a.appointment_date = $2::DATE
+              AND a.status NOT IN ('cancelled', 'completed')
+              AND a.appointment_id != $5
+              AND (a.start_time < $4::TIME AND a.end_time > $3::TIME)
+            UNION ALL
+            SELECT 'scheduled_task' as source, t.task_id as id, TO_CHAR(t.start_time, 'HH24:MI') as start_time, TO_CHAR(t.end_time, 'HH24:MI') as end_time
+            FROM scheduled_tasks t
+            WHERE t.bay_assigned = $1 
+              AND t.scheduled_date = $2::DATE
+              AND t.status NOT IN ('cancelled', 'completed')
+              AND (t.work_order_id IS NULL OR t.work_order_id != $6)
+              AND (t.start_time < $4::TIME AND t.end_time > $3::TIME)
+            LIMIT 1;
+        `;
+        const bayConflictRes = await client.query(bayConflictQuery, [
+            targetBayId,
+            targetDate,
+            targetStart,
+            targetEnd,
+            id,
+            app.work_order_id || 'NO_WO',
+        ]);
+
+        if (bayConflictRes.rows.length > 0) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+                error: `Bay Schedule Conflict: '${bay.bay_name}' is already occupied from ${bayConflictRes.rows[0].start_time} to ${bayConflictRes.rows[0].end_time}.`,
+            });
+        }
+
+        // Update appointment
+        const updateAppRes = await client.query(
+            `UPDATE appointments
+             SET bay_id = $1,
+                 appointment_date = $2::DATE,
+                 start_time = $3::TIME,
+                 end_time = $4::TIME,
+                 service_type = COALESCE($5, service_type),
+                 customer_notes = COALESCE($6, customer_notes),
+                 status = COALESCE($7, status),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE appointment_id = $8
+             RETURNING *;`,
+            [
+                targetBayId,
+                targetDate,
+                targetStart,
+                targetEnd,
+                service_type !== undefined ? service_type : null,
+                customer_notes !== undefined ? customer_notes : null,
+                status || null,
+                id,
+            ]
+        );
+
+        // Update linked work order
+        if (app.work_order_id) {
+            const scheduledStart = `${targetDate} ${targetStart}:00`;
+            const scheduledEnd = `${targetDate} ${targetEnd}:00`;
+            await client.query(
+                `UPDATE work_order_data
+                 SET bay_assigned = $1,
+                     scheduled_start = $2::TIMESTAMPTZ,
+                     scheduled_end = $3::TIMESTAMPTZ,
+                     assigned_staff_id = COALESCE($4, assigned_staff_id),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE work_order_id = $5;`,
+                [
+                    targetBayId,
+                    scheduledStart,
+                    scheduledEnd,
+                    assigned_staff_id ? parseInt(assigned_staff_id, 10) : null,
+                    app.work_order_id,
+                ]
+            );
+
+            // Update linked scheduled tasks
+            await client.query(
+                `UPDATE scheduled_tasks
+                 SET bay_assigned = $1,
+                     scheduled_date = $2::DATE,
+                     start_time = $3::TIME,
+                     end_time = $4::TIME,
+                     assigned_staff_id = COALESCE($5, assigned_staff_id),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE work_order_id = $6 AND status NOT IN ('cancelled', 'completed');`,
+                [
+                    targetBayId,
+                    targetDate,
+                    targetStart,
+                    targetEnd,
+                    assigned_staff_id ? parseInt(assigned_staff_id, 10) : null,
+                    app.work_order_id,
+                ]
+            );
+        }
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:appointments:*");
+        await deleteCachePattern("garage:cache:schedules:*");
+        await deleteCachePattern("garage:cache:workorder:*");
+        await deleteCachePattern("garage:cache:bays:*");
+        await deleteCachePattern("garage:cache:owner:*");
+
+        res.json({
+            success: true,
+            message: `Appointment '${id}' updated successfully!`,
+            data: updateAppRes.rows[0],
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error editing appointment:", err);
+        res.status(500).json({ error: "Failed to update appointment", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================
+// 7. DELETE /api/appointments/:id - Admin Delete Appointment
+// ==========================================
+router.delete("/:id", async (req, res) => {
+    const { id } = req.params;
+    const { delete_work_order } = req.query;
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        const appRes = await client.query(
+            `SELECT appointment_id, work_order_id, bay_id, appointment_date, status 
+             FROM appointments WHERE appointment_id = $1;`,
+            [id]
+        );
+
+        if (appRes.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Appointment not found." });
+        }
+
+        const app = appRes.rows[0];
+
+        // Delete appointment record
+        await client.query("DELETE FROM appointments WHERE appointment_id = $1;", [id]);
+
+        if (app.work_order_id) {
+            // Delete associated scheduled task
+            await client.query("DELETE FROM scheduled_tasks WHERE work_order_id = $1;", [app.work_order_id]);
+
+            if (delete_work_order === "true") {
+                // Delete work order line items, media, invoices, audit logs and work order
+                await client.query("DELETE FROM work_order_items WHERE work_order_id = $1;", [app.work_order_id]);
+                await client.query("DELETE FROM work_order_media WHERE work_order_id = $1;", [app.work_order_id]);
+                await client.query("DELETE FROM invoice_data WHERE work_order_id = $1;", [app.work_order_id]);
+                await client.query("DELETE FROM audit_logs WHERE work_order_id = $1;", [app.work_order_id]);
+                await client.query("DELETE FROM work_order_data WHERE work_order_id = $1;", [app.work_order_id]);
+            } else {
+                // Revert work order status to 'received' and clear schedule
+                await client.query(
+                    `UPDATE work_order_data
+                     SET status = 'received',
+                         bay_assigned = NULL,
+                         scheduled_start = NULL,
+                         scheduled_end = NULL,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE work_order_id = $1 AND status = 'scheduled';`,
+                    [app.work_order_id]
+                );
+            }
+        }
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:appointments:*");
+        await deleteCachePattern("garage:cache:schedules:*");
+        await deleteCachePattern("garage:cache:workorder:*");
+        await deleteCachePattern("garage:cache:bays:*");
+        await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:vehicle:*");
+
+        res.json({
+            success: true,
+            message: `Appointment '${id}' and associated slot reservation deleted successfully.`,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error deleting appointment:", err);
+        res.status(500).json({ error: "Failed to delete appointment", details: err.message });
     } finally {
         client.release();
     }
