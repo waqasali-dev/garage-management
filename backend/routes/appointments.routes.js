@@ -144,7 +144,7 @@ router.get("/", async (req, res) => {
 
 // ==========================================
 // 2. GET /api/appointments/eligible-work-orders
-// Returns ONLY work orders in 'received' or 'diagnosed' phase
+// Returns work orders in 'received', 'diagnosed', or 'scheduled' phase with schedule status
 // ==========================================
 router.get("/eligible-work-orders", async (req, res) => {
     try {
@@ -166,14 +166,44 @@ router.get("/eligible-work-orders", async (req, res) => {
                 o.owner_id,
                 o.full_name AS owner_name,
                 o.phone_number AS owner_phone,
-                s.full_name AS assigned_staff_name
+                s.full_name AS assigned_staff_name,
+                app_info.appointment_id,
+                app_info.bay_id AS appointment_bay_id,
+                app_info.bay_name AS appointment_bay_name,
+                app_info.appointment_date,
+                app_info.start_time AS appointment_start_time,
+                app_info.end_time AS appointment_end_time,
+                CASE 
+                    WHEN app_info.appointment_id IS NOT NULL OR w.status = 'scheduled' THEN true 
+                    ELSE false 
+                END AS is_scheduled
             FROM work_order_data w
             JOIN vehicles v ON w.vehicle_id = v.vehicle_id
             JOIN car_owners o ON v.owner_id = o.owner_id
             LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
-            WHERE w.status IN ('received', 'diagnosed')
+            LEFT JOIN LATERAL (
+                SELECT 
+                    a.appointment_id,
+                    a.bay_id,
+                    wb.bay_name,
+                    TO_CHAR(a.appointment_date, 'YYYY-MM-DD') AS appointment_date,
+                    TO_CHAR(a.start_time, 'HH24:MI') AS start_time,
+                    TO_CHAR(a.end_time, 'HH24:MI') AS end_time
+                FROM appointments a
+                LEFT JOIN workshop_bays wb ON a.bay_id = wb.bay_id
+                WHERE a.work_order_id = w.work_order_id
+                  AND a.status NOT IN ('cancelled', 'completed')
+                ORDER BY a.appointment_date DESC, a.start_time DESC
+                LIMIT 1
+            ) app_info ON true
+            WHERE w.status IN ('received', 'diagnosed', 'scheduled')
             ORDER BY 
-                CASE WHEN w.status = 'received' THEN 1 ELSE 2 END,
+                CASE 
+                    WHEN w.status = 'received' THEN 1 
+                    WHEN w.status = 'diagnosed' THEN 2 
+                    WHEN w.status = 'scheduled' THEN 3
+                    ELSE 4 
+                END,
                 w.created_at ASC;
         `;
         const result = await pool.query(query);
@@ -233,10 +263,10 @@ router.post("/admin-appoint", async (req, res) => {
 
         const wo = woRes.rows[0];
 
-        if (wo.status !== "received" && wo.status !== "diagnosed") {
+        if (wo.status !== "received" && wo.status !== "diagnosed" && wo.status !== "scheduled") {
             await client.query("ROLLBACK");
             return res.status(400).json({
-                error: `Appointment constraint violation: Only cars in 'received' or 'diagnosed' phase can be appointed to a bay. Current phase for ${wo.make} ${wo.model} (${wo.license_plate}) is '${wo.status.toUpperCase()}'.`,
+                error: `Appointment constraint violation: Only cars in 'received', 'diagnosed', or 'scheduled' phase can be appointed to a bay. Current phase for ${wo.make} ${wo.model} (${wo.license_plate}) is '${wo.status.toUpperCase()}'.`,
             });
         }
 
@@ -277,6 +307,7 @@ router.post("/admin-appoint", async (req, res) => {
             WHERE a.bay_id = $1 
               AND a.appointment_date = $2::DATE
               AND a.status NOT IN ('cancelled', 'completed')
+              AND (a.work_order_id IS NULL OR a.work_order_id != $5)
               AND (a.start_time < $4::TIME AND a.end_time > $3::TIME)
             UNION ALL
             SELECT 
@@ -292,6 +323,7 @@ router.post("/admin-appoint", async (req, res) => {
             WHERE t.bay_assigned = $1 
               AND t.scheduled_date = $2::DATE
               AND t.status NOT IN ('cancelled', 'completed')
+              AND (t.work_order_id IS NULL OR t.work_order_id != $5)
               AND (t.start_time < $4::TIME AND t.end_time > $3::TIME)
             LIMIT 1;
         `;
@@ -300,6 +332,7 @@ router.post("/admin-appoint", async (req, res) => {
             appointment_date,
             start_time,
             end_time,
+            work_order_id,
         ]);
 
         if (bayConflictRes.rows.length > 0) {
@@ -312,7 +345,7 @@ router.post("/admin-appoint", async (req, res) => {
             });
         }
 
-        // STEP 4: CONFLICT CHECK - Vehicle Overlap (Car cannot be in two bays at once)
+        // STEP 4: CONFLICT CHECK - Vehicle Overlap (Car cannot be in two bays at once, ignoring self work_order)
         const vehicleConflictQuery = `
             SELECT 
                 a.appointment_id,
@@ -323,6 +356,7 @@ router.post("/admin-appoint", async (req, res) => {
             WHERE a.vehicle_id = $1
               AND a.appointment_date = $2::DATE
               AND a.status NOT IN ('cancelled', 'completed')
+              AND (a.work_order_id IS NULL OR a.work_order_id != $5)
               AND (a.start_time < $4::TIME AND a.end_time > $3::TIME)
             LIMIT 1;
         `;
@@ -331,6 +365,7 @@ router.post("/admin-appoint", async (req, res) => {
             appointment_date,
             start_time,
             end_time,
+            work_order_id,
         ]);
 
         if (vehicleConflictRes.rows.length > 0) {
@@ -342,6 +377,20 @@ router.post("/admin-appoint", async (req, res) => {
                 conflict,
             });
         }
+
+        // STEP 4.5: Cancel older active appointments and scheduled tasks for this work order before re-appointing
+        await client.query(
+            `UPDATE appointments 
+             SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
+             WHERE work_order_id = $1 AND status NOT IN ('cancelled', 'completed');`,
+            [work_order_id]
+        );
+        await client.query(
+            `UPDATE scheduled_tasks 
+             SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
+             WHERE work_order_id = $1 AND status NOT IN ('cancelled', 'completed');`,
+            [work_order_id]
+        );
 
         // STEP 5: INSERT APPOINTMENT RECORD
         const insertAppQuery = `
@@ -374,13 +423,14 @@ router.post("/admin-appoint", async (req, res) => {
         ]);
         const appointment = newAppRes.rows[0];
 
-        // STEP 6: UPDATE WORK ORDER DATA (Bay & Timestamps)
+        // STEP 6: UPDATE WORK ORDER DATA (Status = 'scheduled', Bay & Timestamps)
         const scheduledStart = `${appointment_date} ${start_time}:00`;
         const scheduledEnd = `${appointment_date} ${end_time}:00`;
 
         await client.query(
             `UPDATE work_order_data
-             SET bay_assigned = $1,
+             SET status = 'scheduled',
+                 bay_assigned = $1,
                  scheduled_start = $2::TIMESTAMPTZ,
                  scheduled_end = $3::TIMESTAMPTZ,
                  assigned_staff_id = COALESCE($4, assigned_staff_id),
@@ -562,7 +612,7 @@ router.post("/customer-book", async (req, res) => {
             });
         }
 
-        // STEP 4: CREATE WORK ORDER IN 'received' STATUS FOR INTAKE WORKFLOW
+        // STEP 4: CREATE WORK ORDER IN 'scheduled' STATUS FOR INTAKE WORKFLOW
         const scheduledStart = `${appointment_date} ${start_time}:00`;
         const scheduledEnd = `${appointment_date} ${end_time}:00`;
         const initialObservations = customer_notes 
@@ -580,7 +630,7 @@ router.post("/customer-book", async (req, res) => {
                 estimated_cost,
                 total_cost
             )
-            VALUES ($1, 'received', $2, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ, $5, 0.00, 0.00)
+            VALUES ($1, 'scheduled', $2, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ, $5, 0.00, 0.00)
             RETURNING work_order_id;
         `;
         const woRes = await client.query(insertWoQuery, [
@@ -723,13 +773,23 @@ router.patch("/:id/cancel", async (req, res) => {
             [id]
         );
 
-        // If linked to work order, update scheduled tasks
+        // If linked to work order, update scheduled tasks and revert work order status
         if (app.work_order_id) {
             await client.query(
                 `UPDATE scheduled_tasks 
                  SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
                  WHERE work_order_id = $1 AND scheduled_date = $2::DATE;`,
                 [app.work_order_id, app.appointment_date]
+            );
+            await client.query(
+                `UPDATE work_order_data
+                 SET status = 'received',
+                     bay_assigned = NULL,
+                     scheduled_start = NULL,
+                     scheduled_end = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE work_order_id = $1 AND status = 'scheduled';`,
+                [app.work_order_id]
             );
         }
 

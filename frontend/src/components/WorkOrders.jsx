@@ -11,6 +11,8 @@ const getStatusBadgeInfo = (status) => {
     switch (status) {
         case 'received':
             return { label: 'RECEIVED', type: 'warning', icon: 'pending_actions' };
+        case 'scheduled':
+            return { label: 'SCHEDULED', type: 'scheduled', icon: 'calendar_month' };
         case 'diagnosed':
             return { label: 'DIAGNOSED', type: 'neutral', icon: 'handyman' };
         case 'in_progress':
@@ -121,6 +123,7 @@ export default function WorkOrders() {
     // KPI Metrics calculation
     const inBayCount = workOrders.filter((w) => w.status === 'in_progress' || w.bay_assigned).length;
     const receivedCount = workOrders.filter((w) => w.status === 'received').length;
+    const scheduledCount = workOrders.filter((w) => w.status === 'scheduled').length;
     const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
     const readyPickupCount = workOrders.filter((w) => w.status === 'ready').length;
     const completedCount = workOrders.filter((w) => w.status === 'completed').length;
@@ -244,10 +247,11 @@ export default function WorkOrders() {
                             <div className="pipeline-steps-grid">
                                 {[
                                     { key: 'received', step: '01', label: 'Received', icon: 'pending_actions', count: receivedCount, color: '#38bdf8' },
-                                    { key: 'diagnosed', step: '02', label: 'Diagnosed', icon: 'handyman', count: diagnosedCount, color: '#c084fc' },
-                                    { key: 'in_progress', step: '03', label: 'In Progress', icon: 'build', count: inBayCount, color: '#fbbf24' },
-                                    { key: 'ready', step: '04', label: 'Ready for Pickup', icon: 'task_alt', count: readyPickupCount, color: '#2dd4bf' },
-                                    { key: 'completed', step: '05', label: 'Completed', icon: 'check_circle', count: completedCount, color: '#10b981' },
+                                    { key: 'scheduled', step: '02', label: 'Scheduled', icon: 'calendar_month', count: scheduledCount, color: '#34d399' },
+                                    { key: 'diagnosed', step: '03', label: 'Diagnosed', icon: 'handyman', count: diagnosedCount, color: '#c084fc' },
+                                    { key: 'in_progress', step: '04', label: 'In Progress', icon: 'build', count: inBayCount, color: '#fbbf24' },
+                                    { key: 'ready', step: '05', label: 'Ready for Pickup', icon: 'task_alt', count: readyPickupCount, color: '#2dd4bf' },
+                                    { key: 'completed', step: '06', label: 'Completed', icon: 'check_circle', count: completedCount, color: '#10b981' },
                                 ].map((s) => (
                                     <div
                                         key={s.key}

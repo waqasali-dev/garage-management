@@ -53,7 +53,7 @@ router.get(["/", "/vehicles"], async (req, res) => {
                     SELECT w.work_order_id 
                     FROM work_order_data w 
                     WHERE w.vehicle_id = v.vehicle_id 
-                      AND w.status IN ('received', 'diagnosed', 'in_progress', 'ready')
+                      AND w.status NOT IN ('completed', 'cancelled')
                     ORDER BY w.created_at DESC 
                     LIMIT 1
                 ) AS active_work_order_id,
@@ -61,7 +61,7 @@ router.get(["/", "/vehicles"], async (req, res) => {
                     SELECT w.status 
                     FROM work_order_data w 
                     WHERE w.vehicle_id = v.vehicle_id 
-                      AND w.status IN ('received', 'diagnosed', 'in_progress', 'ready')
+                      AND w.status NOT IN ('completed', 'cancelled')
                     ORDER BY w.created_at DESC 
                     LIMIT 1
                 ) AS active_status,

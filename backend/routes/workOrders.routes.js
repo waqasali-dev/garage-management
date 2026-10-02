@@ -294,11 +294,12 @@ export const handleGetWorkOrdersList = async (req, res) => {
             ORDER BY 
                 CASE 
                     WHEN w.status = 'in_progress' THEN 1
-                    WHEN w.status = 'received' THEN 2
-                    WHEN w.status = 'diagnosed' THEN 3
-                    WHEN w.status = 'ready' THEN 4
-                    WHEN w.status = 'completed' THEN 5
-                    ELSE 6 
+                    WHEN w.status = 'scheduled' THEN 2
+                    WHEN w.status = 'received' THEN 3
+                    WHEN w.status = 'diagnosed' THEN 4
+                    WHEN w.status = 'ready' THEN 5
+                    WHEN w.status = 'completed' THEN 6
+                    ELSE 7 
                 END,
                 w.created_at DESC;
         `;
@@ -545,18 +546,19 @@ router.patch("/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status, staff_id, notes } = req.body;
 
-    const validStatuses = ["received", "diagnosed", "in_progress", "ready", "completed", "cancelled"];
+    const validStatuses = ["received", "scheduled", "diagnosed", "in_progress", "ready", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
     }
 
     const VALID_TRANSITIONS = {
-        received: ["diagnosed", "in_progress", "cancelled"],
-        diagnosed: ["in_progress", "received", "cancelled"],
+        received: ["scheduled", "diagnosed", "in_progress", "cancelled"],
+        scheduled: ["received", "diagnosed", "in_progress", "cancelled"],
+        diagnosed: ["scheduled", "in_progress", "received", "cancelled"],
         in_progress: ["ready", "diagnosed", "cancelled"],
         ready: ["completed", "in_progress", "cancelled"],
         completed: [], // Permanently locked: Once vehicle is picked up (completed), status can never be changed
-        cancelled: ["received"],
+        cancelled: ["received", "scheduled"],
     };
 
     try {

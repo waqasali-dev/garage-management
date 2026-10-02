@@ -22,6 +22,8 @@ const getStatusBadge = (status) => {
     switch (status) {
         case 'received':
             return { label: 'RECEIVED QUEUE', class: 'badge-info', step: 1 };
+        case 'scheduled':
+            return { label: 'SCHEDULED', class: 'badge-success', step: 1 };
         case 'diagnosed':
             return { label: 'DIAGNOSED', class: 'badge-neutral', step: 2 };
         case 'in_progress':

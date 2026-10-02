@@ -12,6 +12,7 @@ CREATE TYPE user_role_enum AS ENUM (
 
 CREATE TYPE work_order_status AS ENUM (
     'received',
+    'scheduled',
     'diagnosed',
     'approved',
     'in_progress',

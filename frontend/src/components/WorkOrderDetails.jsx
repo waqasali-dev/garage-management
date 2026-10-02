@@ -32,6 +32,7 @@ const MEDIA_TYPE_META = {
 
 const STATUS_STEPS = [
     { key: 'received', label: 'Received', icon: 'pending_actions' },
+    { key: 'scheduled', label: 'Scheduled', icon: 'calendar_month' },
     { key: 'diagnosed', label: 'Diagnosed', icon: 'handyman' },
     { key: 'in_progress', label: 'In Progress', icon: 'build' },
     { key: 'ready', label: 'Ready for Pickup', icon: 'task_alt' },
@@ -561,8 +562,8 @@ export default function WorkOrderDetails() {
                                     </span>
                                 )}
 
-                                {/* Delete Work Order Button (Only allowed in Received & Diagnosed phases) */}
-                                {(order.status === 'received' || order.status === 'diagnosed') && (
+                                {/* Delete Work Order Button (Only allowed in Received, Scheduled & Diagnosed phases) */}
+                                {(order.status === 'received' || order.status === 'diagnosed' || order.status === 'scheduled') && (
                                     <button
                                         type="button"
                                         onClick={() => setIsDeleteModalOpen(true)}

@@ -876,7 +876,7 @@ export default function Scheduling() {
             </div>
 
             {/* ==================================================== */}
-            {/* MODAL 1: APPOINT CAR TO BAY (RECEIVED & DIAGNOSED ONLY) */}
+            {/* MODAL 1: APPOINT CAR TO BAY */}
             {/* ==================================================== */}
             {isAppointModalOpen && (
                 <div className="schedule-modal-overlay">
@@ -886,7 +886,7 @@ export default function Scheduling() {
                                 <span className="material-symbols-outlined modal-icon" style={{ color: '#10b981' }}>car_repair</span>
                                 <div>
                                     <h3 className="modal-title">Appoint Car to Bay</h3>
-                                    <p className="modal-subtitle">Reserve a workshop bay slot for vehicles in Received or Diagnosed phase</p>
+                                    <p className="modal-subtitle">Reserve or re-schedule a workshop bay slot for vehicles in Received, Diagnosed, or Scheduled phase</p>
                                 </div>
                             </div>
                             <button type="button" className="modal-close-btn" onClick={() => setIsAppointModalOpen(false)}>
@@ -897,15 +897,16 @@ export default function Scheduling() {
                         <form onSubmit={handleAdminAppoint} className="schedule-modal-form">
                             {/* Step 1: Select Eligible Car */}
                             <div className="form-group grid-full">
-                                <label>1. SELECT CAR IN RECEIVED OR DIAGNOSED PHASE *</label>
+                                <label>1. SELECT CAR (RECEIVED, DIAGNOSED, OR SCHEDULED) *</label>
                                 {eligibleWorkOrders.length === 0 ? (
                                     <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: '#f87171', fontSize: '13px' }}>
-                                        ⚠️ No cars currently in <strong>received</strong> or <strong>diagnosed</strong> phase. Cars must be in intake before booking a bay appointment.
+                                        ⚠️ No cars currently eligible for appointment booking. Cars must be in intake before booking a bay appointment.
                                     </div>
                                 ) : (
                                     <div className="eligible-cars-list">
                                         {eligibleWorkOrders.map((wo) => {
                                             const isSelected = appointForm.work_order_id === wo.work_order_id;
+                                            const isScheduled = wo.status === 'scheduled' || wo.is_scheduled;
                                             return (
                                                 <div
                                                     key={wo.work_order_id}
@@ -916,13 +917,23 @@ export default function Scheduling() {
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                             <strong style={{ color: 'var(--text-main)' }}>{wo.year} {wo.make} {wo.model}</strong>
                                                             <span className="font-mono text-yellow" style={{ fontSize: '12px' }}>({wo.license_plate})</span>
-                                                            <span className={wo.status === 'diagnosed' ? 'car-badge-diagnosed' : 'car-badge-received'}>
-                                                                {wo.status.toUpperCase()}
+                                                            <span className={isScheduled ? 'car-badge-scheduled' : wo.status === 'diagnosed' ? 'car-badge-diagnosed' : 'car-badge-received'}>
+                                                                {isScheduled ? 'SCHEDULED' : wo.status.toUpperCase()}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                                                             WO: {wo.work_order_id} • Owner: {wo.owner_name} {wo.initial_observations ? `• "${wo.initial_observations.slice(0, 45)}..."` : ''}
                                                         </div>
+                                                        {isScheduled && (
+                                                            <div style={{ fontSize: '11px', color: '#34d399', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <span>📅</span>
+                                                                <span>
+                                                                    <strong>Scheduled:</strong> {wo.appointment_bay_name || wo.bay_assigned || 'Bay'}
+                                                                    {wo.appointment_date ? ` • ${wo.appointment_date}` : ''}
+                                                                    {wo.appointment_start_time ? ` (${wo.appointment_start_time} - ${wo.appointment_end_time})` : ''}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     {isSelected && <CheckCircleIcon style={{ color: '#10b981', fontSize: '20px' }} />}
                                                 </div>
@@ -931,8 +942,23 @@ export default function Scheduling() {
                                     </div>
                                 )}
                                 {selectedWoObj && (
-                                    <div style={{ marginTop: '8px', padding: '6px 12px', background: 'rgba(255, 216, 95, 0.1)', border: '1px solid rgba(255, 216, 95, 0.2)', borderRadius: '6px', fontSize: '12px', color: 'var(--accent-yellow)' }}>
-                                        Appointing: <strong>{selectedWoObj.year} {selectedWoObj.make} {selectedWoObj.model}</strong> (Plate: {selectedWoObj.license_plate}) • Owner: {selectedWoObj.owner_name}
+                                    <div style={{
+                                        marginTop: '8px',
+                                        padding: '8px 12px',
+                                        background: selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 216, 95, 0.1)',
+                                        border: `1px solid ${selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 216, 95, 0.2)'}`,
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        color: selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? '#34d399' : 'var(--accent-yellow)'
+                                    }}>
+                                        <div>
+                                            {selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'Re-Appointing / Rescheduling:' : 'Appointing:'} <strong>{selectedWoObj.year} {selectedWoObj.make} {selectedWoObj.model}</strong> (Plate: {selectedWoObj.license_plate}) • Owner: {selectedWoObj.owner_name}
+                                        </div>
+                                        {(selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled') && (
+                                            <div style={{ marginTop: '4px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                                                ℹ️ Currently scheduled for <strong>{selectedWoObj.appointment_bay_name || selectedWoObj.bay_assigned}</strong> on <strong>{selectedWoObj.appointment_date}</strong> ({selectedWoObj.appointment_start_time} - {selectedWoObj.appointment_end_time}). Selecting a slot below will update its appointment.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
