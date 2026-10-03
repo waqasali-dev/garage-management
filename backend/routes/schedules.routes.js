@@ -6,14 +6,18 @@ const router = express.Router();
 
 // GET /api/schedules - Fetch all scheduled repair and maintenance tasks
 router.get("/", async (req, res) => {
-    const { date, week_start } = req.query;
-    const cacheKey = `garage:cache:schedules:${date || "all"}:${week_start || "current"}`;
+    const { date, week_start, include_cancelled } = req.query;
+    const cacheKey = `garage:cache:schedules:${date || "all"}:${week_start || "current"}:${include_cancelled || "active"}`;
 
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
             return res.json({ success: true, source: "redis", data: cached });
         }
+
+        const statusFilter = include_cancelled === "true"
+            ? ""
+            : "WHERE (t.status IS NULL OR t.status NOT IN ('cancelled'))";
 
         const query = `
             SELECT 
@@ -45,6 +49,7 @@ router.get("/", async (req, res) => {
             LEFT JOIN staff_data s ON t.assigned_staff_id = s.staff_id
             LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
             LEFT JOIN car_owners o ON v.owner_id = o.owner_id
+            ${statusFilter}
             ORDER BY t.scheduled_date ASC, t.start_time ASC;
         `;
         const result = await pool.query(query);
@@ -275,7 +280,9 @@ router.patch("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:vehicles:*");
         await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:bays:*");
 
         res.json({ success: true, message: "Task updated successfully", data: task });
     } catch (err) {
@@ -296,8 +303,8 @@ router.delete("/:id", async (req, res) => {
         const task = result.rows[0];
 
         if (task.work_order_id) {
-            // Delete linked appointment
-            await pool.query("DELETE FROM appointments WHERE work_order_id = $1;", [task.work_order_id]);
+            // Mark linked appointment as cancelled
+            await pool.query("UPDATE appointments SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE work_order_id = $1;", [task.work_order_id]);
 
             // Revert work order if it was scheduled
             await pool.query(
@@ -316,7 +323,9 @@ router.delete("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:vehicles:*");
         await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:bays:*");
 
         res.json({ success: true, message: "Scheduled task deleted and bay slot freed", data: task });
     } catch (err) {

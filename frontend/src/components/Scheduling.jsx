@@ -80,6 +80,7 @@ export default function Scheduling() {
     const [workOrdersList, setWorkOrdersList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState(null);
+    const [selectedBayDetails, setSelectedBayDetails] = useState(null);
 
     // ==========================================
     // APPOINT CAR TO BAY MODAL STATE
@@ -227,7 +228,7 @@ export default function Scheduling() {
             if (schedRes.ok) {
                 const schedJson = await schedRes.json();
                 if (schedJson.success && Array.isArray(schedJson.data)) {
-                    setScheduledTasks(schedJson.data);
+                    setScheduledTasks(schedJson.data.filter((t) => t.status !== 'cancelled'));
                 }
             }
 
@@ -469,6 +470,17 @@ export default function Scheduling() {
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
         }
+    };
+
+    // Open Bay Schedule Details View
+    const handleOpenBayDetails = (bay, day, tasks) => {
+        setSelectedBayDetails({
+            bayId: bay.bay_id || bay.id,
+            bayName: bay.bay_name || bay.label || bay.bay_id,
+            date: day.fullDate,
+            dateLabel: `${day.name}, ${day.monthName} ${day.dateNumber}`,
+            tasks: tasks || [],
+        });
     };
 
     // Delete Task
@@ -917,87 +929,118 @@ export default function Scheduling() {
 
                             {/* Resource Rows / Bays */}
                             <div className="grid-body">
-                                {bays.map((bay) => (
-                                    <div key={bay.id || bay.bay_id} className="bay-row">
-                                        <div className="bay-header-cell">
-                                            <div className="bay-badge font-mono">{bay.name || bay.bay_id}</div>
-                                            <span className="bay-label">{bay.bay_name || bay.label}</span>
-                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                                                ⏰ {bay.opening_time || '08:00'} - {bay.closing_time || '18:00'}
-                                            </span>
-                                            <div className="bay-load-bar" style={{ marginTop: '4px' }}>
-                                                <div
-                                                    className={`load-fill ${bay.loadType || 'success'}`}
-                                                    style={{ width: bay.loadPercent || '30%' }}
-                                                ></div>
+                                {bays.map((bay) => {
+                                    const totalBayTasks = scheduledTasks.filter(
+                                        (t) => (t.bay_assigned === bay.bay_id || t.bay_assigned === bay.id) &&
+                                               weekDays.some((d) => d.fullDate === t.scheduled_date)
+                                    ).length;
+
+                                    return (
+                                        <div key={bay.id || bay.bay_id} className="bay-row">
+                                            <div className="bay-header-cell">
+                                                <div className="bay-badge font-mono">{bay.name || bay.bay_id}</div>
+                                                <span className="bay-label">{bay.bay_name || bay.label}</span>
+                                                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                                                    ⏰ {bay.opening_time || '08:00'} - {bay.closing_time || '18:00'}
+                                                </span>
+                                                <span className="bay-tasks-total-pill font-mono" title={`${totalBayTasks} total tasks scheduled this week`}>
+                                                    {totalBayTasks} {totalBayTasks === 1 ? 'Task' : 'Tasks'}
+                                                </span>
+                                                <div className="bay-load-bar" style={{ marginTop: '4px' }}>
+                                                    <div
+                                                        className={`load-fill ${bay.loadType || 'success'}`}
+                                                        style={{ width: bay.loadPercent || '30%' }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bay-days-group">
+                                                {weekDays.map((day) => {
+                                                    const isSelected = selectedDate === day.fullDate;
+                                                    const dayBayTasks = scheduledTasks.filter(
+                                                        (t) => t.scheduled_date === day.fullDate && (t.bay_assigned === bay.bay_id || t.bay_assigned === bay.id)
+                                                    );
+
+                                                    return (
+                                                        <div
+                                                            key={`${bay.bay_id || bay.id}-${day.fullDate}`}
+                                                            className={`day-drop-zone ${isSelected ? 'active-day-bg' : ''}`}
+                                                            onClick={() => setSelectedDate(day.fullDate)}
+                                                            style={{ cursor: 'pointer' }}
+                                                        >
+                                                            {dayBayTasks.length > 0 ? (
+                                                                <div className="day-cell-content">
+                                                                    <div className="day-cell-header-strip">
+                                                                        <span className="day-task-count-pill font-mono">
+                                                                            {dayBayTasks.length} {dayBayTasks.length === 1 ? 'Task' : 'Tasks'}
+                                                                        </span>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn-cell-details"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenBayDetails(bay, day, dayBayTasks);
+                                                                            }}
+                                                                            title={`View details of all ${dayBayTasks.length} tasks`}
+                                                                        >
+                                                                            Details
+                                                                        </button>
+                                                                    </div>
+
+                                                                    <div className="day-tasks-scroller custom-scrollbar">
+                                                                        {dayBayTasks.map((task) => (
+                                                                            <div
+                                                                                key={task.task_id}
+                                                                                className={`scheduled-card ${task.priority === 'urgent' || task.priority === 'high'
+                                                                                        ? 'status-yellow-border'
+                                                                                        : 'status-success-border'
+                                                                                    }`}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleOpenEditTask(task, e);
+                                                                                }}
+                                                                                title="Click to Edit / Reschedule"
+                                                                                style={{ cursor: 'pointer' }}
+                                                                            >
+                                                                                {isSelected && <span className="live-dot animate-pulse"></span>}
+                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                    <span className="slot-time highlight font-mono">
+                                                                                        {task.work_order_id || task.task_id} • {task.start_time || '09:00'} - {task.end_time || '11:00'}
+                                                                                    </span>
+                                                                                    <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#10b981', opacity: 0.85 }}>edit</span>
+                                                                                </div>
+                                                                                <h5 className="slot-title">{task.task_title}</h5>
+                                                                                <p className="slot-tech">
+                                                                                    <span className="material-symbols-outlined">person</span>{' '}
+                                                                                    {task.assigned_staff_name || 'Assigned'}
+                                                                                </p>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="empty-slot-placeholder" onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setAppointForm((prev) => ({
+                                                                        ...prev,
+                                                                        bay_id: bay.bay_id || bay.id,
+                                                                        appointment_date: day.fullDate,
+                                                                    }));
+                                                                    setSelectedDate(day.fullDate);
+                                                                    setIsAppointModalOpen(true);
+                                                                }}>
+                                                                    <span className="hover-add-icon material-symbols-outlined" title="Appoint Car to this Bay">
+                                                                        add_circle
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
-
-                                        <div className="bay-days-group">
-                                            {weekDays.map((day) => {
-                                                const isSelected = selectedDate === day.fullDate;
-                                                const dayBayTasks = scheduledTasks.filter(
-                                                    (t) => t.scheduled_date === day.fullDate && (t.bay_assigned === bay.bay_id || t.bay_assigned === bay.id)
-                                                );
-
-                                                return (
-                                                    <div
-                                                        key={`${bay.bay_id || bay.id}-${day.fullDate}`}
-                                                        className={`day-drop-zone ${isSelected ? 'active-day-bg' : ''}`}
-                                                        onClick={() => setSelectedDate(day.fullDate)}
-                                                        style={{ cursor: 'pointer' }}
-                                                    >
-                                                        {dayBayTasks.length > 0 ? (
-                                                            dayBayTasks.map((task) => (
-                                                                <div
-                                                                    key={task.task_id}
-                                                                    className={`scheduled-card ${task.priority === 'urgent' || task.priority === 'high'
-                                                                            ? 'status-yellow-border'
-                                                                            : 'status-success-border'
-                                                                        }`}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleOpenEditTask(task, e);
-                                                                    }}
-                                                                    title="Click to Edit / Reschedule"
-                                                                    style={{ cursor: 'pointer' }}
-                                                                >
-                                                                    {isSelected && <span className="live-dot animate-pulse"></span>}
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                        <span className="slot-time highlight font-mono">
-                                                                            {task.work_order_id || task.task_id} • {task.start_time || '09:00'} - {task.end_time || '11:00'}
-                                                                        </span>
-                                                                        <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#10b981', opacity: 0.85 }}>edit</span>
-                                                                    </div>
-                                                                    <h5 className="slot-title">{task.task_title}</h5>
-                                                                    <p className="slot-tech">
-                                                                        <span className="material-symbols-outlined">person</span>{' '}
-                                                                        {task.assigned_staff_name || 'Assigned'}
-                                                                    </p>
-                                                                </div>
-                                                            ))
-                                                        ) : (
-                                                            <div className="empty-slot-placeholder" onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setAppointForm((prev) => ({
-                                                                    ...prev,
-                                                                    bay_id: bay.bay_id || bay.id,
-                                                                    appointment_date: day.fullDate,
-                                                                }));
-                                                                setSelectedDate(day.fullDate);
-                                                                setIsAppointModalOpen(true);
-                                                            }}>
-                                                                <span className="hover-add-icon material-symbols-outlined" title="Appoint Car to this Bay">
-                                                                    add_circle
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </section>
@@ -1762,6 +1805,168 @@ export default function Scheduling() {
                                 </div>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ==================================================== */}
+            {/* MODAL / OVERLAY: BAY SCHEDULE DETAILS & NORMAL VIEW */}
+            {/* ==================================================== */}
+            {selectedBayDetails && (
+                <div className="schedule-modal-overlay" onClick={() => setSelectedBayDetails(null)}>
+                    <div className="bay-details-modal-box" onClick={(e) => e.stopPropagation()}>
+                        <div className="bay-details-modal-header">
+                            <div className="bay-details-title-wrap">
+                                <div className="bay-details-badge font-mono">
+                                    {selectedBayDetails.bayId}
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <h3 className="bay-details-title">{selectedBayDetails.bayName}</h3>
+                                        <span className="bay-details-count-chip font-mono">
+                                            {selectedBayDetails.tasks.length} {selectedBayDetails.tasks.length === 1 ? 'Task Scheduled' : 'Tasks Scheduled'}
+                                        </span>
+                                    </div>
+                                    <p className="bay-details-date-sub font-mono">
+                                        📅 {selectedBayDetails.dateLabel} ({selectedBayDetails.date})
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-make-normal"
+                                onClick={() => setSelectedBayDetails(null)}
+                                title="Close details and return to calendar view"
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                                <span>Normal View</span>
+                            </button>
+                        </div>
+
+                        <div className="bay-details-modal-body custom-scrollbar">
+                            {selectedBayDetails.tasks.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                                    <CalendarMonthIcon style={{ fontSize: '40px', opacity: 0.3 }} />
+                                    <p style={{ marginTop: '8px' }}>No active tasks scheduled on this bay for this date.</p>
+                                </div>
+                            ) : (
+                                <div className="bay-details-tasks-grid">
+                                    {selectedBayDetails.tasks.map((task) => (
+                                        <div key={task.task_id} className="bay-detail-task-card">
+                                            <div className="bay-detail-card-top">
+                                                <div className="bay-detail-time-tag font-mono">
+                                                    ⏰ {task.start_time || '09:00'} - {task.end_time || '11:00'}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span className={`priority-badge badge-${task.priority === 'urgent' || task.priority === 'high' ? 'error' : 'pending'}`}>
+                                                        {task.priority?.toUpperCase()}
+                                                    </span>
+                                                    <span className="status-badge-mini font-mono">
+                                                        {task.status?.toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="bay-detail-card-mid">
+                                                <div className="bay-detail-car-visual">
+                                                    <VehicleVisual
+                                                        vehicleType={task.vehicle_type}
+                                                        make={task.make}
+                                                        model={task.model}
+                                                        size="sm"
+                                                        showBadge={true}
+                                                    />
+                                                </div>
+                                                <div className="bay-detail-car-info">
+                                                    <h4 className="bay-detail-task-title">{task.task_title}</h4>
+                                                    <div className="bay-detail-wo-link font-mono">
+                                                        {task.work_order_id ? `📋 Work Order: ${task.work_order_id}` : `Task: ${task.task_id}`}
+                                                    </div>
+                                                    <div className="bay-detail-car-meta">
+                                                        <span className="font-mono text-yellow">
+                                                            {task.year} {task.make} {task.model}
+                                                        </span>
+                                                        {task.license_plate && (
+                                                            <span className="bay-detail-plate-pill font-mono">
+                                                                {task.license_plate}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {task.owner_name && (
+                                                        <div className="bay-detail-owner font-mono">
+                                                            Owner: {task.owner_name} {task.owner_phone ? `(${task.owner_phone})` : ''}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {task.task_description && (
+                                                <div className="bay-detail-desc">
+                                                    "{task.task_description}"
+                                                </div>
+                                            )}
+
+                                            <div className="bay-detail-card-footer">
+                                                <div className="bay-detail-tech">
+                                                    <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>person</span>
+                                                    <span>Technician: {task.assigned_staff_name || 'Unassigned'}</span>
+                                                </div>
+                                                <div className="bay-detail-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-detail-edit"
+                                                        onClick={(e) => {
+                                                            setSelectedBayDetails(null);
+                                                            handleOpenEditTask(task, e);
+                                                        }}
+                                                    >
+                                                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>edit</span>
+                                                        <span>Edit / Reschedule</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-detail-delete"
+                                                        onClick={async (e) => {
+                                                            await handleDeleteTask(task.task_id, e);
+                                                            setSelectedBayDetails(null);
+                                                        }}
+                                                    >
+                                                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>cancel</span>
+                                                        <span>Cancel Task</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bay-details-modal-footer">
+                            <button
+                                type="button"
+                                className="btn-make-normal-footer"
+                                onClick={() => setSelectedBayDetails(null)}
+                            >
+                                ← Return to Normal Calendar View
+                            </button>
+                            <button
+                                type="button"
+                                className="primary-btn"
+                                onClick={() => {
+                                    setAppointForm((prev) => ({
+                                        ...prev,
+                                        bay_id: selectedBayDetails.bayId,
+                                        appointment_date: selectedBayDetails.date,
+                                    }));
+                                    setSelectedBayDetails(null);
+                                    setIsAppointModalOpen(true);
+                                }}
+                            >
+                                <span className="material-symbols-outlined">add_circle</span>
+                                <span>Appoint Another Car</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

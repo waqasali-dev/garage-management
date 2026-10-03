@@ -497,6 +497,8 @@ router.post("/admin-appoint", async (req, res) => {
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:bays:*");
+        await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:vehicles:*");
 
         res.status(201).json({
             success: true,
@@ -751,6 +753,7 @@ router.post("/customer-book", async (req, res) => {
         await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:bays:*");
         await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:vehicles:*");
 
         res.status(201).json({
             success: true,
@@ -810,8 +813,8 @@ router.patch("/:id/cancel", async (req, res) => {
             await client.query(
                 `UPDATE scheduled_tasks 
                  SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP 
-                 WHERE work_order_id = $1 AND scheduled_date = $2::DATE;`,
-                [app.work_order_id, app.appointment_date]
+                 WHERE work_order_id = $1;`,
+                [app.work_order_id]
             );
             await client.query(
                 `UPDATE work_order_data
@@ -831,6 +834,8 @@ router.patch("/:id/cancel", async (req, res) => {
         await deleteCachePattern("garage:cache:schedules:*");
         await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:bays:*");
+        await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:vehicles:*");
 
         res.json({
             success: true,
@@ -1009,6 +1014,7 @@ router.put("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:workorder:*");
         await deleteCachePattern("garage:cache:bays:*");
         await deleteCachePattern("garage:cache:owner:*");
+        await deleteCachePattern("garage:cache:vehicles:*");
 
         res.json({
             success: true,

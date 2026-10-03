@@ -11,6 +11,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SearchIcon from '@mui/icons-material/Search';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CloseIcon from '@mui/icons-material/Close';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import VehicleVisual from '../components/VehicleVisual';
@@ -96,8 +97,17 @@ export default function OwnerCars() {
         }
     };
 
-    const handleCancelAppointment = async (appointmentId) => {
-        if (!window.confirm('Are you sure you want to cancel this workshop appointment? The reserved bay slot will be released.')) return;
+    const [cancellingAppointment, setCancellingAppointment] = useState(null);
+    const [isCancelling, setIsCancelling] = useState(false);
+
+    const handleInitiateCancel = (apt) => {
+        setCancellingAppointment(apt);
+    };
+
+    const handleConfirmCancelAppointment = async () => {
+        if (!cancellingAppointment) return;
+        const appointmentId = cancellingAppointment.appointment_id;
+        setIsCancelling(true);
         try {
             const res = await fetch(`${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/cancel`, {
                 method: 'PATCH',
@@ -107,14 +117,22 @@ export default function OwnerCars() {
             const json = await res.json();
             if (res.ok) {
                 showNotification('Appointment cancelled and bay slot released.', 'info');
-                fetchOwnerVehicles();
-                fetchCustomerAppointments();
+                setCancellingAppointment(null);
+                await fetchOwnerVehicles();
+                await fetchCustomerAppointments();
             } else {
                 showNotification(json.error || 'Failed to cancel appointment', 'error');
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setIsCancelling(false);
         }
+    };
+
+    const handleRefreshAll = () => {
+        fetchOwnerVehicles();
+        fetchCustomerAppointments();
     };
 
     const fetchOwnerVehicles = async () => {
@@ -416,8 +434,8 @@ export default function OwnerCars() {
 
                         <button
                             className="icon-btn"
-                            onClick={fetchOwnerVehicles}
-                            title="Refresh Vehicles"
+                            onClick={handleRefreshAll}
+                            title="Refresh Vehicles & Appointments"
                         >
                             <RefreshIcon fontSize="small" />
                         </button>
@@ -427,9 +445,11 @@ export default function OwnerCars() {
                 {/* Main Content */}
                 <main className="owner-cars-main">
                     <div className="owner-cars-container">
-                        {/* Toast */}
+                        {/* Toast Overlay */}
                         {notification && (
                             <div className={`cars-toast toast-${notification.type}`}>
+                                {notification.type === 'error' && <WarningAmberIcon fontSize="small" />}
+                                {notification.type === 'success' && <CheckCircleIcon fontSize="small" />}
                                 <span>{notification.msg}</span>
                             </div>
                         )}
@@ -525,7 +545,7 @@ export default function OwnerCars() {
                                                     <button
                                                         type="button"
                                                         className="btn-cancel-booking"
-                                                        onClick={() => handleCancelAppointment(apt.appointment_id)}
+                                                        onClick={() => handleInitiateCancel(apt)}
                                                         title="Cancel this appointment and free the bay slot"
                                                     >
                                                         Cancel Booking
@@ -642,9 +662,26 @@ export default function OwnerCars() {
                                                             📅 {vehicle.upcoming_appointment.appointment_date} • {vehicle.upcoming_appointment.start_time}-{vehicle.upcoming_appointment.end_time}
                                                         </span>
                                                     </div>
-                                                    <span className="schedule-bay-pill font-mono">
-                                                        {vehicle.upcoming_appointment.bay_name || vehicle.upcoming_appointment.bay_id}
-                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span className="schedule-bay-pill font-mono">
+                                                            {vehicle.upcoming_appointment.bay_name || vehicle.upcoming_appointment.bay_id}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className="v-active-schedule-cancel-btn"
+                                                            onClick={() => handleInitiateCancel({
+                                                                ...vehicle.upcoming_appointment,
+                                                                vehicle_type: vehicle.vehicle_type,
+                                                                make: vehicle.make,
+                                                                model: vehicle.model,
+                                                                year: vehicle.year,
+                                                                license_plate: vehicle.license_plate
+                                                            })}
+                                                            title="Cancel this appointment"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
 
@@ -964,6 +1001,87 @@ export default function OwnerCars() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Confirmation Modal for Cancelling Appointment */}
+            {cancellingAppointment && (
+                <div className="cancel-modal-overlay" onClick={() => !isCancelling && setCancellingAppointment(null)}>
+                    <div className="cancel-booking-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="cancel-modal-header">
+                            <div className="cancel-modal-title-group">
+                                <div className="cancel-modal-icon-badge">
+                                    <WarningAmberIcon style={{ color: '#ef4444', fontSize: '24px' }} />
+                                </div>
+                                <div>
+                                    <h3 className="cancel-modal-title">Cancel Workshop Appointment?</h3>
+                                    <span className="cancel-modal-subtitle">Slot release & work order rollback</span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="cancel-modal-close-btn"
+                                onClick={() => setCancellingAppointment(null)}
+                                disabled={isCancelling}
+                                aria-label="Close dialog"
+                                title="Keep appointment"
+                            >
+                                <CloseIcon fontSize="small" />
+                            </button>
+                        </div>
+                        <div className="cancel-modal-body">
+                            <div className="cancel-modal-car-summary">
+                                <div className="cancel-modal-visual-wrap">
+                                    <VehicleVisual
+                                        vehicleType={cancellingAppointment.vehicle_type}
+                                        make={cancellingAppointment.make}
+                                        model={cancellingAppointment.model}
+                                        size="sm"
+                                        showBadge={true}
+                                    />
+                                </div>
+                                <div className="cancel-modal-car-details">
+                                    <div className="cancel-modal-car-name">
+                                        {cancellingAppointment.year} {cancellingAppointment.make} {cancellingAppointment.model}
+                                    </div>
+                                    <div className="cancel-modal-badges">
+                                        <span className="cancel-plate-pill font-mono">
+                                            PLATE: {cancellingAppointment.license_plate || 'N/A'}
+                                        </span>
+                                        <span className="cancel-bay-pill font-mono">
+                                            {cancellingAppointment.bay_name || cancellingAppointment.bay_id}
+                                        </span>
+                                    </div>
+                                    <div className="cancel-modal-time font-mono">
+                                        📅 {cancellingAppointment.appointment_date} • ⏰ {cancellingAppointment.start_time} - {cancellingAppointment.end_time}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="cancel-warning-banner">
+                                <p>
+                                    <strong>Notice:</strong> Cancelling will immediately release this workshop bay slot for other customers. Any linked repair order will revert safely to intake status.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="cancel-modal-actions">
+                            <button
+                                type="button"
+                                className="btn-cancel-modal-keep"
+                                onClick={() => setCancellingAppointment(null)}
+                                disabled={isCancelling}
+                            >
+                                Keep Appointment
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-cancel-modal-confirm"
+                                onClick={handleConfirmCancelAppointment}
+                                disabled={isCancelling}
+                            >
+                                {isCancelling ? 'Cancelling Slot...' : 'Yes, Cancel Booking'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
