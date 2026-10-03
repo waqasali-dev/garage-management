@@ -42,6 +42,13 @@ router.get("/", async (req, res) => {
                     LIMIT 1
                 ) AS primary_vin,
                 (
+                    SELECT v.vehicle_type 
+                    FROM vehicles v 
+                    WHERE v.owner_id = o.owner_id 
+                    ORDER BY v.created_at DESC 
+                    LIMIT 1
+                ) AS primary_vehicle_type,
+                (
                     SELECT COUNT(*) 
                     FROM work_order_data w 
                     JOIN vehicles v ON w.vehicle_id = v.vehicle_id 
@@ -85,7 +92,7 @@ router.get("/", async (req, res) => {
                 initials,
                 vehicle: owner.primary_vehicle || "No Vehicle Registered",
                 vin: owner.primary_vin ? `VIN: ${owner.primary_vin}` : "",
-                vehicleType: "directions_car",
+                vehicleType: owner.primary_vehicle_type || "Sedan",
                 additionalVehicles: Math.max(vehiclesCount - 1, 0),
                 vehicles_count: vehiclesCount,
                 active_orders_count: activeOrders,
@@ -132,7 +139,14 @@ router.get("/unlinked", async (req, res) => {
                     WHERE v.owner_id = o.owner_id 
                     ORDER BY v.created_at DESC 
                     LIMIT 1
-                ) AS primary_vehicle
+                ) AS primary_vehicle,
+                (
+                    SELECT v.vehicle_type 
+                    FROM vehicles v 
+                    WHERE v.owner_id = o.owner_id 
+                    ORDER BY v.created_at DESC 
+                    LIMIT 1
+                ) AS primary_vehicle_type
             FROM car_owners o
             LEFT JOIN users u ON o.owner_id = u.owner_id
             WHERE u.user_id IS NULL
@@ -195,7 +209,7 @@ router.get("/:id", async (req, res) => {
         const workOrdersQuery = `
             SELECT 
                 w.*,
-                v.make, v.model, v.year, v.license_plate, v.vin
+                v.make, v.model, v.year, v.license_plate, v.vin, v.vehicle_type
             FROM work_order_data w
             JOIN vehicles v ON w.vehicle_id = v.vehicle_id
             WHERE v.owner_id = $1

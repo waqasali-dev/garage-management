@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
+import VehicleVisual from './VehicleVisual';
 import StyledLoading from './StyledLoading';
 import './css/Invoices.css';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -387,11 +388,22 @@ export default function Invoices() {
                                                         </td>
                                                     )}
                                                     <td>
-                                                        <div className="vehicle-desc">
-                                                            {inv.year} {inv.make} {inv.model}
-                                                        </div>
-                                                        <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                                            🚗 {inv.license_plate}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <VehicleVisual
+                                                                vehicleType={inv.vehicle_type}
+                                                                make={inv.make}
+                                                                model={inv.model}
+                                                                size="xs"
+                                                                showBadge={false}
+                                                            />
+                                                            <div>
+                                                                <div className="vehicle-desc">
+                                                                    {inv.year} {inv.make} {inv.model}
+                                                                </div>
+                                                                <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                                    🚗 {inv.license_plate}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td className="font-mono">{formatCurrency(inv.subtotal)}</td>

@@ -373,6 +373,7 @@ router.get("/:id/available-slots", async (req, res) => {
                 v.license_plate,
                 v.make,
                 v.model,
+                v.vehicle_type,
                 o.full_name AS owner_name
             FROM appointments a
             LEFT JOIN vehicles v ON a.vehicle_id = v.vehicle_id
@@ -393,6 +394,7 @@ router.get("/:id/available-slots", async (req, res) => {
                 v.license_plate,
                 v.make,
                 v.model,
+                v.vehicle_type,
                 o.full_name AS owner_name
             FROM scheduled_tasks t
             LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id

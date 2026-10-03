@@ -134,6 +134,17 @@
     gap: 16px;
 }
 
+.title-stack-with-visual {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.wo-header-visual {
+    flex-shrink: 0;
+}
+
 .title-inline {
     display: flex;
     align-items: center;

@@ -13,6 +13,7 @@ import AddIcon from '@mui/icons-material/Add';
 import MenuIcon from '@mui/icons-material/Menu';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import './css/OwnerDetail.css';
+import VehicleVisual from './VehicleVisual';
 import { API_BASE_URL } from '../config/api';
 import { useCurrency } from '../context/CurrencyContext';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -248,16 +249,27 @@ export default function OwnerDetail() {
                                         ) : (
                                             vehicles.map((v) => (
                                                 <div key={v.vehicle_id} className="vehicle-item-card">
-                                                    <div className="vehicle-card-top">
-                                                        <span className="vehicle-name-bold">
-                                                            {v.year} {v.make} {v.model}
-                                                        </span>
-                                                        <span className="vehicle-plate-pill font-mono">
-                                                            {v.license_plate}
-                                                        </span>
-                                                    </div>
-                                                    <div className="vehicle-vin-sub font-mono">
-                                                        VIN: {v.vin}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                        <VehicleVisual
+                                                            vehicleType={v.vehicle_type}
+                                                            make={v.make}
+                                                            model={v.model}
+                                                            size="sm"
+                                                            showBadge={true}
+                                                        />
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div className="vehicle-card-top">
+                                                                <span className="vehicle-name-bold">
+                                                                    {v.year} {v.make} {v.model}
+                                                                </span>
+                                                                <span className="vehicle-plate-pill font-mono">
+                                                                    {v.license_plate}
+                                                                </span>
+                                                            </div>
+                                                            <div className="vehicle-vin-sub font-mono">
+                                                                VIN: {v.vin}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <div className="vehicle-card-footer">
                                                         <span className="vehicle-id-sub font-mono">{v.vehicle_id}</span>
@@ -309,12 +321,21 @@ export default function OwnerDetail() {
                                                         className="owner-wo-item"
                                                         onClick={() => navigate(`/work-orders/${wo.work_order_id}`)}
                                                     >
-                                                        <div className="wo-item-left">
-                                                            <span className="wo-item-id font-mono">{wo.work_order_id}</span>
-                                                            <span className="wo-item-vehicle">
-                                                                {wo.year} {wo.make} {wo.model} ({wo.license_plate})
-                                                            </span>
-                                                            <span className="wo-item-date font-mono">{dateFormatted}</span>
+                                                        <div className="wo-item-left" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            <VehicleVisual
+                                                                vehicleType={wo.vehicle_type}
+                                                                make={wo.make}
+                                                                model={wo.model}
+                                                                size="xs"
+                                                                showBadge={false}
+                                                            />
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <span className="wo-item-id font-mono">{wo.work_order_id}</span>
+                                                                <span className="wo-item-vehicle">
+                                                                    {wo.year} {wo.make} {wo.model} ({wo.license_plate})
+                                                                </span>
+                                                                <span className="wo-item-date font-mono">{dateFormatted}</span>
+                                                            </div>
                                                         </div>
 
                                                         <div className="wo-item-right">

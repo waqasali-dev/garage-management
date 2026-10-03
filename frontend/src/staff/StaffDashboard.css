@@ -456,10 +456,22 @@
     border-radius: 6px;
 }
 
+.vehicle-card-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.staff-wo-visual {
+    flex-shrink: 0;
+}
+
 .vehicle-info-block {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: 1;
+    min-width: 0;
 }
 
 .vehicle-title {

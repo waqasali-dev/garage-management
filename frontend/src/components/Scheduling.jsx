@@ -12,6 +12,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './css/Scheduling.css';
+import VehicleVisual from './VehicleVisual';
 import { API_BASE_URL } from '../config/api';
 import { useCurrency } from '../context/CurrencyContext';
 
@@ -744,10 +745,19 @@ export default function Scheduling() {
 
                                                 <h4 className="wo-title">{task.task_title}</h4>
                                                 {task.make && (
-                                                    <p className="wo-vehicle">
-                                                        🚗 {task.year} {task.make} {task.model}
-                                                        {task.license_plate ? ` (${task.license_plate})` : ''}
-                                                    </p>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                                                        <VehicleVisual
+                                                            vehicleType={task.vehicle_type}
+                                                            make={task.make}
+                                                            model={task.model}
+                                                            size="xs"
+                                                            showBadge={false}
+                                                        />
+                                                        <p className="wo-vehicle" style={{ margin: 0 }}>
+                                                            {task.year} {task.make} {task.model}
+                                                            {task.license_plate ? ` (${task.license_plate})` : ''}
+                                                        </p>
+                                                    </div>
                                                 )}
 
                                                 <div className="card-bottom">
@@ -800,9 +810,18 @@ export default function Scheduling() {
                                                 <h4 className="wo-title">
                                                     {item.initial_observations || 'Vehicle Intake Scheduled'}
                                                 </h4>
-                                                <p className="wo-vehicle">
-                                                    {item.year} {item.make} {item.model} - {item.owner_name}
-                                                </p>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                                                    <VehicleVisual
+                                                        vehicleType={item.vehicle_type}
+                                                        make={item.make}
+                                                        model={item.model}
+                                                        size="xs"
+                                                        showBadge={false}
+                                                    />
+                                                    <p className="wo-vehicle" style={{ margin: 0 }}>
+                                                        {item.year} {item.make} {item.model} - {item.owner_name}
+                                                    </p>
+                                                </div>
 
                                                 <div className="card-bottom">
                                                     <div className="meta-tag">
@@ -1054,21 +1073,33 @@ export default function Scheduling() {
                                 {selectedWoObj && (
                                     <div style={{
                                         marginTop: '8px',
-                                        padding: '8px 12px',
+                                        padding: '10px 14px',
                                         background: selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 216, 95, 0.1)',
                                         border: `1px solid ${selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 216, 95, 0.2)'}`,
-                                        borderRadius: '6px',
+                                        borderRadius: '8px',
                                         fontSize: '12px',
-                                        color: selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? '#34d399' : 'var(--accent-yellow)'
+                                        color: selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? '#34d399' : 'var(--accent-yellow)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
                                     }}>
-                                        <div>
-                                            {selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'Re-Appointing / Rescheduling:' : 'Appointing:'} <strong>{selectedWoObj.year} {selectedWoObj.make} {selectedWoObj.model}</strong> (Plate: {selectedWoObj.license_plate}) • Owner: {selectedWoObj.owner_name}
-                                        </div>
-                                        {(selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled') && (
-                                            <div style={{ marginTop: '4px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.85)' }}>
-                                                ℹ️ Currently scheduled for <strong>{selectedWoObj.appointment_bay_name || selectedWoObj.bay_assigned}</strong> on <strong>{selectedWoObj.appointment_date}</strong> ({selectedWoObj.appointment_start_time} - {selectedWoObj.appointment_end_time}). Selecting a slot below will update its appointment.
+                                        <VehicleVisual
+                                            vehicleType={selectedWoObj.vehicle_type}
+                                            make={selectedWoObj.make}
+                                            model={selectedWoObj.model}
+                                            size="sm"
+                                            showBadge={true}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div>
+                                                {selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled' ? 'Re-Appointing / Rescheduling:' : 'Appointing:'} <strong>{selectedWoObj.year} {selectedWoObj.make} {selectedWoObj.model}</strong> (Plate: {selectedWoObj.license_plate}) • Owner: {selectedWoObj.owner_name}
                                             </div>
-                                        )}
+                                            {(selectedWoObj.is_scheduled || selectedWoObj.status === 'scheduled') && (
+                                                <div style={{ marginTop: '4px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                                                    ℹ️ Currently scheduled for <strong>{selectedWoObj.appointment_bay_name || selectedWoObj.bay_assigned}</strong> on <strong>{selectedWoObj.appointment_date}</strong> ({selectedWoObj.appointment_start_time} - {selectedWoObj.appointment_end_time}). Selecting a slot below will update its appointment.
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>

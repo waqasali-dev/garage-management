@@ -960,13 +960,47 @@
     border: 1px solid rgba(245, 158, 11, 0.4);
 }
 
+.v-card-hero-showcase {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 14px 10px;
+    background: radial-gradient(circle at center, rgba(34, 197, 94, 0.08) 0%, rgba(20, 28, 22, 0.5) 80%);
+    border: 1px solid var(--border-glass);
+    border-radius: 10px;
+    margin: 6px 0;
+    transition: transform 0.3s ease;
+}
+
+.vehicle-card:hover .v-card-hero-showcase {
+    transform: scale(1.02);
+}
+
 .ticket-car {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
+    align-items: center;
+    gap: 12px;
     padding-bottom: 8px;
     border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.ticket-car-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.booking-vehicle-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 8px;
+    margin-top: 8px;
 }
 
 .ticket-car-name {

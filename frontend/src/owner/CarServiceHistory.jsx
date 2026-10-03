@@ -12,6 +12,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import CloseIcon from '@mui/icons-material/Close';
 import './CarServiceHistory.css';
+import VehicleVisual from '../components/VehicleVisual';
 import { API_BASE_URL } from '../config/api';
 import { useCurrency } from '../context/CurrencyContext';
 
@@ -184,20 +185,29 @@ export default function CarServiceHistory() {
                                 {/* Hero Vehicle Profile Card */}
                                 <section className="vehicle-hero-card">
                                     <div className="hero-top-row">
-                                        <div className="hero-title-group">
-                                            <h1 className="hero-main-title">
-                                                {historyData.vehicle.year} {historyData.vehicle.make} {historyData.vehicle.model}
-                                            </h1>
-                                            <div className="hero-meta-pills">
-                                                <span className="hero-vin-badge">
-                                                    VIN: {historyData.vehicle.vin}
-                                                </span>
-                                                <span className="hero-plate-badge">
-                                                    🚗 {historyData.vehicle.license_plate}
-                                                </span>
-                                                <span className="hero-plate-badge">
-                                                    ID: {historyData.vehicle.vehicle_id}
-                                                </span>
+                                        <div className="hero-vehicle-identity-stack">
+                                            <VehicleVisual
+                                                vehicleType={historyData.vehicle.vehicle_type}
+                                                make={historyData.vehicle.make}
+                                                model={historyData.vehicle.model}
+                                                size="lg"
+                                                showBadge={true}
+                                            />
+                                            <div className="hero-title-group">
+                                                <h1 className="hero-main-title">
+                                                    {historyData.vehicle.year} {historyData.vehicle.make} {historyData.vehicle.model}
+                                                </h1>
+                                                <div className="hero-meta-pills">
+                                                    <span className="hero-vin-badge">
+                                                        VIN: {historyData.vehicle.vin}
+                                                    </span>
+                                                    <span className="hero-plate-badge">
+                                                        🚗 {historyData.vehicle.license_plate}
+                                                    </span>
+                                                    <span className="hero-plate-badge">
+                                                        ID: {historyData.vehicle.vehicle_id}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
 

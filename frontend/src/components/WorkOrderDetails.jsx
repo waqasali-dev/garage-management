@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TaxInvoiceModal from './TaxInvoiceModal';
 import StyledLoading from './StyledLoading';
+import VehicleVisual from './VehicleVisual';
 import { useCurrency } from '../context/CurrencyContext';
 import './css/WorkOrderDetails.css';
 import { API_BASE_URL } from '../config/api';
@@ -655,19 +656,29 @@ export default function WorkOrderDetails() {
 
                         {/* Top Page Control Header */}
                         <div className="page-header-row">
-                            <div className="title-stack">
-                                <div className="title-inline">
-                                    <Link to="/work-orders" className="back-btn" aria-label="Go back">
-                                        <span className="material-symbols-outlined">arrow_back</span>
-                                    </Link>
-                                    <h2 className="order-id">{order.work_order_id}</h2>
-                                    <span className={`badge badge-${order.status === 'in_progress' ? 'warning' : order.status === 'ready' ? 'cyan' : order.status === 'completed' ? 'success' : 'info'} font-mono`}>
-                                        {(order.status === 'ready' ? 'READY FOR PICKUP' : order.status === 'completed' ? 'COMPLETED (PICKED UP)' : order.status || 'received').replace('_', ' ').toUpperCase()}
-                                    </span>
+                            <div className="title-stack-with-visual">
+                                <VehicleVisual
+                                    size="md"
+                                    type={order.vehicle_type}
+                                    make={order.make}
+                                    model={order.model}
+                                    showBadge
+                                    className="wo-header-visual"
+                                />
+                                <div className="title-stack">
+                                    <div className="title-inline">
+                                        <Link to="/work-orders" className="back-btn" aria-label="Go back">
+                                            <span className="material-symbols-outlined">arrow_back</span>
+                                        </Link>
+                                        <h2 className="order-id">{order.work_order_id}</h2>
+                                        <span className={`badge badge-${order.status === 'in_progress' ? 'warning' : order.status === 'ready' ? 'cyan' : order.status === 'completed' ? 'success' : 'info'} font-mono`}>
+                                            {(order.status === 'ready' ? 'READY FOR PICKUP' : order.status === 'completed' ? 'COMPLETED (PICKED UP)' : order.status || 'received').replace('_', ' ').toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <p className="order-meta-desc">
+                                        {order.year} {order.make} {order.model} • Plate: <strong className="font-mono">{order.license_plate || 'N/A'}</strong> • Owner: <strong>{order.owner_name}</strong> ({order.owner_phone}) • VIN: <span className="font-mono">{order.vin}</span>
+                                    </p>
                                 </div>
-                                <p className="order-meta-desc">
-                                    {order.year} {order.make} {order.model} • Owner: <strong>{order.owner_name}</strong> ({order.owner_phone}) • VIN: <span className="font-mono">{order.vin}</span>
-                                </p>
                             </div>
 
                             <div className="page-actions">

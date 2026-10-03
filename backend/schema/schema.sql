@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     model VARCHAR(50) NOT NULL,
     year INT NOT NULL CHECK (year >= 1900 AND year <= 2100),
     license_plate VARCHAR(20) NOT NULL,
+    vehicle_type VARCHAR(50) DEFAULT 'Sedan',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_vehicle_id_format CHECK (vehicle_id ~ '^VEH-\d{4,}$')
 );

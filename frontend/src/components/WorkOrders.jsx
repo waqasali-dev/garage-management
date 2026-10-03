@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import StyledLoading from './StyledLoading';
+import VehicleVisual from './VehicleVisual';
 import { useCurrency } from '../context/CurrencyContext';
 import './css/WorkOrders.css';
 import { API_BASE_URL } from '../config/api';
@@ -361,14 +362,22 @@ export default function WorkOrders() {
                                                         <td className="font-mono wo-id">{order.work_order_id}</td>
                                                         <td>
                                                             <div className="vehicle-cell">
-                                                                <div className="vehicle-icon-box">
-                                                                    <span className="material-symbols-outlined">
-                                                                        directions_car
-                                                                    </span>
+                                                                <div className="vehicle-visual-wrapper">
+                                                                    <VehicleVisual
+                                                                        size="sm"
+                                                                        type={order.vehicle_type}
+                                                                        make={order.make}
+                                                                        model={order.model}
+                                                                    />
                                                                 </div>
-                                                                <div>
-                                                                    <div className="vehicle-name">
-                                                                        {order.year} {order.make} {order.model}
+                                                                <div className="vehicle-details-stack">
+                                                                    <div className="vehicle-name-row">
+                                                                        <span className="vehicle-name">
+                                                                            {order.year} {order.make} {order.model}
+                                                                        </span>
+                                                                        <span className="vehicle-type-tag font-mono">
+                                                                            {order.vehicle_type || 'SEDAN'}
+                                                                        </span>
                                                                     </div>
                                                                     <div className="vehicle-vin font-mono">
                                                                         {order.license_plate ? `Plate: ${order.license_plate}` : `VIN: ${order.vin}`}

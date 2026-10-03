@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
+import VehicleVisual from './VehicleVisual';
+import { VEHICLE_TYPES, resolveVehicleType } from '../utils/vehicleVisuals';
 import './css/VehicleIntake.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -10,6 +12,7 @@ const INITIAL_FORM_STATE = {
     model: '',
     year: '',
     licensePlate: '',
+    vehicleType: 'Sedan',
     ownerSearch: '',
     fullName: '',
     phone: '',
@@ -76,6 +79,7 @@ export default function VehicleIntake() {
                 const json = await res.json();
                 if (json.found && json.data) {
                     const v = json.data;
+                    const resolvedType = v.vehicle_type || resolveVehicleType('', v.make, v.model) || 'Sedan';
                     setFormData((prev) => ({
                         ...prev,
                         vin: v.vin || vin,
@@ -83,6 +87,7 @@ export default function VehicleIntake() {
                         model: v.model || prev.model,
                         year: v.year ? String(v.year) : prev.year,
                         licensePlate: v.license_plate || prev.licensePlate,
+                        vehicleType: resolvedType || prev.vehicleType,
                         fullName: v.owner_name || prev.fullName,
                         phone: v.owner_phone || prev.phone,
                         email: v.owner_email || prev.email,
@@ -90,7 +95,7 @@ export default function VehicleIntake() {
                     if (v.owner_id) {
                         setSelectedOwnerId(v.owner_id);
                     }
-                    showNotification(`Auto-filled details for existing vehicle ${v.year || ''} ${v.make || ''} ${v.model || ''} (${v.owner_name || 'Known Owner'})`, 'success');
+                    showNotification(`Auto-filled details for existing vehicle ${v.year || ''} ${v.make || ''} ${v.model || ''} (${resolvedType})`, 'success');
                 } else if (isManual) {
                     showNotification(`VIN "${vin}" is not in database. Enter new vehicle & owner details below.`, 'info');
                 }
@@ -119,12 +124,31 @@ export default function VehicleIntake() {
         }
     };
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
+    const handleVehicleTypeSelect = (typeId) => {
         setFormData((prev) => ({
             ...prev,
-            [name]: name === 'vin' || name === 'licensePlate' ? value.toUpperCase() : value,
+            vehicleType: typeId,
         }));
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => {
+            const next = {
+                ...prev,
+                [name]: name === 'vin' || name === 'licensePlate' ? value.toUpperCase() : value,
+            };
+
+            // If user types model or make, intelligently suggest car body type if still default
+            if ((name === 'make' || name === 'model') && (!prev.vehicleType || prev.vehicleType === 'Sedan')) {
+                const suggested = resolveVehicleType('', next.make, next.model);
+                if (suggested && suggested !== 'Sedan') {
+                    next.vehicleType = suggested;
+                }
+            }
+
+            return next;
+        });
 
         // Reset selected owner if user modifies owner fields manually
         if (name === 'fullName' || name === 'phone' || name === 'email') {
@@ -181,6 +205,8 @@ export default function VehicleIntake() {
                     model: formData.model,
                     year: formData.year,
                     licensePlate: formData.licensePlate,
+                    vehicle_type: formData.vehicleType || 'Sedan',
+                    vehicleType: formData.vehicleType || 'Sedan',
                     fullName: formData.fullName,
                     phone: formData.phone,
                     email: formData.email,
@@ -259,7 +285,19 @@ export default function VehicleIntake() {
                                 </span>
                                 <div>
                                     <h3>Vehicle Identification & Specifications</h3>
-                                    <p className="card-desc">Enter vehicle VIN, year, make, model, and registration plate.</p>
+                                    <p className="card-desc">Enter vehicle VIN, year, make, model, registration plate, and body style.</p>
+                                </div>
+                            </div>
+
+                            {/* Dynamic Vehicle Visual Preview Banner */}
+                            <div className="intake-vehicle-preview-banner">
+                                <VehicleVisual size="md" type={formData.vehicleType} make={formData.make} model={formData.model} showBadge />
+                                <div className="preview-text-block">
+                                    <span className="preview-label">LIVE VEHICLE IDENTIFICATION & VISUAL</span>
+                                    <h4 className="preview-headline">{formData.year || '202X'} {formData.make || 'Vehicle'} {formData.model || 'Model'}</h4>
+                                    <span className="preview-plate font-mono">
+                                        PLATE: {formData.licensePlate || 'PENDING'} • VIN: {formData.vin ? formData.vin : 'NOT ENTERED'}
+                                    </span>
                                 </div>
                             </div>
 
@@ -355,6 +393,46 @@ export default function VehicleIntake() {
                                         className="uppercase-input font-mono"
                                         required
                                     />
+                                </div>
+
+                                {/* Car Body Type Selector */}
+                                <div className="form-group col-span-12 vehicle-type-selector-group">
+                                    <div className="type-selector-header">
+                                        <label>VEHICLE BODY TYPE *</label>
+                                        <span className="type-selector-hint">Select matching body style for visual distinction across all garage queues</span>
+                                    </div>
+                                    <div className="vehicle-type-cards-grid">
+                                        {VEHICLE_TYPES.map((vt) => {
+                                            const isSelected = formData.vehicleType === vt.id;
+                                            return (
+                                                <div
+                                                    key={vt.id}
+                                                    className={`vehicle-type-choice-card ${isSelected ? 'selected' : ''}`}
+                                                    onClick={() => handleVehicleTypeSelect(vt.id)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    style={{
+                                                        '--type-accent': vt.badgeColor,
+                                                        '--type-accent-bg': vt.accentBg,
+                                                        '--type-border': vt.borderColor,
+                                                    }}
+                                                >
+                                                    <div className="type-card-thumb">
+                                                        <VehicleVisual size="sm" type={vt.id} glow={false} />
+                                                    </div>
+                                                    <div className="type-card-info">
+                                                        <span className="type-card-title">{vt.label}</span>
+                                                        <span className="type-card-sub">{vt.subLabel}</span>
+                                                    </div>
+                                                    {isSelected && (
+                                                        <div className="type-check-badge">
+                                                            <span className="material-symbols-outlined">check_circle</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -551,6 +629,16 @@ export default function VehicleIntake() {
                         <p className="success-modal-subtitle">
                             New repair work order and customer intake records created:
                         </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 16px' }}>
+                            <VehicleVisual
+                                size="md"
+                                type={intakeSuccessData.vehicle_type || formData.vehicleType}
+                                make={intakeSuccessData.make}
+                                model={intakeSuccessData.model}
+                                showBadge
+                            />
+                        </div>
 
                         <div className="success-details-grid">
                             <div className="success-detail-box">

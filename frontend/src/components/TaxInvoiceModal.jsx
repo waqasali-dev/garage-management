@@ -7,6 +7,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { API_BASE_URL } from '../config/api';
+import VehicleVisual from './VehicleVisual';
 import './css/TaxInvoiceModal.css';
 
 export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) {
@@ -548,11 +549,19 @@ Precision Garage Workshop Management System`;
                         </div>
 
                         {/* Column 2: Vehicle */}
-                        <div className="meta-column">
-                            <div className="meta-label-strong">Vehicle :</div>
-                            <div>{vehiclePlate}</div>
-                            <div>{vehicleModel}</div>
-                            <div>{vehicleVin}</div>
+                        <div className="meta-column" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
+                            <VehicleVisual
+                                vehicleType={invoice.vehicle_type}
+                                make={invoice.make}
+                                model={invoice.model}
+                                size="xs"
+                                showBadge={false}
+                            />
+                            <div>
+                                <div className="meta-label-strong">Vehicle: {vehicleModel}</div>
+                                <div>Plate: {vehiclePlate}</div>
+                                <div>VIN: {vehicleVin}</div>
+                            </div>
                         </div>
 
                         {/* Column 3: Tax Invoice Details */}

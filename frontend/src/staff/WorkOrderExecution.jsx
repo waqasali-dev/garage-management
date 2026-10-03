@@ -20,6 +20,7 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './WorkOrderExecution.css';
+import VehicleVisual from '../components/VehicleVisual';
 import { API_BASE_URL } from '../config/api';
 import { useCurrency } from '../context/CurrencyContext';
 
@@ -524,8 +525,15 @@ export default function WorkOrderExecution() {
                             <span>Staff Dashboard</span>
                         </button>
                         <div className="header-divider"></div>
-                        <h2 className="header-wo-title">
-                            {order.work_order_id} <span>• {order.year} {order.make} {order.model}</span>
+                        <h2 className="header-wo-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <VehicleVisual
+                                vehicleType={order.vehicle_type}
+                                make={order.make}
+                                model={order.model}
+                                size="xs"
+                                showBadge={false}
+                            />
+                            <span>{order.work_order_id} <span>• {order.year} {order.make} {order.model}</span></span>
                         </h2>
                     </div>
 
@@ -593,15 +601,30 @@ export default function WorkOrderExecution() {
                             {/* Left Column: Vehicle, Owner, and Workshop Assignment */}
                             <div className="exec-col-left">
                                 {/* Vehicle Card */}
-                                <div className="exec-card">
+                                <div className="exec-card vehicle-exec-card">
                                     <div className="card-header">
                                         <DirectionsCarIcon className="card-icon" />
                                         <h3>Vehicle Identification</h3>
                                     </div>
-                                    <div className="info-pairs-grid">
+                                    <div className="exec-vehicle-hero-banner">
+                                        <VehicleVisual
+                                            vehicleType={order.vehicle_type}
+                                            make={order.make}
+                                            model={order.model}
+                                            size="lg"
+                                            showBadge={true}
+                                        />
+                                    </div>
+                                    <div className="info-pairs-grid" style={{ marginTop: '16px' }}>
                                         <div>
                                             <span className="info-label">VEHICLE</span>
                                             <span className="info-val">{order.year} {order.make} {order.model}</span>
+                                        </div>
+                                        <div>
+                                            <span className="info-label">BODY TYPE</span>
+                                            <span className="info-val" style={{ color: 'var(--accent-yellow)', textTransform: 'capitalize', fontWeight: 600 }}>
+                                                {order.vehicle_type || 'Sedan'}
+                                            </span>
                                         </div>
                                         <div>
                                             <span className="info-label">LICENSE PLATE</span>

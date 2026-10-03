@@ -53,6 +53,7 @@ router.get("/", async (req, res) => {
                 v.model,
                 v.year,
                 v.license_plate,
+                v.vehicle_type,
                 w.status AS work_order_status
             FROM invoice_data i
             JOIN car_owners o ON i.owner_id = o.owner_id
@@ -125,6 +126,7 @@ router.get("/:id", async (req, res) => {
                 v.model,
                 v.year,
                 v.license_plate,
+                v.vehicle_type,
                 w.status AS work_order_status,
                 w.initial_observations,
                 s.full_name AS lead_technician_name

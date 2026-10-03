@@ -13,6 +13,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CloseIcon from '@mui/icons-material/Close';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
+import VehicleVisual from '../components/VehicleVisual';
 import './OwnerCars.css';
 import { API_BASE_URL } from '../config/api';
 
@@ -481,11 +482,20 @@ export default function OwnerCars() {
                                                 </div>
 
                                                 <div className="ticket-car">
-                                                    <div className="ticket-car-name">
-                                                        🚗 {apt.year} {apt.make} {apt.model}
-                                                    </div>
-                                                    <div className="ticket-plate font-mono">
-                                                        PLATE: {apt.license_plate || 'N/A'}
+                                                    <VehicleVisual
+                                                        vehicleType={apt.vehicle_type}
+                                                        make={apt.make}
+                                                        model={apt.model}
+                                                        size="xs"
+                                                        showBadge={false}
+                                                    />
+                                                    <div className="ticket-car-details">
+                                                        <div className="ticket-car-name">
+                                                            {apt.year} {apt.make} {apt.model}
+                                                        </div>
+                                                        <div className="ticket-plate font-mono">
+                                                            PLATE: {apt.license_plate || 'N/A'}
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -595,6 +605,17 @@ export default function OwnerCars() {
                                                         READY / COMPLETED
                                                     </span>
                                                 )}
+                                            </div>
+
+                                            {/* Car Visual Showcase */}
+                                            <div className="v-card-hero-showcase">
+                                                <VehicleVisual
+                                                    vehicleType={vehicle.vehicle_type}
+                                                    make={vehicle.make}
+                                                    model={vehicle.model}
+                                                    size="md"
+                                                    showBadge={true}
+                                                />
                                             </div>
 
                                             {/* Owner & VIN Details Strip */}
@@ -755,8 +776,17 @@ export default function OwnerCars() {
                                     </div>
                                 )}
                                 {selectedVehicleObj && !selectedVehicleObj.has_active_booking && (
-                                    <div style={{ fontSize: '12px', color: '#10b981', marginTop: '4px' }}>
-                                        Vehicle: <strong>{selectedVehicleObj.year} {selectedVehicleObj.make} {selectedVehicleObj.model}</strong> • Plate: <span className="font-mono">{selectedVehicleObj.license_plate}</span>
+                                    <div className="booking-vehicle-preview">
+                                        <VehicleVisual
+                                            vehicleType={selectedVehicleObj.vehicle_type}
+                                            make={selectedVehicleObj.make}
+                                            model={selectedVehicleObj.model}
+                                            size="sm"
+                                            showBadge={true}
+                                        />
+                                        <div style={{ fontSize: '12px', color: '#10b981' }}>
+                                            Vehicle: <strong>{selectedVehicleObj.year} {selectedVehicleObj.make} {selectedVehicleObj.model}</strong> • Plate: <span className="font-mono">{selectedVehicleObj.license_plate}</span>
+                                        </div>
                                     </div>
                                 )}
                             </div>

@@ -583,6 +583,40 @@
     font-weight: 600;
 }
 
+.vehicle-visual-wrapper {
+    width: 68px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.vehicle-details-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.vehicle-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.vehicle-type-tag {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 216, 95, 0.1);
+    border: 1px solid rgba(255, 216, 95, 0.25);
+    color: var(--accent-yellow);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
 .vehicle-vin {
     font-size: 11px;
     font-family: 'JetBrains Mono', monospace;

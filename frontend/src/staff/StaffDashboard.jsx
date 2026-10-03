@@ -16,6 +16,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import StarIcon from '@mui/icons-material/Star';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useCurrency } from '../context/CurrencyContext';
+import VehicleVisual from '../components/VehicleVisual';
 import './StaffDashboard.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -350,13 +351,23 @@ export default function StaffDashboard() {
                                             </div>
                                         </div>
 
-                                        <div className="vehicle-info-block">
-                                            <div className="vehicle-title">
-                                                {order.year} {order.make} {order.model}
-                                            </div>
-                                            <div className="vehicle-plate-vin">
-                                                <span className="plate-tag">{order.license_plate}</span>
-                                                <span className="vin-tag font-mono">VIN: {order.vin}</span>
+                                        <div className="vehicle-card-row">
+                                            <VehicleVisual
+                                                vehicleType={order.vehicle_type}
+                                                make={order.make}
+                                                model={order.model}
+                                                size="sm"
+                                                showBadge={true}
+                                                className="staff-wo-visual"
+                                            />
+                                            <div className="vehicle-info-block">
+                                                <div className="vehicle-title">
+                                                    {order.year} {order.make} {order.model}
+                                                </div>
+                                                <div className="vehicle-plate-vin">
+                                                    <span className="plate-tag">{order.license_plate}</span>
+                                                    <span className="vin-tag font-mono">VIN: {order.vin}</span>
+                                                </div>
                                             </div>
                                         </div>
 

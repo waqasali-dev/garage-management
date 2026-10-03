@@ -38,6 +38,7 @@ router.get("/", async (req, res) => {
                 v.year,
                 v.license_plate,
                 v.vin,
+                v.vehicle_type,
                 o.full_name AS owner_name,
                 o.phone_number AS owner_phone
             FROM scheduled_tasks t

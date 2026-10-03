@@ -14,6 +14,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import StyledLoading from './StyledLoading';
 import { useCurrency } from '../context/CurrencyContext';
+import VehicleVisual from './VehicleVisual';
 import './css/Dashboard.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -423,6 +424,13 @@ export default function Dashboard() {
                                                 style={{ cursor: 'pointer' }}
                                             >
                                                 <div className="order-left-info">
+                                                    <VehicleVisual
+                                                        vehicleType={wo.vehicle_type}
+                                                        make={wo.make}
+                                                        model={wo.model}
+                                                        size="xs"
+                                                        showBadge={false}
+                                                    />
                                                     <span className="order-id-badge font-mono">{wo.work_order_id}</span>
                                                     <div className="order-vehicle-box">
                                                         <div className="order-vehicle-title">

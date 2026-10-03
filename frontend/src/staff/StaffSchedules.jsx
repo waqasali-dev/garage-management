@@ -12,6 +12,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import './StaffSchedules.css';
+import VehicleVisual from '../components/VehicleVisual';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
@@ -306,10 +307,17 @@ export default function StaffSchedules() {
 
                                                 {/* Vehicle Details Box if linked */}
                                                 {(task.make || task.license_plate || task.work_order_id) && (
-                                                    <div className="task-vehicle-box">
-                                                        <div>
+                                                    <div className="task-vehicle-box" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <VehicleVisual
+                                                            vehicleType={task.vehicle_type}
+                                                            make={task.make}
+                                                            model={task.model}
+                                                            size="xs"
+                                                            showBadge={false}
+                                                        />
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
                                                             <span className="vehicle-desc-text">
-                                                                🚗 {task.year} {task.make} {task.model}
+                                                                {task.year} {task.make} {task.model}
                                                             </span>
                                                             <span className="vehicle-meta-tags" style={{ marginLeft: '8px' }}>
                                                                 {task.license_plate && `[${task.license_plate}]`}

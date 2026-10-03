@@ -14,6 +14,7 @@ import StarIcon from '@mui/icons-material/Star';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './css/OwnersList.css';
+import VehicleVisual from './VehicleVisual';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
@@ -393,7 +394,16 @@ export default function OwnersList() {
 
                                         <div className="owner-card-body">
                                             <div className="vehicle-info-box">
-                                                <DirectionsCarIcon className="vehicle-icon" />
+                                                {owner.vehicle && owner.vehicle !== 'No Vehicle Registered' ? (
+                                                    <VehicleVisual
+                                                        vehicleType={owner.vehicleType}
+                                                        make={owner.vehicle}
+                                                        size="xs"
+                                                        showBadge={false}
+                                                    />
+                                                ) : (
+                                                    <DirectionsCarIcon className="vehicle-icon" />
+                                                )}
                                                 <div className="vehicle-details">
                                                     <span className="vehicle-title">{owner.vehicle}</span>
                                                     {owner.vin && <span className="vehicle-vin font-mono">{owner.vin}</span>}

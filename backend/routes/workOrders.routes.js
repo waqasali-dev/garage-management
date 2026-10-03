@@ -25,8 +25,12 @@ export const handleIntake = async (req, res) => {
             notes,
             vatNumber,
             vat_number,
+            vehicleType,
+            vehicle_type,
+            carType,
         } = req.body;
         const cleanVat = (vatNumber || vat_number || "").trim();
+        const cleanVehicleType = (vehicleType || vehicle_type || carType || "Sedan").trim();
 
         if (!vin || !make || !model || !year || !licensePlate) {
             await client.query("ROLLBACK");
@@ -110,7 +114,7 @@ export const handleIntake = async (req, res) => {
         // STEP 2: RESOLVE VEHICLE
         let vehicleId = null;
         const checkVehicle = await client.query(
-            "SELECT vehicle_id, owner_id, vin, make, model, year, license_plate FROM vehicles WHERE UPPER(vin) = $1;",
+            "SELECT vehicle_id, owner_id, vin, make, model, year, license_plate, vehicle_type FROM vehicles WHERE UPPER(vin) = $1;",
             [sanitizedVin]
         );
 
@@ -118,9 +122,9 @@ export const handleIntake = async (req, res) => {
             vehicleId = checkVehicle.rows[0].vehicle_id;
             await client.query(
                 `UPDATE vehicles 
-                 SET owner_id = $1, make = $2, model = $3, year = $4, license_plate = $5 
-                 WHERE vehicle_id = $6;`,
-                [ownerId, make.trim(), model.trim(), parsedYear, licensePlate.trim().toUpperCase(), vehicleId]
+                 SET owner_id = $1, make = $2, model = $3, year = $4, license_plate = $5, vehicle_type = COALESCE($6, vehicle_type, 'Sedan') 
+                 WHERE vehicle_id = $7;`,
+                [ownerId, make.trim(), model.trim(), parsedYear, licensePlate.trim().toUpperCase(), cleanVehicleType, vehicleId]
             );
         } else {
             const insertVehicleQuery = `
@@ -130,10 +134,11 @@ export const handleIntake = async (req, res) => {
                     make,
                     model,
                     year,
-                    license_plate
+                    license_plate,
+                    vehicle_type
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING vehicle_id, owner_id, vin, make, model, year, license_plate;
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING vehicle_id, owner_id, vin, make, model, year, license_plate, vehicle_type;
             `;
             const newVehicleResult = await client.query(insertVehicleQuery, [
                 ownerId,
@@ -142,6 +147,7 @@ export const handleIntake = async (req, res) => {
                 model.trim(),
                 parsedYear,
                 licensePlate.trim().toUpperCase(),
+                cleanVehicleType,
             ]);
             vehicleId = newVehicleResult.rows[0].vehicle_id;
         }
@@ -277,6 +283,7 @@ export const handleGetWorkOrdersList = async (req, res) => {
                 v.model,
                 v.year,
                 v.license_plate,
+                v.vehicle_type,
                 o.owner_id,
                 o.full_name AS owner_name,
                 o.phone_number AS owner_phone,
@@ -332,7 +339,7 @@ export const handleGetSingleWorkOrder = async (req, res) => {
         const mainQuery = `
             SELECT 
                 w.*,
-                v.vin, v.make, v.model, v.year, v.license_plate,
+                v.vin, v.make, v.model, v.year, v.license_plate, v.vehicle_type,
                 o.owner_id, o.full_name AS owner_name, o.phone_number AS owner_phone, o.email_address AS owner_email, o.is_vip AS owner_is_vip,
                 s.full_name AS assigned_staff_name, s.role AS assigned_staff_role, s.hourly_rate AS staff_hourly_rate,
                 sa.full_name AS service_advisor_name
