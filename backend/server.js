@@ -31,6 +31,7 @@ import appointmentsRoutes from "./routes/appointments.routes.js";
 import { migrateSettingsAndTax } from "./migrate_settings.js";
 import { runAppointmentMigration } from "./migrate_appointments.js";
 import { runVehicleTypeMigration } from "./migrate_vehicle_type.js";
+import { runInventoryBatchesMigration } from "./migrate_inventory_batches.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -155,5 +156,8 @@ app.listen(port, () => {
     });
     runVehicleTypeMigration().catch((err) => {
         console.warn("⚠️ Automatic vehicle type migration notice:", err.message);
+    });
+    runInventoryBatchesMigration().catch((err) => {
+        console.warn("⚠️ Automatic inventory batches migration notice:", err.message);
     });
 });

@@ -10,6 +10,10 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import LayersIcon from '@mui/icons-material/Layers';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import './css/WorkshopSettingsModal.css';
 
 const TAX_PRESETS = [
@@ -106,7 +110,7 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
     const { settings, updateSettings } = useCurrency();
     const { showNotification } = useNotification();
 
-    const [activeTab, setActiveTab] = useState('hours'); // 'hours' or 'billing'
+    const [activeTab, setActiveTab] = useState('hours'); // 'hours', 'billing', or 'inventory'
 
     // Billing & Currency State
     const [taxPercentage, setTaxPercentage] = useState(5.0);
@@ -114,6 +118,9 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
     const [currencySymbol, setCurrencySymbol] = useState('$');
     const [currencyDecimals, setCurrencyDecimals] = useState(2);
     const [recalculatePending, setRecalculatePending] = useState(true);
+
+    // Inventory Valuation Method State (FIFO / LIFO / Normal)
+    const [valuationMethod, setValuationMethod] = useState('fifo');
 
     // Workshop Working Hours State
     const [operatingDays, setOperatingDays] = useState([1, 2, 3, 4, 5, 6]);
@@ -132,6 +139,7 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
             setCurrencyCode(settings.currency_code || 'USD');
             setCurrencySymbol(settings.currency_symbol || '$');
             setCurrencyDecimals(settings.currency_decimals !== undefined ? settings.currency_decimals : 2);
+            setValuationMethod(settings.valuation_method || 'fifo');
             setRecalculatePending(true);
 
             if (settings.working_hours) {
@@ -351,6 +359,7 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                 currency_code: currencyCode.trim().toUpperCase(),
                 currency_symbol: currencySymbol.trim() || currencyCode.trim().toUpperCase(),
                 currency_decimals: parseInt(currencyDecimals, 10) || 2,
+                valuation_method: valuationMethod,
                 recalculate_pending: recalculatePending,
                 working_hours: {
                     operating_days: operatingDays,
@@ -368,7 +377,7 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
 
             const shiftsSummary = sortedShifts.map((s) => `${s.start}-${s.end}`).join(', ');
             showNotification(
-                `Workshop settings saved! Shifts: ${shiftsSummary} (${breaks.length} break${breaks.length === 1 ? '' : 's'}). VAT: ${parsedTax}%.`,
+                `Workshop settings saved! Valuation: ${valuationMethod.toUpperCase()}. Shifts: ${shiftsSummary} (${breaks.length} break${breaks.length === 1 ? '' : 's'}). VAT: ${parsedTax}%.`,
                 'success'
             );
 
@@ -383,6 +392,8 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
         }
     };
 
+    if (!isOpen) return null;
+
     return (
         <div className="settings-modal-overlay" onClick={onClose}>
             <div className="settings-modal-container" onClick={(e) => e.stopPropagation()}>
@@ -395,7 +406,7 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                         <div>
                             <h3 className="settings-modal-title">Workshop Configuration & Settings</h3>
                             <p className="settings-modal-subtitle">
-                                Configure daily operating shifts, workshop breaks, appointment slots, and currency/VAT.
+                                Configure daily operating shifts, workshop breaks, appointment slots, currency/VAT, and inventory valuation (FIFO/LIFO).
                             </p>
                         </div>
                     </div>
@@ -423,6 +434,15 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                         <MonetizationOnIcon style={{ fontSize: '18px' }} />
                         <span>Currency & Tax (VAT)</span>
                         <span className="settings-tab-counter font-mono">{currencyCode}</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`settings-tab-btn ${activeTab === 'inventory' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('inventory')}
+                    >
+                        <Inventory2Icon style={{ fontSize: '18px' }} />
+                        <span>Inventory Valuation</span>
+                        <span className="settings-tab-counter font-mono">{valuationMethod.toUpperCase()}</span>
                     </button>
                 </div>
 
@@ -884,6 +904,143 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                                         </span>
                                     </div>
                                 </label>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'inventory' && (
+                        <div className="settings-tab-content">
+                            <div className="settings-section-card">
+                                <div className="settings-section-head">
+                                    <div className="settings-section-title-wrap">
+                                        <Inventory2Icon className="settings-section-icon" />
+                                        <h4 className="settings-section-title">Inventory Valuation & Selling Strategy</h4>
+                                    </div>
+                                    <span className="settings-section-badge font-mono" style={{ color: '#ffd85f', borderColor: 'rgba(255, 216, 95, 0.4)' }}>
+                                        ACTIVE: {valuationMethod.toUpperCase()}
+                                    </span>
+                                </div>
+
+                                <p className="settings-section-description">
+                                    When you restock an item at a new price, older stock retains its historical price under the same SKU. Choose how stock is depleted and priced when parts are added to work orders:
+                                </p>
+
+                                {/* Strategy Cards Grid */}
+                                <div className="valuation-cards-grid">
+                                    {/* FIFO */}
+                                    <div
+                                        className={`valuation-card ${valuationMethod === 'fifo' ? 'selected' : ''}`}
+                                        onClick={() => setValuationMethod('fifo')}
+                                    >
+                                        <div className="valuation-card-header">
+                                            <div className="valuation-card-title-group">
+                                                <TrendingUpIcon className="valuation-card-icon fifo-icon" />
+                                                <div>
+                                                    <h5 className="valuation-card-title">
+                                                        FIFO (First-In, First-Out)
+                                                        <span className="valuation-badge badge-recommended">Recommended for Garages</span>
+                                                    </h5>
+                                                </div>
+                                            </div>
+                                            <div className="valuation-radio">
+                                                {valuationMethod === 'fifo' && <CheckCircleIcon style={{ color: '#10b981', fontSize: '18px' }} />}
+                                            </div>
+                                        </div>
+                                        <p className="valuation-card-desc">
+                                            Sells older priced parts first. Earlier batches are completely consumed before the system moves to newer, higher-priced stock.
+                                        </p>
+                                        <div className="valuation-flow-pipeline">
+                                            <span className="pipeline-step step-old">Oldest Batch ($20)</span>
+                                            <span className="pipeline-arrow">➔</span>
+                                            <span className="pipeline-step step-mid">Next Batch ($24)</span>
+                                            <span className="pipeline-arrow">➔</span>
+                                            <span className="pipeline-step step-new">Newest Batch ($28)</span>
+                                        </div>
+                                    </div>
+
+                                    {/* LIFO */}
+                                    <div
+                                        className={`valuation-card ${valuationMethod === 'lifo' ? 'selected' : ''}`}
+                                        onClick={() => setValuationMethod('lifo')}
+                                    >
+                                        <div className="valuation-card-header">
+                                            <div className="valuation-card-title-group">
+                                                <LayersIcon className="valuation-card-icon lifo-icon" />
+                                                <div>
+                                                    <h5 className="valuation-card-title">
+                                                        LIFO (Last-In, First-Out)
+                                                        <span className="valuation-badge badge-inflation">Latest Costs First</span>
+                                                    </h5>
+                                                </div>
+                                            </div>
+                                            <div className="valuation-radio">
+                                                {valuationMethod === 'lifo' && <CheckCircleIcon style={{ color: '#10b981', fontSize: '18px' }} />}
+                                            </div>
+                                        </div>
+                                        <p className="valuation-card-desc">
+                                            Sells newly purchased parts first at the newest rates. Older batches remain in reserve until newer stock is depleted.
+                                        </p>
+                                        <div className="valuation-flow-pipeline">
+                                            <span className="pipeline-step step-new">Newest Batch ($28)</span>
+                                            <span className="pipeline-arrow">➔</span>
+                                            <span className="pipeline-step step-mid">Previous Batch ($24)</span>
+                                            <span className="pipeline-arrow">➔</span>
+                                            <span className="pipeline-step step-old">Oldest Batch ($20)</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Normal */}
+                                    <div
+                                        className={`valuation-card ${valuationMethod === 'normal' ? 'selected' : ''}`}
+                                        onClick={() => setValuationMethod('normal')}
+                                    >
+                                        <div className="valuation-card-header">
+                                            <div className="valuation-card-title-group">
+                                                <SettingsIcon className="valuation-card-icon normal-icon" />
+                                                <div>
+                                                    <h5 className="valuation-card-title">
+                                                        Normal (Standard / Catalog Pricing)
+                                                        <span className="valuation-badge badge-standard">Uniform Rate</span>
+                                                    </h5>
+                                                </div>
+                                            </div>
+                                            <div className="valuation-radio">
+                                                {valuationMethod === 'normal' && <CheckCircleIcon style={{ color: '#10b981', fontSize: '18px' }} />}
+                                            </div>
+                                        </div>
+                                        <p className="valuation-card-desc">
+                                            All units under the SKU share a single active catalog selling price. Historical batches and price changes remain tracked in item details.
+                                        </p>
+                                        <div className="valuation-flow-pipeline">
+                                            <span className="pipeline-step step-standard">All Units Billed at Current Catalog Price</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Live Simulation Callout */}
+                                <div className="valuation-sim-box">
+                                    <div className="valuation-sim-head">
+                                        <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#ffd85f' }}>analytics</span>
+                                        <strong>How This Affects Repair Orders:</strong>
+                                    </div>
+                                    <div className="valuation-sim-content">
+                                        {valuationMethod === 'fifo' && (
+                                            <p>
+                                                If you have <strong>5 units at $20</strong> and restock <strong>10 units at $30</strong> under the same SKU: the next repair order using 3 units will bill at <strong>$20 each</strong> from the older batch. Once those 5 units are sold, subsequent repair orders will automatically bill at <strong>$30</strong>.
+                                            </p>
+                                        )}
+                                        {valuationMethod === 'lifo' && (
+                                            <p>
+                                                If you have <strong>5 units at $20</strong> and restock <strong>10 units at $30</strong> under the same SKU: the next repair order will immediately bill at <strong>$30 each</strong> from the newest batch. Older $20 units remain untouched until the 10 newest units are sold.
+                                            </p>
+                                        )}
+                                        {valuationMethod === 'normal' && (
+                                            <p>
+                                                All units will be billed at the item's standard catalog selling price. You can view individual batch costs and the interactive price change graph in each item's details drawer.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

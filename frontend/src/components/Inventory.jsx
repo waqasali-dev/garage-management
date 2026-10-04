@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
 import StyledLoading from './StyledLoading';
+import PartPriceGraphModal from './PartPriceGraphModal';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import './css/Inventory.css';
@@ -32,7 +33,7 @@ const INITIAL_FORM_STATE = {
 
 export default function Inventory() {
     const { isAdmin } = useAuth();
-    const { currency, formatCurrency } = useCurrency();
+    const { currency, formatCurrency, valuationMethod, openSettingsModal } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [items, setItems] = useState([]);
     const [kpi, setKpi] = useState({
@@ -50,12 +51,19 @@ export default function Inventory() {
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Restock Modal State
+    // Restock Modal State (Multi-batch pricing under same SKU)
     const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
     const [restockTarget, setRestockTarget] = useState(null);
     const [restockQty, setRestockQty] = useState('10');
     const [restockUnitCost, setRestockUnitCost] = useState('');
+    const [restockSellingPrice, setRestockSellingPrice] = useState('');
+    const [restockBatchNumber, setRestockBatchNumber] = useState('');
+    const [restockNotes, setRestockNotes] = useState('');
     const [isRestocking, setIsRestocking] = useState(false);
+
+    // Part Details & Price Evolution Graph Modal State
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [selectedDetailPartId, setSelectedDetailPartId] = useState(null);
 
     // Edit Part Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -133,13 +141,27 @@ export default function Inventory() {
         if (!isAdmin) return;
         setRestockTarget(item);
         setRestockQty('10');
-        setRestockUnitCost(item.unit_cost ? String(item.unit_cost) : '');
+        setRestockUnitCost(item.unit_cost !== undefined ? String(item.unit_cost) : '');
+        setRestockSellingPrice(item.selling_price !== undefined ? String(item.selling_price) : '');
+        setRestockBatchNumber('');
+        setRestockNotes('');
         setIsRestockModalOpen(true);
     };
 
     const handleCloseRestockModal = () => {
         setIsRestockModalOpen(false);
         setRestockTarget(null);
+    };
+
+    // Open Part Details & Price Evolution Graph
+    const handleOpenDetails = (item) => {
+        setSelectedDetailPartId(item.part_id);
+        setIsDetailsModalOpen(true);
+    };
+
+    const handleCloseDetails = () => {
+        setIsDetailsModalOpen(false);
+        setSelectedDetailPartId(null);
     };
 
     const handleAddPart = async (e) => {
@@ -184,7 +206,7 @@ export default function Inventory() {
         }
     };
 
-    // Submit Restock Quantity
+    // Submit Restock Quantity with custom batch price
     const handleRestockSubmit = async (e) => {
         e.preventDefault();
 
@@ -203,7 +225,10 @@ export default function Inventory() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     added_quantity: qty,
-                    unit_cost: restockUnitCost ? parseFloat(restockUnitCost) : undefined,
+                    unit_cost: restockUnitCost !== '' && !isNaN(parseFloat(restockUnitCost)) ? parseFloat(restockUnitCost) : undefined,
+                    selling_price: restockSellingPrice !== '' && !isNaN(parseFloat(restockSellingPrice)) ? parseFloat(restockSellingPrice) : undefined,
+                    batch_number: restockBatchNumber.trim() || undefined,
+                    notes: restockNotes.trim() || undefined,
                 }),
             });
 
@@ -215,7 +240,7 @@ export default function Inventory() {
             }
 
             showNotification(
-                `📦 Restocked +${qty} units of [${restockTarget.sku}]! New stock: ${data.data.stock_quantity}`,
+                `📦 Restocked +${qty} units of [${restockTarget.sku}]! Added under new batch. Total stock: ${data.data.stock_quantity}`,
                 'success'
             );
             setIsRestockModalOpen(false);
@@ -447,7 +472,20 @@ export default function Inventory() {
                         {/* Main Table Card */}
                         <div className="table-card">
                             <div className="table-toolbar">
-                                <h3 className="toolbar-title">Parts Inventory</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <h3 className="toolbar-title">Parts Inventory</h3>
+                                    <div
+                                        className="valuation-toolbar-badge"
+                                        title="Click to view or change Valuation Strategy (FIFO / LIFO / Normal) in Settings"
+                                        onClick={openSettingsModal}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#ffd85f' }}>
+                                            {valuationMethod === 'fifo' ? 'trending_up' : valuationMethod === 'lifo' ? 'layers' : 'tune'}
+                                        </span>
+                                        <span>METHOD: <strong>{valuationMethod ? valuationMethod.toUpperCase() : 'FIFO'}</strong></span>
+                                    </div>
+                                </div>
                                 <div className="toolbar-actions">
                                     <button type="button" className="toolbar-btn" onClick={loadInventoryData}>
                                         <span className="material-symbols-outlined">refresh</span>
@@ -470,7 +508,7 @@ export default function Inventory() {
                                             {isAdmin ? (
                                                 <th className="text-right">Actions</th>
                                             ) : (
-                                                <th className="text-center">Access</th>
+                                                <th className="text-center">Access & Details</th>
                                             )}
                                         </tr>
                                     </thead>
@@ -505,8 +543,22 @@ export default function Inventory() {
                                                                 : ''
                                                         }`}
                                                 >
-                                                    <td className="font-mono sku-code">{item.sku}</td>
-                                                    <td className="item-name">{item.name}</td>
+                                                    <td className="font-mono sku-code" style={{ cursor: 'pointer' }} onClick={() => handleOpenDetails(item)}>
+                                                        <span className="sku-text-link">{item.sku}</span>
+                                                        {item.active_batches_count > 1 && (
+                                                            <span className="sku-batch-pill" title={`${item.active_batches_count} distinct active price batches under this SKU`}>
+                                                                {item.active_batches_count} Batches
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        className="item-name"
+                                                        style={{ cursor: 'pointer' }}
+                                                        onClick={() => handleOpenDetails(item)}
+                                                        title="Click to view batches & price history graph"
+                                                    >
+                                                        {item.name}
+                                                    </td>
                                                     <td className="text-muted">{item.category}</td>
                                                     <td
                                                         className={`text-right font-mono stock-count ${item.statusType === 'warning'
@@ -539,6 +591,16 @@ export default function Inventory() {
                                                             <div className="table-actions-group">
                                                                 <button
                                                                     type="button"
+                                                                    className="action-chart-btn"
+                                                                    title="View Price Changes Graph & Batches"
+                                                                    onClick={() => handleOpenDetails(item)}
+                                                                >
+                                                                    <span className="material-symbols-outlined">show_chart</span>
+                                                                    <span>Graph</span>
+                                                                </button>
+
+                                                                <button
+                                                                    type="button"
                                                                     className="action-restock-btn"
                                                                     title="Restock / Add more units of this part"
                                                                     onClick={() => handleOpenRestockModal(item)}
@@ -568,23 +630,17 @@ export default function Inventory() {
                                                         </td>
                                                     ) : (
                                                         <td className="text-center">
-                                                            <span
-                                                                style={{
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '4px',
-                                                                    fontSize: '11px',
-                                                                    fontFamily: "'JetBrains Mono', monospace",
-                                                                    color: 'var(--text-muted)',
-                                                                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                                                                    padding: '3px 8px',
-                                                                    borderRadius: '4px',
-                                                                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                                                                }}
-                                                            >
-                                                                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>visibility</span>
-                                                                Read Only
-                                                            </span>
+                                                            <div className="table-actions-group" style={{ justifyContent: 'center' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    className="action-chart-btn"
+                                                                    title="View Price Changes Graph & Batches"
+                                                                    onClick={() => handleOpenDetails(item)}
+                                                                >
+                                                                    <span className="material-symbols-outlined">show_chart</span>
+                                                                    <span>Graph</span>
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     )}
                                                 </tr>
@@ -772,6 +828,26 @@ export default function Inventory() {
                             </div>
                         </div>
 
+                        {/* Multi-Batch Valuation Info Card */}
+                        <div style={{
+                            padding: '10px 14px',
+                            background: 'rgba(255, 216, 95, 0.08)',
+                            border: '1px solid rgba(255, 216, 95, 0.25)',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                            fontSize: '12px',
+                            color: '#e2e8f0',
+                            display: 'flex',
+                            gap: '8px',
+                            alignItems: 'flex-start'
+                        }}>
+                            <span className="material-symbols-outlined" style={{ color: '#ffd85f', fontSize: '18px', flexShrink: 0 }}>info</span>
+                            <div>
+                                <strong>Multi-Batch Price Retention:</strong> Earlier stock batches retain their older purchase & selling prices.
+                                This new batch will be added with its new price under SKU <code style={{ color: '#ffd85f' }}>{restockTarget.sku}</code> and sold according to <strong style={{ color: '#ffd85f' }}>{valuationMethod ? valuationMethod.toUpperCase() : 'FIFO'}</strong>.
+                            </div>
+                        </div>
+
                         <form onSubmit={handleRestockSubmit} className="inventory-modal-form">
                             <div className="form-grid-2col">
                                 <div className="form-group">
@@ -791,23 +867,64 @@ export default function Inventory() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="restock_cost">NEW UNIT COST ($)</label>
+                                    <label htmlFor="restock_batch_num">BATCH NUMBER / LOT (OPTIONAL)</label>
                                     <input
-                                        type="number"
-                                        id="restock_cost"
-                                        step="0.01"
-                                        min="0"
-                                        placeholder={restockTarget.unit_cost ? String(restockTarget.unit_cost) : '0.00'}
-                                        value={restockUnitCost}
-                                        onChange={(e) => setRestockUnitCost(e.target.value)}
+                                        type="text"
+                                        id="restock_batch_num"
+                                        placeholder={`e.g. BATCH-${restockTarget.sku}-${Date.now().toString().slice(-4)}`}
+                                        value={restockBatchNumber}
+                                        onChange={(e) => setRestockBatchNumber(e.target.value)}
                                         className="font-mono"
                                     />
                                 </div>
                             </div>
 
+                            <div className="form-grid-2col">
+                                <div className="form-group">
+                                    <label htmlFor="restock_cost">BATCH PURCHASE COST ({currency?.code || currency?.symbol || '$'}) *</label>
+                                    <input
+                                        type="number"
+                                        id="restock_cost"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder={restockTarget.unit_cost !== undefined ? String(restockTarget.unit_cost) : '0.00'}
+                                        value={restockUnitCost}
+                                        onChange={(e) => setRestockUnitCost(e.target.value)}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="restock_price">BATCH SELLING PRICE ({currency?.code || currency?.symbol || '$'}) *</label>
+                                    <input
+                                        type="number"
+                                        id="restock_price"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder={restockTarget.selling_price !== undefined ? String(restockTarget.selling_price) : '0.00'}
+                                        value={restockSellingPrice}
+                                        onChange={(e) => setRestockSellingPrice(e.target.value)}
+                                        className="font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="restock_notes">SUPPLIER / BATCH NOTES (OPTIONAL)</label>
+                                <input
+                                    type="text"
+                                    id="restock_notes"
+                                    placeholder="e.g. Supplier PO #4092, OEM shipment"
+                                    value={restockNotes}
+                                    onChange={(e) => setRestockNotes(e.target.value)}
+                                />
+                            </div>
+
                             {/* Calculation Preview */}
                             <div className="restock-calc-preview">
-                                <span>NEW ESTIMATED STOCK:</span>
+                                <span>NEW ESTIMATED TOTAL STOCK:</span>
                                 <strong className="font-mono text-yellow">
                                     {(parseInt(restockTarget.stock, 10) || 0) + (parseInt(restockQty, 10) || 0)} units
                                 </strong>
@@ -818,7 +935,7 @@ export default function Inventory() {
                                     Cancel
                                 </button>
                                 <button type="submit" className="btn-modal-submit" disabled={isRestocking}>
-                                    {isRestocking ? 'Restocking...' : `+ Restock ${restockQty || 0} Units`}
+                                    {isRestocking ? 'Restocking Batch...' : `+ Restock ${restockQty || 0} Units`}
                                 </button>
                             </div>
                         </form>
@@ -1039,6 +1156,15 @@ export default function Inventory() {
                     </div>
                 </div>
             )}
+
+            {/* Part Details & Price Evolution Graph Modal */}
+            <PartPriceGraphModal
+                isOpen={isDetailsModalOpen}
+                onClose={handleCloseDetails}
+                partId={selectedDetailPartId}
+                valuationMethod={valuationMethod}
+                onRestockRequested={(part) => handleOpenRestockModal(part)}
+            />
         </div>
     );
 }

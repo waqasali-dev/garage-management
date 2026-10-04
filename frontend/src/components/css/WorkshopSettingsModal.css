@@ -816,3 +816,199 @@
         transform: rotate(360deg);
     }
 }
+
+/* Inventory Valuation Strategy Tab */
+.valuation-cards-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.valuation-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.valuation-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 216, 95, 0.3);
+    transform: translateY(-1px);
+}
+
+.valuation-card.selected {
+    background: rgba(255, 216, 95, 0.08);
+    border-color: #ffd85f;
+    box-shadow: 0 4px 20px rgba(255, 216, 95, 0.12);
+}
+
+.valuation-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.valuation-card-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.valuation-card-icon {
+    font-size: 26px;
+    color: #94a3b8;
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.valuation-card.selected .valuation-card-icon.fifo-icon {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.valuation-card.selected .valuation-card-icon.lifo-icon {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+}
+
+.valuation-card.selected .valuation-card-icon.normal-icon {
+    color: #ffd85f;
+    background: rgba(255, 216, 95, 0.15);
+}
+
+.valuation-card-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.valuation-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge-recommended {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-inflation {
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.badge-standard {
+    background: rgba(255, 216, 95, 0.2);
+    color: #ffd85f;
+    border: 1px solid rgba(255, 216, 95, 0.3);
+}
+
+.valuation-radio {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.valuation-card.selected .valuation-radio {
+    border-color: #10b981;
+}
+
+.valuation-card-desc {
+    margin: 0;
+    font-size: 13px;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.valuation-flow-pipeline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+.pipeline-step {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.step-old {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.step-mid {
+    background: rgba(255, 216, 95, 0.15);
+    color: #ffd85f;
+    border: 1px solid rgba(255, 216, 95, 0.3);
+}
+
+.step-new {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.step-standard {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+}
+
+.pipeline-arrow {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.valuation-sim-box {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(255, 216, 95, 0.06);
+    border: 1px solid rgba(255, 216, 95, 0.2);
+}
+
+.valuation-sim-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #ffd85f;
+    margin-bottom: 6px;
+}
+
+.valuation-sim-content p {
+    margin: 0;
+    font-size: 12.5px;
+    color: #e2e8f0;
+    line-height: 1.5;
+}
+

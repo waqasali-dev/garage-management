@@ -522,13 +522,40 @@ router.delete("/:id", async (req, res) => {
             });
         }
 
-        // Restore any allocated inventory parts
+        // Restore any allocated inventory parts to batches & inventory_data
         const allocatedParts = await client.query(
-            "SELECT part_id, quantity_or_hours FROM work_order_items WHERE work_order_id = $1 AND item_type = 'part' AND part_id IS NOT NULL;",
+            "SELECT item_id, part_id, quantity_or_hours FROM work_order_items WHERE work_order_id = $1 AND item_type = 'part' AND part_id IS NOT NULL;",
             [id]
         );
 
         for (const part of allocatedParts.rows) {
+            const allocRes = await client.query(
+                "SELECT allocation_id, batch_id, quantity FROM work_order_item_allocations WHERE item_id = $1;",
+                [part.item_id]
+            );
+            if (allocRes.rows.length > 0) {
+                for (const alloc of allocRes.rows) {
+                    await client.query(
+                        `UPDATE inventory_batches 
+                         SET quantity_remaining = quantity_remaining + $1, updated_at = CURRENT_TIMESTAMP 
+                         WHERE batch_id = $2;`,
+                        [alloc.quantity, alloc.batch_id]
+                    );
+                }
+            } else {
+                // Fallback for legacy records
+                const latestBatch = await client.query(
+                    "SELECT batch_id FROM inventory_batches WHERE part_id = $1 ORDER BY created_at DESC LIMIT 1;",
+                    [part.part_id]
+                );
+                if (latestBatch.rows.length > 0) {
+                    await client.query(
+                        "UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE batch_id = $2;",
+                        [Math.round(parseFloat(part.quantity_or_hours) || 1), latestBatch.rows[0].batch_id]
+                    );
+                }
+            }
+
             const qty = parseFloat(part.quantity_or_hours) || 0;
             if (qty > 0) {
                 await client.query(
@@ -703,10 +730,28 @@ router.patch("/:id/details", async (req, res) => {
 // Line Items Management
 router.post("/:id/items", async (req, res) => {
     const { id } = req.params;
-    const { item_type, part_id, description, quantity_or_hours, unit_price } = req.body;
+    let { item_type, part_id, description, quantity_or_hours, unit_price } = req.body;
 
-    if (!item_type || !description || !unit_price) {
-        return res.status(400).json({ error: "item_type, description, and unit_price are required." });
+    let price = parseFloat(unit_price);
+    if ((isNaN(price) || price === null || unit_price === undefined || unit_price === '') && item_type === 'part' && part_id) {
+        // Query next selling price according to shop FIFO/LIFO/Normal valuation method
+        const settRes = await pool.query("SELECT COALESCE(valuation_method, 'fifo') AS valuation_method FROM workshop_settings WHERE id = 1");
+        const vMethod = settRes.rows[0]?.valuation_method || 'fifo';
+        const batchOrder = vMethod === 'lifo' ? 'ORDER BY created_at DESC, batch_id DESC' : 'ORDER BY created_at ASC, batch_id ASC';
+        const batchRes = await pool.query(
+            `SELECT selling_price FROM inventory_batches WHERE part_id = $1 AND quantity_remaining > 0 ${batchOrder} LIMIT 1;`,
+            [part_id]
+        );
+        if (batchRes.rows.length > 0) {
+            price = parseFloat(batchRes.rows[0].selling_price);
+        } else {
+            const partRes = await pool.query("SELECT selling_price FROM inventory_data WHERE part_id = $1;", [part_id]);
+            price = parseFloat(partRes.rows[0]?.selling_price || 0);
+        }
+    }
+
+    if (!item_type || !description || isNaN(price)) {
+        return res.status(400).json({ error: "item_type, description, and valid unit_price are required." });
     }
 
     const client = await pool.connect();
@@ -714,7 +759,6 @@ router.post("/:id/items", async (req, res) => {
         await client.query("BEGIN");
 
         const qty = parseFloat(quantity_or_hours) || 1.0;
-        const price = parseFloat(unit_price) || 0.0;
 
         const insertItemQuery = `
             INSERT INTO work_order_items (
@@ -737,13 +781,58 @@ router.post("/:id/items", async (req, res) => {
             price,
         ]);
 
-        // If it's a part, decrement inventory stock
+        // If it's a part, decrement inventory stock and allocate from batches according to FIFO/LIFO/Normal
         if (item_type === "part" && part_id) {
+            const pId = parseInt(part_id, 10);
+            let neededQty = Math.round(qty);
+
+            // 1. Get workshop valuation method
+            const settRes = await client.query(
+                "SELECT COALESCE(valuation_method, 'fifo') AS valuation_method FROM workshop_settings WHERE id = 1"
+            );
+            const valuationMethod = settRes.rows[0]?.valuation_method || 'fifo';
+
+            // 2. Fetch active batches
+            // LIFO: newest first (created_at DESC)
+            // FIFO/Normal: oldest first (created_at ASC)
+            const orderClause = valuationMethod === 'lifo' 
+                ? 'ORDER BY created_at DESC, batch_id DESC' 
+                : 'ORDER BY created_at ASC, batch_id ASC';
+
+            const batchesRes = await client.query(
+                `SELECT batch_id, quantity_remaining, unit_cost, selling_price 
+                 FROM inventory_batches 
+                 WHERE part_id = $1 AND quantity_remaining > 0 
+                 ${orderClause} 
+                 FOR UPDATE;`,
+                [pId]
+            );
+
+            for (const batch of batchesRes.rows) {
+                if (neededQty <= 0) break;
+                const deduct = Math.min(neededQty, batch.quantity_remaining);
+
+                await client.query(
+                    `UPDATE inventory_batches 
+                     SET quantity_remaining = quantity_remaining - $1, updated_at = CURRENT_TIMESTAMP 
+                     WHERE batch_id = $2;`,
+                    [deduct, batch.batch_id]
+                );
+
+                await client.query(
+                    `INSERT INTO work_order_item_allocations (item_id, batch_id, quantity, unit_cost, unit_price)
+                     VALUES ($1, $2, $3, $4, $5);`,
+                    [itemResult.rows[0].item_id, batch.batch_id, deduct, batch.unit_cost, batch.selling_price]
+                );
+
+                neededQty -= deduct;
+            }
+
             await client.query(
                 `UPDATE inventory_data 
                  SET stock_quantity = GREATEST(stock_quantity - $1, 0) 
                  WHERE part_id = $2;`,
-                [Math.round(qty), parseInt(part_id, 10)]
+                [Math.round(qty), pId]
             );
             await deleteCachePattern("garage:cache:inventory:*");
         }
@@ -792,19 +881,48 @@ router.delete("/:id/items/:itemId", async (req, res) => {
     try {
         await client.query("BEGIN");
 
-        const deleteResult = await client.query(
-            "DELETE FROM work_order_items WHERE item_id = $1 AND work_order_id = $2 RETURNING *;",
+        const itemRes = await client.query(
+            "SELECT * FROM work_order_items WHERE item_id = $1 AND work_order_id = $2;",
             [parseInt(itemId, 10), id]
         );
 
-        if (deleteResult.rows.length === 0) {
+        if (itemRes.rows.length === 0) {
             await client.query("ROLLBACK");
             return res.status(404).json({ error: "Item not found" });
         }
 
-        const deletedItem = deleteResult.rows[0];
+        const deletedItem = itemRes.rows[0];
 
         if (deletedItem.item_type === "part" && deletedItem.part_id) {
+            const allocRes = await client.query(
+                "SELECT allocation_id, batch_id, quantity FROM work_order_item_allocations WHERE item_id = $1;",
+                [deletedItem.item_id]
+            );
+
+            if (allocRes.rows.length > 0) {
+                for (const alloc of allocRes.rows) {
+                    await client.query(
+                        `UPDATE inventory_batches 
+                         SET quantity_remaining = quantity_remaining + $1, updated_at = CURRENT_TIMESTAMP 
+                         WHERE batch_id = $2;`,
+                        [alloc.quantity, alloc.batch_id]
+                    );
+                }
+                await client.query("DELETE FROM work_order_item_allocations WHERE item_id = $1;", [deletedItem.item_id]);
+            } else {
+                // Fallback for legacy records: restore to most recent batch
+                const latestBatch = await client.query(
+                    "SELECT batch_id FROM inventory_batches WHERE part_id = $1 ORDER BY created_at DESC LIMIT 1;",
+                    [deletedItem.part_id]
+                );
+                if (latestBatch.rows.length > 0) {
+                    await client.query(
+                        "UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE batch_id = $2;",
+                        [Math.round(parseFloat(deletedItem.quantity_or_hours) || 1), latestBatch.rows[0].batch_id]
+                    );
+                }
+            }
+
             const returnQty = Math.round(parseFloat(deletedItem.quantity_or_hours) || 1);
             await client.query(
                 `UPDATE inventory_data 
@@ -814,6 +932,12 @@ router.delete("/:id/items/:itemId", async (req, res) => {
             );
             await deleteCachePattern("garage:cache:inventory:*");
         }
+
+        // Delete the item record now that allocations have been safely restored to batches
+        await client.query(
+            "DELETE FROM work_order_items WHERE item_id = $1 AND work_order_id = $2;",
+            [parseInt(itemId, 10), id]
+        );
 
         const calcQuery = `
             UPDATE work_order_data 

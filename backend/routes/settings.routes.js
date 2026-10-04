@@ -23,6 +23,7 @@ router.get("/", async (req, res) => {
                 currency_decimals,
                 workshop_name,
                 working_hours,
+                COALESCE(valuation_method, 'fifo') AS valuation_method,
                 updated_at
             FROM workshop_settings
             WHERE id = 1;
@@ -71,6 +72,7 @@ router.put("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
         currency_decimals,
         workshop_name,
         working_hours,
+        valuation_method,
         recalculate_pending = false,
     } = req.body;
 
@@ -85,6 +87,17 @@ router.put("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
         const cleanSymbol = (currency_symbol || cleanCode).trim().slice(0, 10);
         const decimals = currency_decimals !== undefined ? Math.max(0, Math.min(4, parseInt(currency_decimals, 10))) : (cleanCode === 'OMR' || cleanCode === 'KWD' || cleanCode === 'BHD' ? 3 : 2);
         const name = (workshop_name || "Precision Garage").trim().slice(0, 100);
+
+        // Validation for valuation_method
+        let cleanValuation = null;
+        if (valuation_method !== undefined && valuation_method !== null) {
+            const v = String(valuation_method).toLowerCase().trim();
+            if (['fifo', 'lifo', 'normal'].includes(v)) {
+                cleanValuation = v;
+            } else {
+                return res.status(400).json({ error: "Valuation method must be one of: 'fifo', 'lifo', 'normal'." });
+            }
+        }
 
         // Validation for working_hours
         let cleanWorkingHours = null;
@@ -138,8 +151,8 @@ router.put("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
         }
 
         const updateQuery = `
-            INSERT INTO workshop_settings (id, tax_percentage, currency_code, currency_symbol, currency_decimals, workshop_name, working_hours, updated_at)
-            VALUES (1, $1, $2, $3, $4, $5, COALESCE($6::JSONB, (SELECT working_hours FROM workshop_settings WHERE id = 1)), CURRENT_TIMESTAMP)
+            INSERT INTO workshop_settings (id, tax_percentage, currency_code, currency_symbol, currency_decimals, workshop_name, working_hours, valuation_method, updated_at)
+            VALUES (1, $1, $2, $3, $4, $5, COALESCE($6::JSONB, (SELECT working_hours FROM workshop_settings WHERE id = 1)), COALESCE($7, 'fifo'), CURRENT_TIMESTAMP)
             ON CONFLICT (id) DO UPDATE SET
                 tax_percentage = EXCLUDED.tax_percentage,
                 currency_code = EXCLUDED.currency_code,
@@ -147,6 +160,7 @@ router.put("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
                 currency_decimals = EXCLUDED.currency_decimals,
                 workshop_name = EXCLUDED.workshop_name,
                 working_hours = CASE WHEN $6::JSONB IS NOT NULL THEN $6::JSONB ELSE workshop_settings.working_hours END,
+                valuation_method = CASE WHEN $7 IS NOT NULL THEN $7 ELSE workshop_settings.valuation_method END,
                 updated_at = CURRENT_TIMESTAMP
             RETURNING 
                 id,
@@ -156,6 +170,7 @@ router.put("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
                 currency_decimals,
                 workshop_name,
                 working_hours,
+                COALESCE(valuation_method, 'fifo') AS valuation_method,
                 updated_at;
         `;
         const result = await pool.query(updateQuery, [
@@ -165,6 +180,7 @@ router.put("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
             decimals,
             name,
             cleanWorkingHours ? JSON.stringify(cleanWorkingHours) : null,
+            cleanValuation,
         ]);
 
         const updatedSettings = result.rows[0];
