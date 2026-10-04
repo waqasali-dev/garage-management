@@ -230,6 +230,7 @@ export const handleIntake = async (req, res) => {
         await deleteCachePattern("garage:cache:owner:vehicles:*");
         await deleteCachePattern("garage:cache:vehicle:*");
         await deleteCachePattern("garage:cache:dashboard:*");
+        await deleteCachePattern("garage:cache:staff:*");
         await setCache(`garage:cache:vehicle:vin:${sanitizedVin}`, responseData, 3600);
         await setCache(`garage:cache:workorder:${createdWorkOrder.work_order_id}`, responseData, 3600);
 
@@ -559,6 +560,7 @@ router.delete("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:owner:vehicles:*");
         await deleteCachePattern("garage:cache:vehicle:*");
         await deleteCachePattern("garage:cache:owners:*");
+        await deleteCachePattern("garage:cache:staff:*");
 
         res.json({
             success: true,
@@ -647,6 +649,7 @@ router.patch("/:id/status", async (req, res) => {
         await deleteCachePattern("garage:cache:owner:vehicles:*");
         await deleteCachePattern("garage:cache:vehicle:*");
         await deleteCachePattern("garage:cache:dashboard:*");
+        await deleteCachePattern("garage:cache:staff:*");
 
         res.json({ success: true, message: `Status updated to ${status}`, data: result.rows[0] });
     } catch (err) {
@@ -688,6 +691,7 @@ router.patch("/:id/details", async (req, res) => {
 
         await deleteCachePattern("garage:cache:workorders:*");
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:staff:*");
 
         res.json({ success: true, message: "Work order details updated", data: result.rows[0] });
     } catch (err) {

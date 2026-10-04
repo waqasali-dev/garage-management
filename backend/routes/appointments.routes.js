@@ -836,6 +836,7 @@ router.patch("/:id/cancel", async (req, res) => {
         await deleteCachePattern("garage:cache:bays:*");
         await deleteCachePattern("garage:cache:owner:*");
         await deleteCachePattern("garage:cache:vehicles:*");
+        await deleteCachePattern("garage:cache:staff:*");
 
         res.json({
             success: true,
@@ -1091,6 +1092,7 @@ router.delete("/:id", async (req, res) => {
         await deleteCachePattern("garage:cache:bays:*");
         await deleteCachePattern("garage:cache:owner:*");
         await deleteCachePattern("garage:cache:vehicle:*");
+        await deleteCachePattern("garage:cache:staff:*");
 
         res.json({
             success: true,

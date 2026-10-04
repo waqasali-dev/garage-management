@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import StyledLoading from './StyledLoading';
 import SearchIcon from '@mui/icons-material/Search';
@@ -12,6 +13,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import './css/Staff.css';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
@@ -39,6 +41,7 @@ const INITIAL_STAFF_FORM = {
 };
 
 export default function Staff() {
+    const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [staffList, setStaffList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -438,7 +441,9 @@ export default function Staff() {
                                         return (
                                             <div
                                                 key={member.id}
-                                                className={`staff-card ${suspended ? 'staff-card-suspended' : ''}`}
+                                                className={`staff-card staff-card-interactive ${suspended ? 'staff-card-suspended' : ''}`}
+                                                onClick={() => navigate(`/staff/${member.id}`)}
+                                                title={`Click to view ${member.name}'s profile & managed cars`}
                                             >
                                                 <div className="card-top">
                                                     <div className="profile-group">
@@ -485,7 +490,7 @@ export default function Staff() {
 
                                                 <div className="card-bottom">
                                                     <div className="workload-info">
-                                                        <span className="text-muted">Workload Capacity</span>
+                                                        <span className="text-muted">Garage Work Share</span>
                                                         <span
                                                             className={
                                                                 suspended
@@ -514,6 +519,19 @@ export default function Staff() {
                                                 </div>
 
                                                 <div className="card-actions-row">
+                                                    <button
+                                                        type="button"
+                                                        className="staff-profile-btn font-mono"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/staff/${member.id}`);
+                                                        }}
+                                                        title={`Open detailed employee profile for ${member.name}`}
+                                                    >
+                                                        <span>Profile & Cars</span>
+                                                        <ArrowForwardIcon style={{ fontSize: 13 }} />
+                                                    </button>
+
                                                     {suspended ? (
                                                         <button
                                                             type="button"

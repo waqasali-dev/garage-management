@@ -20,6 +20,7 @@ const Scheduling = lazy(() => import('./components/Scheduling'));
 const Inventory = lazy(() => import('./components/Inventory'));
 const Invoices = lazy(() => import('./components/Invoices'));
 const Staff = lazy(() => import('./components/Staff'));
+const StaffDetail = lazy(() => import('./components/StaffDetail'));
 const StaffLogin = lazy(() => import('./components/StaffLogin'));
 const AuditLog = lazy(() => import('./components/AuditLog'));
 const UserManagement = lazy(() => import('./components/UserManagement'));
@@ -174,6 +175,22 @@ function App() {
                         element={
                             <ProtectedRoute allowedRoles={['admin']}>
                                 <Staff />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/staff/:id"
+                        element={
+                            <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                                <StaffDetail />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/staff/details"
+                        element={
+                            <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                                <StaffDetail />
                             </ProtectedRoute>
                         }
                     />
