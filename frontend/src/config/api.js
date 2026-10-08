@@ -15,7 +15,7 @@ const isLocalhost = typeof window !== 'undefined' &&
 
 export const API_BASE_URL = rawUrl
     ? formatApiUrl(rawUrl)
-    : (isLocalhost ? 'http://localhost:5000/api' : 'https://garage-management-hy5h.onrender.com/api');
+    : (isLocalhost ? 'http://localhost:5000/api' : (process.env.REACT_APP_API_URL));
 
 
 // ==============================================================================
