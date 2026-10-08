@@ -122,7 +122,7 @@ export default function WorkOrders() {
     });
 
     // KPI Metrics calculation
-    const inBayCount = workOrders.filter((w) => w.status === 'in_progress' || w.bay_assigned).length;
+    const inProgressCount = workOrders.filter((w) => w.status === 'in_progress').length;
     const receivedCount = workOrders.filter((w) => w.status === 'received').length;
     const scheduledCount = workOrders.filter((w) => w.status === 'scheduled').length;
     const diagnosedCount = workOrders.filter((w) => w.status === 'diagnosed').length;
@@ -246,7 +246,7 @@ export default function WorkOrders() {
                                     { key: 'received', step: '01', label: 'Received', icon: 'pending_actions', count: receivedCount, color: '#38bdf8' },
                                     { key: 'scheduled', step: '02', label: 'Scheduled', icon: 'calendar_month', count: scheduledCount, color: '#34d399' },
                                     { key: 'diagnosed', step: '03', label: 'Diagnosed', icon: 'handyman', count: diagnosedCount, color: '#c084fc' },
-                                    { key: 'in_progress', step: '04', label: 'In Progress', icon: 'build', count: inBayCount, color: '#fbbf24' },
+                                    { key: 'in_progress', step: '04', label: 'In Progress', icon: 'build', count: inProgressCount, color: '#fbbf24' },
                                     { key: 'ready', step: '05', label: 'Ready for Pickup', icon: 'task_alt', count: readyPickupCount, color: '#2dd4bf' },
                                     { key: 'completed', step: '06', label: 'Completed', icon: 'check_circle', count: completedCount, color: '#10b981' },
                                 ].map((s) => (
@@ -315,7 +315,7 @@ export default function WorkOrders() {
                                             <th>Status</th>
                                             <th>Lead Tech</th>
                                             <th>Bay</th>
-                                            <th>Total Cost ({currency.code || currency.symbol})</th>
+                                            <th>Total Cost ({currency?.code || currency?.symbol || '$'})</th>
                                             <th>Date In</th>
                                             <th className="text-right">Action</th>
                                         </tr>
