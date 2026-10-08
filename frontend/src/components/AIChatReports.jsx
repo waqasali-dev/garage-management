@@ -175,10 +175,29 @@ export default function AIChatReports() {
         e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
     };
 
-    const handleCopyContent = (text, idx) => {
-        navigator.clipboard.writeText(text);
-        setCopiedIndex(idx);
-        setTimeout(() => setCopiedIndex(null), 2500);
+    const handleCopyContent = async (text, idx) => {
+        if (!text) return;
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (!successful) throw new Error('Copy command failed');
+            }
+            setCopiedIndex(idx);
+            setTimeout(() => setCopiedIndex(null), 2500);
+        } catch (err) {
+            console.warn('Failed to copy content to clipboard:', err);
+        }
     };
 
     const handleClearChat = () => {
