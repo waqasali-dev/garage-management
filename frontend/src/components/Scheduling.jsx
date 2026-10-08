@@ -484,9 +484,9 @@ export default function Scheduling() {
     };
 
     // Delete Task
-    const handleDeleteTask = async (taskId, e) => {
+    const handleDeleteTask = async (taskId, e, skipConfirm = false) => {
         if (e) e.stopPropagation();
-        if (!window.confirm('Are you sure you want to remove this scheduled task?')) return;
+        if (!skipConfirm && !window.confirm('Are you sure you want to remove this scheduled task?')) return;
 
         try {
             const res = await fetch(`${API_BASE_URL}/schedules/${taskId}`, {
@@ -496,6 +496,13 @@ export default function Scheduling() {
                 showNotification('Task deleted from schedule', 'info');
                 fetchSchedules();
                 fetchEligibleWorkOrders();
+                setSelectedBayDetails((prev) => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        tasks: prev.tasks.filter((t) => (t.task_id || t.id) !== taskId),
+                    };
+                });
             }
         } catch (err) {
             showNotification(`Error: ${err.message}`, 'error');
@@ -1788,7 +1795,7 @@ export default function Scheduling() {
                                     style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.4)' }}
                                     onClick={(e) => {
                                         if (window.confirm('Are you sure you want to remove this scheduled appointment/task?')) {
-                                            handleDeleteTask(editTaskForm.task_id, e);
+                                            handleDeleteTask(editTaskForm.task_id, e, true);
                                             setIsEditTaskModalOpen(false);
                                         }
                                     }}
@@ -1926,10 +1933,7 @@ export default function Scheduling() {
                                                     <button
                                                         type="button"
                                                         className="btn-detail-delete"
-                                                        onClick={async (e) => {
-                                                            await handleDeleteTask(task.task_id, e);
-                                                            setSelectedBayDetails(null);
-                                                        }}
+                                                        onClick={(e) => handleDeleteTask(task.task_id, e)}
                                                     >
                                                         <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>cancel</span>
                                                         <span>Cancel Task</span>
