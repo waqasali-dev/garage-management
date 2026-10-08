@@ -68,11 +68,26 @@ export default function TaxInvoiceModal({ invoice, onClose, onInvoiceUpdated }) 
     const vehicleModel = `${invoice.year || ''} ${invoice.make || ''} ${invoice.model || ''}`.trim() || 'Vehicle';
     const vehicleVin = invoice.vin ? `${invoice.vin}` : '196320 Kms';
     const invoiceId = invoice.invoice_id || `INV-${invoice.work_order_id || '82-4756'}`;
-    const dateIssued = invoice.date_issued || new Date().toISOString().split('T')[0];
-
-    // Format date as DD-MM-YY
-    const dateParts = dateIssued.split('-');
-    const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0].slice(2)}` : dateIssued;
+    // Format date as DD-MM-YY safely from YYYY-MM-DD, ISO string, or Date
+    let formattedDate = '--';
+    const rawDateStr = invoice.date_issued
+        ? (typeof invoice.date_issued === 'string' ? invoice.date_issued : new Date(invoice.date_issued).toISOString())
+        : new Date().toISOString();
+    const dateOnly = rawDateStr.split('T')[0].trim();
+    const dateParts = dateOnly.split('-');
+    if (dateParts.length === 3 && dateParts[0].length === 4) {
+        formattedDate = `${dateParts[2].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}-${dateParts[0].slice(-2)}`;
+    } else {
+        const d = new Date(rawDateStr);
+        if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = String(d.getFullYear()).slice(-2);
+            formattedDate = `${day}-${month}-${year}`;
+        } else {
+            formattedDate = dateOnly || '--';
+        }
+    }
 
     // Items list resolution
     const rawItems = invoice.items || [];
