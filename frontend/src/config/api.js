@@ -2,12 +2,21 @@
 // BACKEND API CONFIGURATION & GLOBAL REQUEST DEDUPLICATION
 // ==============================================================================
 
-const isLocalhost = typeof window !== 'undefined' && 
+const rawUrl = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL;
+
+const formatApiUrl = (url) => {
+    if (!url) return '';
+    const clean = url.trim().replace(/\/+$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
+};
+
+const isLocalhost = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-export const API_BASE_URL = isLocalhost 
-    ? 'http://localhost:5000/api'
-    : (process.env.REACT_APP_API_URL || 'https://garage-management-hy5h.onrender.com/api');
+export const API_BASE_URL = rawUrl
+    ? formatApiUrl(rawUrl)
+    : (isLocalhost ? 'http://localhost:5000/api' : 'https://garage-management-hy5h.onrender.com/api');
+
 
 // ==============================================================================
 // 🛡️ GLOBAL IN-FLIGHT MUTEX & AUTH / IDEMPOTENCY INTERCEPTOR

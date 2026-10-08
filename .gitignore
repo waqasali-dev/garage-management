@@ -1,9 +1,12 @@
 # Environment Variables
 .env
 .env.*
+*.env
+backend/.env*
+frontend/.env*
 !.env.example
-backend/.env
-frontend/.env
+!backend/.env.example
+!frontend/.env.example
 
 # Dependencies
 node_modules/

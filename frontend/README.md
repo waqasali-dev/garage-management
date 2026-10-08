@@ -188,17 +188,21 @@ garage_management/
 
 ### Frontend (`frontend/.env`)
 ```env
-REACT_APP_API_BASE_URL=https://garage-management-hy5h.onrender.com/api
+REACT_APP_API_URL=https://your-backend-api.onrender.com/api
 # For local backend development:
-# REACT_APP_API_BASE_URL=http://localhost:5000/api
+# REACT_APP_API_URL=http://localhost:5000/api
 ```
 
 ### Backend (`backend/.env`)
 ```env
 PORT=5000
-DATABASE_URL=postgresql://neondb_owner:npg_MnEUA5DI8rGd@ep-square-lab-axos9voe-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-UPSTASH_REDIS_REST_URL=https://on-basilisk-103918.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_upstash_token_here
+DATABASE_URL=postgresql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>/<DB_NAME>?sslmode=require
+UPSTASH_REDIS_REST_URL=https://your-redis-instance.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token_here
+JWT_SECRET=your_jwt_secret_key_here
+JWT_EXPIRES_IN=7d
+PG_MAX_CONNECTIONS=10
+FRONTEND_URL=http://localhost:3000
 ```
 
 ---

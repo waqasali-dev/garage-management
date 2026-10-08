@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
 
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL || "https://on-basilisk-103918.upstash.io";
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL || "";
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_TOKEN || "";
 
 let redis = null;
