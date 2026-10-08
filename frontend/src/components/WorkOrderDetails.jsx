@@ -599,12 +599,14 @@ export default function WorkOrderDetails() {
         );
     }
 
-    // Financial totals
+    // Financial totals: calculate from items breakdown, or fallback to intake total_cost / estimated_cost
     const itemsList = order.items || [];
-    const subtotal = itemsList.reduce(
+    const itemsSum = itemsList.reduce(
         (sum, item) => sum + parseFloat(item.total_price || (item.quantity_or_hours * item.unit_price) || 0),
         0
     );
+    const fallbackCost = parseFloat(order.total_cost || order.estimated_cost || 0);
+    const subtotal = itemsList.length > 0 ? itemsSum : fallbackCost;
     const total = subtotal;
 
     // Timeline list
@@ -1021,7 +1023,9 @@ export default function WorkOrderDetails() {
                                             <tfoot>
                                                 <tr className="total-row">
                                                     <td colSpan="3"></td>
-                                                    <td className="text-right total-label font-mono">Grand Total</td>
+                                                    <td className="text-right total-label font-mono">
+                                                        {itemsList.length === 0 && fallbackCost > 0 ? 'Estimated Total' : 'Grand Total'}
+                                                    </td>
                                                     <td className="text-right total-amount font-mono" colSpan="2">
                                                         {formatCurrency(total)}
                                                     </td>
