@@ -859,72 +859,62 @@ export default function WorkOrderDetails() {
                                 </div>
                             </div>
 
-                            <div className="stepper-scroll-wrapper">
-                                <div className="stepper-stages-track">
-                                    {statusSteps.map((step, idx) => {
-                                        const isCompleted = currentStepIdx > -1 && currentStepIdx > idx;
-                                        const isActive = currentStepIdx === idx;
-                                        const isPending = currentStepIdx === -1 || currentStepIdx < idx;
-                                        const isLocked = order.status === 'completed';
-                                        const hasLeftConnector = idx > 0;
-                                        const hasRightConnector = idx < statusSteps.length - 1;
-                                        const isLeftFilled = currentStepIdx > -1 && currentStepIdx >= idx;
-                                        const isRightFilled = currentStepIdx > -1 && currentStepIdx > idx;
+                            {/* Adaptive Stage-to-Stage Stepper Track (No Scroller, 100% Screen Responsive) */}
+                            <div className="stepper-stages-track">
+                                {statusSteps.map((step, idx) => {
+                                    const isCompleted = currentStepIdx > -1 && currentStepIdx > idx;
+                                    const isActive = currentStepIdx === idx;
+                                    const isPending = currentStepIdx === -1 || currentStepIdx < idx;
+                                    const isLocked = order.status === 'completed';
+                                    const hasLeftLine = idx > 0;
+                                    const isLineFilled = currentStepIdx > -1 && currentStepIdx >= idx;
 
-                                        return (
-                                            <div
-                                                key={step.key}
-                                                className={`stepper-stage ${isCompleted ? 'is-completed' : ''} ${isActive ? 'is-active' : ''} ${isPending ? 'is-pending' : ''} ${isLocked ? 'is-locked' : ''}`}
-                                                onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
-                                                onKeyDown={(e) => {
-                                                    if (!isLocked && (e.key === 'Enter' || e.key === ' ')) {
-                                                        e.preventDefault();
-                                                        handleStatusChange(step.key);
-                                                    }
-                                                }}
-                                                role="button"
-                                                tabIndex={isLocked ? -1 : 0}
-                                                title={isLocked ? "Car picked up — status is permanently locked" : `Click to transition to ${step.label}`}
-                                            >
-                                                {/* Stage Node Row with Half Connectors */}
-                                                <div className="stage-node-row">
-                                                    {/* Left Connector (bridges from previous stage column) */}
-                                                    {hasLeftConnector && (
-                                                        <div className="stage-connector connector-left">
-                                                            <div className={`connector-fill ${isLeftFilled ? 'filled' : ''}`} />
-                                                        </div>
-                                                    )}
-
-                                                    {/* Circle Node */}
-                                                    <div className={`stage-circle ${isActive ? 'pulse-glow' : ''}`}>
-                                                        <span className="material-symbols-outlined">
-                                                            {isCompleted ? 'check' : step.icon}
-                                                        </span>
-                                                        {isActive && <span className="stage-active-pulse-ring" />}
+                                    return (
+                                        <div
+                                            key={step.key}
+                                            className={`stepper-stage ${isCompleted ? 'is-completed' : ''} ${isActive ? 'is-active' : ''} ${isPending ? 'is-pending' : ''} ${isLocked ? 'is-locked' : ''}`}
+                                            onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
+                                            onKeyDown={(e) => {
+                                                if (!isLocked && (e.key === 'Enter' || e.key === ' ')) {
+                                                    e.preventDefault();
+                                                    handleStatusChange(step.key);
+                                                }
+                                            }}
+                                            role="button"
+                                            tabIndex={isLocked ? -1 : 0}
+                                            title={isLocked ? "Car picked up — status is permanently locked" : `Click to transition to ${step.label}`}
+                                        >
+                                            {/* Stage Node Row with Full Left Connector */}
+                                            <div className="stage-node-row">
+                                                {/* Full line on the left side: connects previous stage (idx - 1) to this stage (idx) */}
+                                                {hasLeftLine && (
+                                                    <div className="stage-connector-full">
+                                                        <div className={`connector-fill ${isLineFilled ? 'filled' : ''}`} />
                                                     </div>
+                                                )}
 
-                                                    {/* Right Connector (bridges to next stage column) */}
-                                                    {hasRightConnector && (
-                                                        <div className="stage-connector connector-right">
-                                                            <div className={`connector-fill ${isRightFilled ? 'filled' : ''}`} />
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Stage Metadata / Label */}
-                                                <div className="stage-meta">
-                                                    <span className="stage-step-num font-mono">
-                                                        {isCompleted ? `STEP 0${idx + 1} ✓` : `STEP 0${idx + 1}`}
+                                                {/* Circle Node */}
+                                                <div className={`stage-circle ${isActive ? 'pulse-glow' : ''}`}>
+                                                    <span className="material-symbols-outlined">
+                                                        {isCompleted ? 'check' : step.icon}
                                                     </span>
-                                                    <span className="stage-label">
-                                                        <span className="label-full">{step.label}</span>
-                                                        <span className="label-short">{step.shortLabel || step.label}</span>
-                                                    </span>
+                                                    {isActive && <span className="stage-active-pulse-ring" />}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
+
+                                            {/* Stage Metadata / Label */}
+                                            <div className="stage-meta">
+                                                <span className="stage-step-num font-mono">
+                                                    {isCompleted ? `STEP 0${idx + 1} ✓` : `STEP 0${idx + 1}`}
+                                                </span>
+                                                <span className="stage-label">
+                                                    <span className="label-full">{step.label}</span>
+                                                    <span className="label-short">{step.shortLabel || step.label}</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </section>
 

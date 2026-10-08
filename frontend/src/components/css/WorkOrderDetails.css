@@ -268,26 +268,27 @@
     background-color: var(--bg-olive-card);
     border: 1px solid var(--border-glass);
     border-radius: 14px;
-    padding: 24px;
+    padding: 28px 28px 26px 28px;
+    margin-top: 16px;
     margin-bottom: 24px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .stepper-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 14px;
 }
 
 .stepper-title-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
@@ -295,16 +296,20 @@
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+    line-height: 1.3;
 }
 
 .customer-booking-badge {
     font-size: 11px;
-    padding: 3px 10px;
+    padding: 4px 10px;
     border-radius: 12px;
     background: rgba(52, 211, 153, 0.15);
     color: #34d399;
     border: 1px solid rgba(52, 211, 153, 0.35);
     font-weight: 600;
+    line-height: 1.2;
+    display: inline-flex;
+    align-items: center;
 }
 
 .stepper-status-badge-group {
@@ -342,14 +347,7 @@
     margin-left: 4px;
 }
 
-/* Stepper Track & Scroll Wrapper */
-.stepper-scroll-wrapper {
-    width: 100%;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    padding-bottom: 6px;
-}
-
+/* Stepper Track - Adapts 100% to screen width, zero horizontal scrollbar */
 .stepper-stages-track {
     display: flex;
     width: 100%;
@@ -357,6 +355,7 @@
     justify-content: space-between;
     min-width: 0;
     position: relative;
+    overflow: visible;
 }
 
 /* Individual Stage Column - Mathematically Equidistant flex: 1 */
@@ -369,15 +368,11 @@
     position: relative;
     cursor: pointer;
     user-select: none;
-    transition: transform 0.2s ease;
+    /* Do NOT translateY .stepper-stage on hover so connecting line stays perfectly locked! */
 }
 
 .stepper-stage.is-locked {
     cursor: not-allowed !important;
-}
-
-.stepper-stage:not(.is-locked):hover {
-    transform: translateY(-2px);
 }
 
 /* Stage Node Row */
@@ -390,9 +385,11 @@
     height: 48px;
 }
 
-/* Connector Lines - Mathematical Stage-to-Stage Bridge */
-.stage-connector {
+/* Full Left-Side Connecting Line: Spans 100% from previous stage circle to this stage circle */
+.stage-connector-full {
     position: absolute;
+    left: -50%;
+    right: 50%;
     top: 50%;
     height: 3px;
     transform: translateY(-50%);
@@ -400,16 +397,7 @@
     z-index: 1;
     overflow: hidden;
     border-radius: 2px;
-}
-
-.stage-connector.connector-left {
-    left: -0.5px;
-    right: 50%;
-}
-
-.stage-connector.connector-right {
-    left: 50%;
-    right: -0.5px;
+    pointer-events: none;
 }
 
 .connector-fill {
@@ -437,7 +425,7 @@
     justify-content: center;
     color: var(--text-muted);
     z-index: 2;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
@@ -446,17 +434,22 @@
     transition: transform 0.2s ease;
 }
 
+/* Hover effect ONLY on circle node — line remains rock solid! */
+.stepper-stage:not(.is-locked):hover .stage-circle {
+    transform: scale(1.1);
+    box-shadow: 0 0 16px rgba(255, 216, 95, 0.45);
+}
+
+.stepper-stage:not(.is-locked):hover .stage-label {
+    color: var(--accent-yellow);
+}
+
 /* Circle States */
 .stepper-stage.is-completed .stage-circle {
     background: linear-gradient(135deg, #ffd85f 0%, #eab308 100%);
     border-color: #ffd85f;
     color: #161e18;
     box-shadow: 0 0 14px rgba(255, 216, 95, 0.35);
-}
-
-.stepper-stage.is-completed:not(.is-locked):hover .stage-circle {
-    transform: scale(1.08);
-    box-shadow: 0 0 18px rgba(255, 216, 95, 0.5);
 }
 
 .stepper-stage.is-active .stage-circle {
@@ -501,7 +494,6 @@
     border-color: rgba(255, 216, 95, 0.5);
     color: var(--text-main);
     opacity: 1;
-    transform: scale(1.08);
 }
 
 /* Stage Label Metadata */
@@ -565,6 +557,55 @@
     font-size: 18px;
     font-weight: 600;
     margin: 0 0 24px 0;
+}
+
+/* Responsive Scaling: Zero horizontal scroll, pure fluid adaptation */
+@media (max-width: 1100px) {
+    .label-full {
+        display: none;
+    }
+    .label-short {
+        display: inline;
+    }
+}
+
+@media (max-width: 860px) {
+    .stage-circle {
+        width: 38px;
+        height: 38px;
+    }
+    .stage-circle .material-symbols-outlined {
+        font-size: 18px;
+    }
+    .stage-label {
+        font-size: 11px;
+    }
+    .stepper-card {
+        padding: 22px 16px 20px 16px;
+    }
+}
+
+@media (max-width: 600px) {
+    .stage-circle {
+        width: 32px;
+        height: 32px;
+    }
+    .stage-circle .material-symbols-outlined {
+        font-size: 15px;
+    }
+    .stage-node-row {
+        height: 38px;
+    }
+    .stage-step-num {
+        font-size: 8.5px;
+    }
+    .stage-label {
+        font-size: 9.5px;
+        line-height: 1.2;
+    }
+    .stepper-card {
+        padding: 18px 12px 16px 12px;
+    }
 }
 
 /* Two Column Layout */
@@ -1137,10 +1178,6 @@
 
     .details-main {
         padding: 16px;
-    }
-
-    .stepper-stages-track {
-        min-width: 520px;
     }
 
     .label-full {
