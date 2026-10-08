@@ -43,6 +43,7 @@ export default function CarServiceHistory() {
     const { vin: paramVin } = useParams();
     const navigate = useNavigate();
     const { formatCurrency, taxPercentage } = useCurrency();
+    const activeTaxRate = parseFloat(taxPercentage) || 0;
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const [vinInput, setVinInput] = useState(paramVin ? decodeURIComponent(paramVin).toUpperCase() : '');
@@ -234,7 +235,7 @@ export default function CarServiceHistory() {
                                         <div className="hero-stat-item">
                                             <span className="hero-stat-lbl">Lifetime Maintenance Spend</span>
                                             <span className="hero-stat-val font-mono" style={{ color: 'var(--accent-yellow)' }}>
-                                                ${historyData.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {formatCurrency(historyData.totalSpent || 0)}
                                             </span>
                                         </div>
                                         <div className="hero-stat-item">
@@ -398,8 +399,8 @@ export default function CarServiceHistory() {
                                                             </div>
 
                                                             <div className="t-cost-total">
-                                                                <span>TOTAL SERVICE INVOICE (INCL. {taxPercentage}% TAX): </span>
-                                                                <span>{formatCurrency(wo.total_with_tax || (parseFloat(wo.total_cost || wo.estimated_cost || 0) * (1 + (taxPercentage / 100))))}</span>
+                                                                <span>TOTAL SERVICE INVOICE (INCL. {activeTaxRate}% TAX): </span>
+                                                                <span>{formatCurrency(wo.total_with_tax || (parseFloat(wo.total_cost || wo.estimated_cost || 0) * (1 + (activeTaxRate / 100))))}</span>
                                                             </div>
                                                         </div>
                                                     </article>
