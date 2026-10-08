@@ -672,12 +672,15 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                                         {/* Shift segments */}
                                         {shifts.map((s, i) => {
                                             const sMin = timeToMinutes(s.start);
-                                            const eMin = timeToMinutes(s.end);
-                                            const dayStart = 6 * 60; // 06:00
-                                            const dayTotal = 18 * 60; // 18 hours span (06:00 to 24:00)
+                                            let eMin = timeToMinutes(s.end);
+                                            if (eMin <= sMin && (s.end === '00:00' || s.end === '24:00')) {
+                                                eMin = 24 * 60;
+                                            }
+                                            const dayStart = 0; // 00:00 (full 24-hour cycle)
+                                            const dayTotal = 24 * 60; // 24 hours span (1440 minutes)
 
                                             const leftPct = Math.max(0, Math.min(100, ((sMin - dayStart) / dayTotal) * 100));
-                                            const widthPct = Math.max(2, Math.min(100 - leftPct, ((eMin - sMin) / dayTotal) * 100));
+                                            const widthPct = Math.max(1.5, Math.min(100 - leftPct, ((eMin - sMin) / dayTotal) * 100));
 
                                             return (
                                                 <div
@@ -694,9 +697,12 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                                         {/* Break segments */}
                                         {breaks.map((b, i) => {
                                             const sMin = timeToMinutes(b.start);
-                                            const eMin = timeToMinutes(b.end);
-                                            const dayStart = 6 * 60;
-                                            const dayTotal = 18 * 60;
+                                            let eMin = timeToMinutes(b.end);
+                                            if (eMin <= sMin && (b.end === '00:00' || b.end === '24:00')) {
+                                                eMin = 24 * 60;
+                                            }
+                                            const dayStart = 0; // 00:00 (full 24-hour cycle)
+                                            const dayTotal = 24 * 60; // 24 hours span (1440 minutes)
 
                                             const leftPct = Math.max(0, Math.min(100, ((sMin - dayStart) / dayTotal) * 100));
                                             const widthPct = Math.max(1, Math.min(100 - leftPct, ((eMin - sMin) / dayTotal) * 100));
@@ -714,8 +720,10 @@ export default function WorkshopSettingsModal({ isOpen, onClose, onSaved }) {
                                         })}
                                     </div>
 
-                                    {/* Timeline Hour Marks */}
+                                    {/* Timeline Hour Marks (Full 24-hour cycle from 00:00 to 24:00) */}
                                     <div className="timeline-markers-row font-mono">
+                                        <span>00:00</span>
+                                        <span>03:00</span>
                                         <span>06:00</span>
                                         <span>09:00</span>
                                         <span>12:00</span>
