@@ -32,21 +32,21 @@ const MEDIA_TYPE_META = {
 };
 
 const CUSTOMER_STATUS_STEPS = [
-    { key: 'scheduled', label: 'Scheduled (Online)', icon: 'calendar_month' },
-    { key: 'received', label: 'Received (Vehicle Intake)', icon: 'pending_actions' },
-    { key: 'diagnosed', label: 'Diagnosed', icon: 'handyman' },
-    { key: 'in_progress', label: 'In Progress', icon: 'build' },
-    { key: 'ready', label: 'Ready for Pickup', icon: 'task_alt' },
-    { key: 'completed', label: 'Completed (Picked Up)', icon: 'check_circle' },
+    { key: 'scheduled', label: 'Scheduled (Online)', shortLabel: 'Scheduled', icon: 'calendar_month' },
+    { key: 'received', label: 'Received (Vehicle Intake)', shortLabel: 'Received', icon: 'pending_actions' },
+    { key: 'diagnosed', label: 'Diagnosed', shortLabel: 'Diagnosed', icon: 'handyman' },
+    { key: 'in_progress', label: 'In Progress', shortLabel: 'In Progress', icon: 'build' },
+    { key: 'ready', label: 'Ready for Pickup', shortLabel: 'Ready', icon: 'task_alt' },
+    { key: 'completed', label: 'Completed (Picked Up)', shortLabel: 'Completed', icon: 'check_circle' },
 ];
 
 const SHOP_STATUS_STEPS = [
-    { key: 'received', label: 'Received', icon: 'pending_actions' },
-    { key: 'scheduled', label: 'Scheduled', icon: 'calendar_month' },
-    { key: 'diagnosed', label: 'Diagnosed', icon: 'handyman' },
-    { key: 'in_progress', label: 'In Progress', icon: 'build' },
-    { key: 'ready', label: 'Ready for Pickup', icon: 'task_alt' },
-    { key: 'completed', label: 'Completed (Picked Up)', icon: 'check_circle' },
+    { key: 'received', label: 'Received', shortLabel: 'Received', icon: 'pending_actions' },
+    { key: 'scheduled', label: 'Scheduled', shortLabel: 'Scheduled', icon: 'calendar_month' },
+    { key: 'diagnosed', label: 'Diagnosed', shortLabel: 'Diagnosed', icon: 'handyman' },
+    { key: 'in_progress', label: 'In Progress', shortLabel: 'In Progress', icon: 'build' },
+    { key: 'ready', label: 'Ready for Pickup', shortLabel: 'Ready', icon: 'task_alt' },
+    { key: 'completed', label: 'Completed (Picked Up)', shortLabel: 'Completed', icon: 'check_circle' },
 ];
 
 export default function WorkOrderDetails() {
@@ -836,73 +836,95 @@ export default function WorkOrderDetails() {
 
                         {/* Active Repair Status Stepper */}
                         <section className="stepper-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <h3 className="section-title" style={{ margin: 0 }}>Repair Lifecycle Status</h3>
+                            <div className="stepper-header-row">
+                                <div className="stepper-title-group">
+                                    <h3 className="section-title">Repair Lifecycle Status</h3>
                                     {order.booked_by === 'customer' && (
-                                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.35)', fontWeight: 600 }}>
+                                        <span className="customer-booking-badge">
                                             🌐 Customer Online Booking
                                         </span>
                                     )}
                                 </div>
-                                {order.status === 'completed' && (
-                                    <span
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            padding: '4px 12px',
-                                            borderRadius: '20px',
-                                            fontSize: '11px',
-                                            fontWeight: 600,
-                                            fontFamily: 'JetBrains Mono, monospace',
-                                            background: 'rgba(16, 185, 129, 0.15)',
-                                            color: '#34d399',
-                                            border: '1px solid rgba(16, 185, 129, 0.4)',
-                                        }}
-                                    >
-                                        <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>lock</span>
-                                        STATUS PERMANENTLY LOCKED (CAR PICKED UP)
-                                    </span>
-                                )}
-                            </div>
-                            <div className="stepper-track">
-                                {/* Connecting background and active progress line */}
-                                <div className="stepper-line-container">
-                                    <div className="stepper-line-bg"></div>
-                                    <div
-                                        className="stepper-line-fill"
-                                        style={{
-                                            width: currentStepIdx >= 0 ? `${(currentStepIdx / (statusSteps.length - 1)) * 100}%` : '0%',
-                                        }}
-                                    ></div>
+                                <div className="stepper-status-badge-group">
+                                    {order.status === 'completed' ? (
+                                        <span className="stepper-locked-badge">
+                                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>lock</span>
+                                            STATUS PERMANENTLY LOCKED (CAR PICKED UP)
+                                        </span>
+                                    ) : (
+                                        <span className="stepper-current-stage-tag font-mono">
+                                            CURRENT STAGE: <strong className="text-accent">{statusSteps[currentStepIdx]?.label || (order.status || '').toUpperCase()}</strong>
+                                        </span>
+                                    )}
                                 </div>
+                            </div>
 
-                                {statusSteps.map((step, idx) => {
-                                    const isCompleted = currentStepIdx > idx;
-                                    const isActive = currentStepIdx === idx;
-                                    const isPending = currentStepIdx < idx;
-                                    const isLocked = order.status === 'completed';
+                            <div className="stepper-scroll-wrapper">
+                                <div className="stepper-stages-track">
+                                    {statusSteps.map((step, idx) => {
+                                        const isCompleted = currentStepIdx > -1 && currentStepIdx > idx;
+                                        const isActive = currentStepIdx === idx;
+                                        const isPending = currentStepIdx === -1 || currentStepIdx < idx;
+                                        const isLocked = order.status === 'completed';
+                                        const hasLeftConnector = idx > 0;
+                                        const hasRightConnector = idx < statusSteps.length - 1;
+                                        const isLeftFilled = currentStepIdx > -1 && currentStepIdx >= idx;
+                                        const isRightFilled = currentStepIdx > -1 && currentStepIdx > idx;
 
-                                    return (
-                                        <div
-                                            key={step.key}
-                                            className={`step-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isPending ? 'disabled' : ''} ${isLocked ? 'locked' : ''}`}
-                                            onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
-                                            style={{ cursor: isLocked ? 'not-allowed' : 'pointer' }}
-                                            title={isLocked ? "Car picked up — status is permanently locked" : `Click to set status to ${step.label}`}
-                                        >
-                                            <div className={`step-icon ${isActive ? 'pulse-glow' : ''}`}>
-                                                <span className="material-symbols-outlined">
-                                                    {isCompleted ? 'check' : step.icon}
-                                                </span>
+                                        return (
+                                            <div
+                                                key={step.key}
+                                                className={`stepper-stage ${isCompleted ? 'is-completed' : ''} ${isActive ? 'is-active' : ''} ${isPending ? 'is-pending' : ''} ${isLocked ? 'is-locked' : ''}`}
+                                                onClick={isLocked ? undefined : () => handleStatusChange(step.key)}
+                                                onKeyDown={(e) => {
+                                                    if (!isLocked && (e.key === 'Enter' || e.key === ' ')) {
+                                                        e.preventDefault();
+                                                        handleStatusChange(step.key);
+                                                    }
+                                                }}
+                                                role="button"
+                                                tabIndex={isLocked ? -1 : 0}
+                                                title={isLocked ? "Car picked up — status is permanently locked" : `Click to transition to ${step.label}`}
+                                            >
+                                                {/* Stage Node Row with Half Connectors */}
+                                                <div className="stage-node-row">
+                                                    {/* Left Connector (bridges from previous stage column) */}
+                                                    {hasLeftConnector && (
+                                                        <div className="stage-connector connector-left">
+                                                            <div className={`connector-fill ${isLeftFilled ? 'filled' : ''}`} />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Circle Node */}
+                                                    <div className={`stage-circle ${isActive ? 'pulse-glow' : ''}`}>
+                                                        <span className="material-symbols-outlined">
+                                                            {isCompleted ? 'check' : step.icon}
+                                                        </span>
+                                                        {isActive && <span className="stage-active-pulse-ring" />}
+                                                    </div>
+
+                                                    {/* Right Connector (bridges to next stage column) */}
+                                                    {hasRightConnector && (
+                                                        <div className="stage-connector connector-right">
+                                                            <div className={`connector-fill ${isRightFilled ? 'filled' : ''}`} />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Stage Metadata / Label */}
+                                                <div className="stage-meta">
+                                                    <span className="stage-step-num font-mono">
+                                                        {isCompleted ? `STEP 0${idx + 1} ✓` : `STEP 0${idx + 1}`}
+                                                    </span>
+                                                    <span className="stage-label">
+                                                        <span className="label-full">{step.label}</span>
+                                                        <span className="label-short">{step.shortLabel || step.label}</span>
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <span className={`step-label ${isActive ? 'active-text' : ''}`}>
-                                                {step.label}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </section>
 

@@ -267,109 +267,304 @@
 .stepper-card {
     background-color: var(--bg-olive-card);
     border: 1px solid var(--border-glass);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 24px;
     margin-bottom: 24px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-}
-
-.section-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0 0 24px 0;
-}
-
-.stepper-track {
     position: relative;
+    overflow: hidden;
+}
+
+.stepper-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 30px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
-.stepper-line-container {
-    position: absolute;
-    left: 50px;
-    right: 50px;
-    top: 20px;
-    height: 2px;
-    z-index: 1;
-    pointer-events: none;
+.stepper-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
-.stepper-line-bg {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 2px;
-    background-color: var(--bg-olive);
+.stepper-header-row .section-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
 }
 
-.stepper-line-fill {
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 2px;
-    background-color: var(--accent-yellow);
-    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+.customer-booking-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    font-weight: 600;
 }
 
-.step-item {
+.stepper-status-badge-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stepper-locked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.stepper-current-stage-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 4px 12px;
+    border-radius: 16px;
+    border: 1px solid var(--border-glass);
+}
+
+.stepper-current-stage-tag .text-accent {
+    color: var(--accent-yellow);
+    margin-left: 4px;
+}
+
+/* Stepper Track & Scroll Wrapper */
+.stepper-scroll-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 6px;
+}
+
+.stepper-stages-track {
+    display: flex;
+    width: 100%;
+    align-items: flex-start;
+    justify-content: space-between;
+    min-width: 0;
     position: relative;
-    z-index: 2;
+}
+
+/* Individual Stage Column - Mathematically Equidistant flex: 1 */
+.stepper-stage {
+    flex: 1 1 0%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.2s ease;
 }
 
-.step-icon {
-    width: 40px;
-    height: 40px;
+.stepper-stage.is-locked {
+    cursor: not-allowed !important;
+}
+
+.stepper-stage:not(.is-locked):hover {
+    transform: translateY(-2px);
+}
+
+/* Stage Node Row */
+.stage-node-row {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+}
+
+/* Connector Lines - Mathematical Stage-to-Stage Bridge */
+.stage-connector {
+    position: absolute;
+    top: 50%;
+    height: 3px;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.08);
+    z-index: 1;
+    overflow: hidden;
+    border-radius: 2px;
+}
+
+.stage-connector.connector-left {
+    left: -0.5px;
+    right: 50%;
+}
+
+.stage-connector.connector-right {
+    left: 50%;
+    right: -0.5px;
+}
+
+.connector-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #ffd85f 0%, #f59e0b 100%);
+    box-shadow: 0 0 10px rgba(255, 216, 95, 0.5);
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.connector-fill.filled {
+    width: 100%;
+}
+
+/* Circle Node */
+.stage-circle {
+    position: relative;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    background-color: var(--bg-olive);
-    border: 1px solid var(--border-glass);
+    background-color: var(--bg-olive-dark);
+    border: 2px solid rgba(255, 255, 255, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
+    z-index: 2;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-.step-item.completed .step-icon {
-    background-color: var(--accent-yellow);
-    color: var(--bg-olive-dark);
-    border-color: var(--accent-yellow);
+.stage-circle .material-symbols-outlined {
+    font-size: 20px;
+    transition: transform 0.2s ease;
 }
 
-.step-item.active .step-icon {
+/* Circle States */
+.stepper-stage.is-completed .stage-circle {
+    background: linear-gradient(135deg, #ffd85f 0%, #eab308 100%);
+    border-color: #ffd85f;
+    color: #161e18;
+    box-shadow: 0 0 14px rgba(255, 216, 95, 0.35);
+}
+
+.stepper-stage.is-completed:not(.is-locked):hover .stage-circle {
+    transform: scale(1.08);
+    box-shadow: 0 0 18px rgba(255, 216, 95, 0.5);
+}
+
+.stepper-stage.is-active .stage-circle {
+    background-color: rgba(255, 216, 95, 0.12);
     border-color: var(--accent-yellow);
     color: var(--accent-yellow);
-    box-shadow: 0 0 12px rgba(255, 216, 95, 0.4);
+    box-shadow: 0 0 16px rgba(255, 216, 95, 0.45);
 }
 
-.step-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+.stage-active-pulse-ring {
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 216, 95, 0.6);
+    animation: activePulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    pointer-events: none;
+}
+
+@keyframes activePulseRing {
+    0% {
+        transform: scale(0.92);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.18);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1.18);
+        opacity: 0;
+    }
+}
+
+.stepper-stage.is-pending .stage-circle {
+    background-color: var(--bg-olive-dark);
+    border-color: rgba(255, 255, 255, 0.1);
     color: var(--text-muted);
+    opacity: 0.75;
 }
 
-.step-label.active-text {
+.stepper-stage.is-pending:not(.is-locked):hover .stage-circle {
+    border-color: rgba(255, 216, 95, 0.5);
+    color: var(--text-main);
+    opacity: 1;
+    transform: scale(1.08);
+}
+
+/* Stage Label Metadata */
+.stage-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 10px;
+    text-align: center;
+    width: 100%;
+    padding: 0 4px;
+}
+
+.stage-step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    opacity: 0.65;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.stepper-stage.is-completed .stage-step-num {
+    color: #ffd85f;
+    opacity: 0.9;
+}
+
+.stepper-stage.is-active .stage-step-num {
+    color: var(--accent-yellow);
+    opacity: 1;
+    font-weight: 800;
+}
+
+.stage-label {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+    word-break: break-word;
+}
+
+.stepper-stage.is-completed .stage-label {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.stepper-stage.is-active .stage-label {
     color: var(--accent-yellow);
     font-weight: 700;
 }
 
-.step-item.disabled {
-    opacity: 0.4;
+.label-short {
+    display: none;
 }
 
-.step-item.locked {
-    cursor: not-allowed !important;
-}
-
-.step-item.locked:hover .step-icon {
-    box-shadow: none !important;
-    transform: none !important;
+/* Section Title default */
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 24px 0;
 }
 
 /* Two Column Layout */
@@ -944,15 +1139,16 @@
         padding: 16px;
     }
 
-    .stepper-track {
-        padding: 0;
-        overflow-x: auto;
+    .stepper-stages-track {
+        min-width: 520px;
     }
 
-    .stepper-line-container,
-    .stepper-line-bg,
-    .stepper-line-fill {
+    .label-full {
         display: none;
+    }
+
+    .label-short {
+        display: inline;
     }
 
     .page-header-row {
