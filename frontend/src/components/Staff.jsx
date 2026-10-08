@@ -15,6 +15,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import './css/Staff.css';
+import { useCurrency } from '../context/CurrencyContext';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
@@ -42,6 +43,7 @@ const INITIAL_STAFF_FORM = {
 
 export default function Staff() {
     const navigate = useNavigate();
+    const { currency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [staffList, setStaffList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -678,7 +680,7 @@ export default function Staff() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="staff_hourly_rate">HOURLY RATE ($) *</label>
+                                    <label htmlFor="staff_hourly_rate">HOURLY RATE ({currency?.code || currency?.symbol || '$'}) *</label>
                                     <input
                                         type="number"
                                         step="0.50"

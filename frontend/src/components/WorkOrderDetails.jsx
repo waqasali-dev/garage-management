@@ -52,7 +52,7 @@ const SHOP_STATUS_STEPS = [
 export default function WorkOrderDetails() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { taxPercentage, formatCurrency } = useCurrency();
+    const { taxPercentage, formatCurrency, currency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [order, setOrder] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -1372,7 +1372,7 @@ export default function WorkOrderDetails() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label>UNIT PRICE / RATE ($) *</label>
+                                    <label>UNIT PRICE / RATE ({currency?.code || currency?.symbol || '$'}) *</label>
                                     <input
                                         type="number"
                                         step="any"

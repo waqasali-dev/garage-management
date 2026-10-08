@@ -3,6 +3,7 @@ import Sidebar from './Sidebar';
 import VehicleVisual from './VehicleVisual';
 import { VEHICLE_TYPES, resolveVehicleType } from '../utils/vehicleVisuals';
 import './css/VehicleIntake.css';
+import { useCurrency } from '../context/CurrencyContext';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
@@ -21,6 +22,7 @@ const INITIAL_FORM_STATE = {
 };
 
 export default function VehicleIntake() {
+    const { formatCurrency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
     const [selectedOwnerId, setSelectedOwnerId] = useState(null);
@@ -583,11 +585,11 @@ export default function VehicleIntake() {
                                         </div>
                                         <div className="meta-item">
                                             <span className="meta-label">ESTIMATED COST:</span>
-                                            <span className="meta-val font-mono">$0.00</span>
+                                            <span className="meta-val font-mono">{formatCurrency(0)}</span>
                                         </div>
                                         <div className="meta-item">
                                             <span className="meta-label">TOTAL COST:</span>
-                                            <span className="meta-val font-mono">$0.00</span>
+                                            <span className="meta-val font-mono">{formatCurrency(0)}</span>
                                         </div>
                                         <div className="meta-item">
                                             <span className="meta-label">BAY / ADVISOR / STAFF:</span>

@@ -325,7 +325,7 @@ export default function Dashboard() {
                                 <span className="kpi-badge-indicator badge-gold">PIPELINE</span>
                             </div>
                             <span className="kpi-val font-mono text-yellow">
-                                ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatCurrency(totalRevenue)}
                             </span>
                         </div>
                     </div>

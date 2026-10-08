@@ -21,6 +21,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import StarIcon from '@mui/icons-material/Star';
 import './css/UserManagement.css';
+import { useCurrency } from '../context/CurrencyContext';
 import { API_BASE_URL } from '../config/api';
 // Local API URL fallback: 'http://localhost:5000/api'
 
@@ -44,6 +45,7 @@ const INITIAL_FORM_STATE = {
 };
 
 export default function UserManagement() {
+    const { currency } = useCurrency();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -786,7 +788,7 @@ export default function UserManagement() {
 
                                         <div className="form-group">
                                             <label className="form-label" htmlFor="staff_hourly_rate">
-                                                <AttachMoneyIcon fontSize="inherit" /> Hourly Rate ($/hr)
+                                                <AttachMoneyIcon fontSize="inherit" /> Hourly Rate ({currency?.code || currency?.symbol || '$'}/hr)
                                             </label>
                                             <input
                                                 type="number"

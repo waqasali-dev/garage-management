@@ -37,7 +37,7 @@ export default function Inventory() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [items, setItems] = useState([]);
     const [kpi, setKpi] = useState({
-        totalValue: '$0.00',
+        totalValue: '--',
         lowStockAlerts: 0,
         totalItems: 0,
         totalSKUs: 0,
@@ -753,7 +753,7 @@ export default function Inventory() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="unit_cost">Unit Cost ($) *</label>
+                                    <label htmlFor="unit_cost">Unit Cost ({currency?.code || currency?.symbol || '$'}) *</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -769,7 +769,7 @@ export default function Inventory() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="selling_price">Selling Price ($) *</label>
+                                    <label htmlFor="selling_price">Selling Price ({currency?.code || currency?.symbol || '$'}) *</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -1009,7 +1009,7 @@ export default function Inventory() {
 
                                 <div className="form-group">
                                     <label htmlFor="edit_selling_price" style={{ color: 'var(--accent-yellow)', fontWeight: 800 }}>
-                                        Selling Price ($) *
+                                        Selling Price ({currency?.code || currency?.symbol || '$'}) *
                                     </label>
                                     <input
                                         type="number"
@@ -1026,7 +1026,7 @@ export default function Inventory() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="edit_unit_cost">Unit Cost ($) *</label>
+                                    <label htmlFor="edit_unit_cost">Unit Cost ({currency?.code || currency?.symbol || '$'}) *</label>
                                     <input
                                         type="number"
                                         step="0.01"

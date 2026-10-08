@@ -16,7 +16,7 @@ export default function PartPriceGraphModal({
     onRestockRequested,
     valuationMethod = 'fifo',
 }) {
-    const { formatCurrency, currency } = useCurrency();
+    const { formatCurrency } = useCurrency();
     const [details, setDetails] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -368,7 +368,7 @@ export default function PartPriceGraphModal({
                                                         fontFamily="'JetBrains Mono', monospace"
                                                         textAnchor="end"
                                                     >
-                                                        {currency?.symbol || '$'}{Math.round(tick.val)}
+                                                        {formatCurrency(Math.round(tick.val), { decimals: 0 })}
                                                     </text>
                                                 </g>
                                             ))}

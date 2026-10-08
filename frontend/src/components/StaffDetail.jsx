@@ -46,7 +46,7 @@ const STAFF_ROLE_OPTIONS = [
 export default function StaffDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { formatCurrency } = useCurrency();
+    const { formatCurrency, currency } = useCurrency();
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [profile, setProfile] = useState(null);
@@ -1084,7 +1084,7 @@ export default function StaffDetail() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label htmlFor="edit_rate">HOURLY RATE ($) *</label>
+                                    <label htmlFor="edit_rate">HOURLY RATE ({currency?.code || currency?.symbol || '$'}) *</label>
                                     <input
                                         type="number"
                                         step="0.50"
