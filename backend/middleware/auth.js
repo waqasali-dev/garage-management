@@ -6,7 +6,15 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
-export const JWT_SECRET = process.env.JWT_SECRET || "precision_garage_jwt_secret_key_2026_production";
+const envSecret = process.env.JWT_SECRET && process.env.JWT_SECRET.trim();
+if (!envSecret) {
+    if (process.env.NODE_ENV === "production") {
+        throw new Error("FATAL SECURITY ERROR: JWT_SECRET environment variable is required in production mode.");
+    }
+    console.warn("⚠️ SECURITY WARNING: JWT_SECRET is not set in environment. Set JWT_SECRET in .env for production deployment.");
+}
+
+export const JWT_SECRET = envSecret || "dev_precision_garage_temporary_local_secret_2026";
 export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 /**
