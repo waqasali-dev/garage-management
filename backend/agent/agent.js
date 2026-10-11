@@ -146,10 +146,15 @@ export async function executeSafeSqlQuery(sql, params = [], role = 'admin', cons
         return { error: 'Invalid SQL query provided.' };
     }
 
-    const trimmed = sql.trim();
-    const upper = trimmed.toUpperCase();
+    // Strip SQL comments (single line -- and multi-line /* */) before any validation
+    const cleanSql = sql
+        .replace(/--.*$/gm, ' ')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .trim();
 
-    // 1. Enforce SELECT only — strictly forbid modifications or schema alterations
+    const upper = cleanSql.toUpperCase();
+
+    // 1. Enforce SELECT only — strictly forbid modifications, schema alterations, or multi-statement chains
     const forbiddenKeywords = [
         'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE',
         'CREATE', 'REPLACE', 'GRANT', 'REVOKE', 'EXEC', 'EXECUTE',
@@ -158,11 +163,15 @@ export async function executeSafeSqlQuery(sql, params = [], role = 'admin', cons
 
     for (const keyword of forbiddenKeywords) {
         const regex = new RegExp(`\\b${keyword}\\b`, 'i');
-        if (regex.test(trimmed)) {
+        if (regex.test(cleanSql)) {
             return {
                 error: `SECURITY BLOCK: Forbidden operation '${keyword}'. Only read-only SELECT queries are permitted.`
             };
         }
+    }
+
+    if (/;[\s\S]*\S/.test(cleanSql)) {
+        return { error: 'SECURITY BLOCK: Multiple SQL statements are strictly prohibited.' };
     }
 
     if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) {
@@ -171,42 +180,59 @@ export async function executeSafeSqlQuery(sql, params = [], role = 'admin', cons
         };
     }
 
-    // 2. Prevent access to sensitive tables (e.g. users table)
-    if (/\busers\b/i.test(trimmed)) {
+    // 2. Prevent access to system and credential tables
+    if (/\b(users|information_schema|pg_catalog|pg_tables|pg_user|pg_shadow)\b/i.test(cleanSql)) {
         return {
-            error: 'SECURITY BLOCK: Access to system users and authentication credentials table is strictly prohibited.'
+            error: 'SECURITY BLOCK: Access to system credentials and database metadata tables is strictly prohibited.'
         };
     }
 
     // 3. For Owner role: enforce constant owner_id isolation for personal record tables
-    // (General tables like inventory_data or parts catalog can be queried for pricing)
     if (role === 'owner' || role === 'car_owner') {
         if (!constantOwnerId) {
             return { error: 'SECURITY BLOCK: Missing constant customer identifier for owner session.' };
         }
 
-        const isQueryingPersonalData = /\b(vehicles|work_order_data|invoice_data|scheduled_tasks|car_owners)\b/i.test(trimmed);
+        // Forbid customer queries into internal workshop administration
+        if (/\b(audit_logs|staff_data|workshop_settings)\b/i.test(cleanSql)) {
+            return {
+                error: 'SECURITY BLOCK: Customer accounts are not permitted to inspect internal staff records, audit logs, or system configuration.'
+            };
+        }
+
+        // Expanded list of customer-protected tables
+        const isQueryingPersonalData = /\b(vehicles|work_order_data|invoice_data|scheduled_tasks|car_owners|appointments|work_order_items|work_order_media)\b/i.test(cleanSql);
         if (isQueryingPersonalData) {
-            const containsOwnerRef = trimmed.includes(constantOwnerId) || (params && params.includes(constantOwnerId));
-            if (!containsOwnerRef) {
+            const ownerIdClean = String(constantOwnerId).trim();
+            const ownerRegex = new RegExp(`['"]?${ownerIdClean}['"]?`, 'i');
+            const paramsMatch = Array.isArray(params) && params.some((p) => String(p).trim().toUpperCase() === ownerIdClean.toUpperCase());
+
+            if (!ownerRegex.test(cleanSql) && !paramsMatch) {
                 return {
-                    error: `SECURITY BLOCK: Customer queries must strictly filter by authenticated owner ID (${constantOwnerId}).`
+                    error: `SECURITY BLOCK: Customer queries must strictly filter by authenticated owner ID (${ownerIdClean}).`
                 };
             }
         }
     }
 
+    const client = await pool.connect();
     try {
-        const result = await pool.query(trimmed, params);
+        await client.query("BEGIN READ ONLY;");
+        await client.query("SET LOCAL statement_timeout = '5000ms';");
+        const result = await client.query(cleanSql, params);
+        await client.query("COMMIT;");
         return {
             rowCount: result.rowCount,
             rows: result.rows
         };
     } catch (err) {
+        await client.query("ROLLBACK;").catch(() => {});
         console.error('SQL Execution Error:', err.message);
         return {
             error: `Database execution error: ${err.message}`
         };
+    } finally {
+        client.release();
     }
 }
 
