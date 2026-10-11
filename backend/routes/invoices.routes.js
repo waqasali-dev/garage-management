@@ -8,9 +8,15 @@ router.use(authenticateToken);
 
 // GET /api/invoices - List all invoices with owner and vehicle details
 router.get("/", async (req, res) => {
-    const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+    const rawRole = (req.user?.role || "").toLowerCase();
+    const isOwner = rawRole === "car_owner" || rawRole === "owner";
+
+    if (isOwner && !req.user?.owner_id) {
+        return res.status(403).json({ error: "Access denied. Owner account ID not identified." });
+    }
+
     const { owner_id } = req.query;
-    const effectiveOwnerId = isOwner ? req.user?.owner_id : (owner_id && owner_id.trim() ? owner_id.trim() : null);
+    const effectiveOwnerId = isOwner ? req.user.owner_id : (owner_id && owner_id.trim() ? owner_id.trim() : null);
     const cacheKey = `garage:cache:invoices:list:${effectiveOwnerId || "all"}`;
 
     try {
@@ -96,11 +102,19 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
     const { id } = req.params;
     const cleanId = (id || "").trim();
+    const rawRole = (req.user?.role || "").toLowerCase();
+    const isOwner = rawRole === "car_owner" || rawRole === "owner";
     const cacheKey = `garage:cache:invoice:details:${cleanId.toUpperCase()}`;
 
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
+            if (isOwner && (!req.user?.owner_id || cached.owner_id !== req.user.owner_id)) {
+                return res.status(403).json({
+                    error: "Access denied. You do not have permission to view this invoice.",
+                    code: "FORBIDDEN_INVOICE",
+                });
+            }
             return res.json({ success: true, source: "redis", data: cached });
         }
 
@@ -148,9 +162,11 @@ router.get("/:id", async (req, res) => {
         }
 
         const invoice = invoiceResult.rows[0];
-        const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
-        if (isOwner && req.user?.owner_id && invoice.owner_id !== req.user.owner_id) {
-            return res.status(403).json({ error: "Access denied. You do not have permission to view this invoice.", code: "FORBIDDEN_INVOICE" });
+        if (isOwner && (!req.user?.owner_id || invoice.owner_id !== req.user.owner_id)) {
+            return res.status(403).json({
+                error: "Access denied. You do not have permission to view this invoice.",
+                code: "FORBIDDEN_INVOICE",
+            });
         }
 
         // Fetch line items for this work order
