@@ -174,7 +174,7 @@ router.get("/unlinked", requireRole(["admin"]), async (req, res) => {
 router.get("/:id", async (req, res) => {
     const { id } = req.params;
     const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
-    if (isOwner && req.user?.owner_id && req.user.owner_id !== id) {
+    if (isOwner && (!req.user?.owner_id || req.user.owner_id !== id)) {
         return res.status(403).json({ error: "Access denied. You may only view your own owner profile.", code: "FORBIDDEN_OWNER" });
     }
     const cacheKey = `garage:cache:owner:details:${id}`;

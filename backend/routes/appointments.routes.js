@@ -66,9 +66,15 @@ const validateWithinWorkshopHours = async (client, appointmentDate, startTime, e
 // 1. GET /api/appointments - List appointments with full joins
 // ==========================================
 router.get("/", async (req, res) => {
-    const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+    const rawRole = (req.user?.role || "").toLowerCase();
+    const isOwner = rawRole === "car_owner" || rawRole === "owner";
+
+    if (isOwner && !req.user?.owner_id) {
+        return res.status(403).json({ error: "Access denied. Owner account ID not identified." });
+    }
+
     const { date, bay_id, vehicle_id, owner_id, status } = req.query;
-    const effectiveOwnerId = isOwner ? req.user?.owner_id : (owner_id || null);
+    const effectiveOwnerId = isOwner ? req.user.owner_id : (owner_id || null);
     const cacheKey = `garage:cache:appointments:${date || "all"}:${bay_id || "all"}:${effectiveOwnerId || "all"}:${status || "all"}`;
 
     try {
@@ -814,7 +820,7 @@ router.patch("/:id/cancel", async (req, res) => {
 
         const app = appRes.rows[0];
         const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
-        if (isOwner && req.user?.owner_id && app.owner_id !== req.user.owner_id) {
+        if (isOwner && (!req.user?.owner_id || app.owner_id !== req.user.owner_id)) {
             await client.query("ROLLBACK");
             return res.status(403).json({ error: "Access denied. You cannot cancel another customer's appointment.", code: "FORBIDDEN_APPOINTMENT" });
         }
