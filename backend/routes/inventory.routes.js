@@ -588,7 +588,71 @@ router.patch("/:id", async (req, res) => {
             partId,
         ]);
 
-        const updatedPart = result.rows[0];
+        let updatedPart = result.rows[0];
+
+        // Synchronize batch stock quantities if catalog stock_quantity was modified
+        if (targetStock !== undefined) {
+            const oldStock = parseInt(curPart.stock_quantity, 10) || 0;
+            const newStock = parseInt(targetStock, 10) || 0;
+            const diff = newStock - oldStock;
+
+            if (diff > 0) {
+                // Stock increased manually: create an adjustment batch
+                const adjBatchNum = `ADJ-${updatedPart.sku}-${Date.now().toString().slice(-6)}`;
+                await client.query(
+                    `INSERT INTO inventory_batches (
+                        part_id,
+                        batch_number,
+                        quantity_received,
+                        quantity_remaining,
+                        unit_cost,
+                        selling_price,
+                        received_date,
+                        notes
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7);`,
+                    [
+                        partId,
+                        adjBatchNum,
+                        diff,
+                        diff,
+                        newCost !== null ? newCost : parseFloat(curPart.unit_cost),
+                        newPrice !== null ? newPrice : parseFloat(curPart.selling_price),
+                        `Manual stock adjustment (+${diff} units)`,
+                    ]
+                );
+            } else if (diff < 0) {
+                // Stock decreased manually: deduct from remaining batches using FIFO
+                let toDeduct = Math.abs(diff);
+                const batchesRes = await client.query(
+                    "SELECT batch_id, quantity_remaining FROM inventory_batches WHERE part_id = $1 AND quantity_remaining > 0 ORDER BY received_date ASC FOR UPDATE;",
+                    [partId]
+                );
+
+                for (const batch of batchesRes.rows) {
+                    if (toDeduct <= 0) break;
+                    const deductFromThis = Math.min(parseInt(batch.quantity_remaining, 10), toDeduct);
+                    await client.query(
+                        "UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1, updated_at = CURRENT_TIMESTAMP WHERE batch_id = $2;",
+                        [deductFromThis, batch.batch_id]
+                    );
+                    toDeduct -= deductFromThis;
+                }
+            }
+
+            // Sync total stock quantity from active batches
+            const syncRes = await client.query(
+                `UPDATE inventory_data 
+                 SET stock_quantity = COALESCE((SELECT SUM(quantity_remaining) FROM inventory_batches WHERE part_id = $1), $2),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE part_id = $1
+                 RETURNING *;`,
+                [partId, newStock]
+            );
+            if (syncRes.rows.length > 0) {
+                updatedPart = syncRes.rows[0];
+            }
+        }
 
         // If unit_cost or selling_price changed manually, record in price history
         const costChanged = newCost !== null && Math.abs(parseFloat(curPart.unit_cost) - newCost) > 0.001;
