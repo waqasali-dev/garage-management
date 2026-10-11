@@ -1018,8 +1018,56 @@ router.post("/:id/media", requireRole(["admin", "staff"]), async (req, res) => {
     const { id } = req.params;
     const { file_url, file_type = "vehicle_condition" } = req.body;
 
-    if (!file_url) {
+    const cleanUrl = (file_url || "").trim();
+    if (!cleanUrl) {
         return res.status(400).json({ error: "file_url is required." });
+    }
+
+    // Validate URL to prevent Stored XSS and SSRF attacks
+    const isDataUrl = cleanUrl.startsWith("data:");
+    if (isDataUrl) {
+        const dataImageRegex = /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+        if (!dataImageRegex.test(cleanUrl)) {
+            return res.status(400).json({
+                error: "Invalid image data format. Only JPEG, PNG, WEBP, and GIF base64 images are supported.",
+                code: "INVALID_MEDIA_DATA_URL",
+            });
+        }
+    } else {
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(cleanUrl);
+        } catch (urlErr) {
+            return res.status(400).json({
+                error: "Invalid media URL structure.",
+                code: "INVALID_URL",
+            });
+        }
+
+        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+            return res.status(400).json({
+                error: "Security error: Media URL must use HTTP or HTTPS protocol.",
+                code: "FORBIDDEN_URL_PROTOCOL",
+            });
+        }
+
+        const host = parsedUrl.hostname.toLowerCase();
+        const isPrivateHost =
+            host === "localhost" ||
+            host === "127.0.0.1" ||
+            host === "0.0.0.0" ||
+            host === "::1" ||
+            host === "169.254.169.254" ||
+            /^10\./.test(host) ||
+            /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+            /^192\.168\./.test(host);
+
+        if (isPrivateHost) {
+            return res.status(400).json({
+                error: "Security error: Media URLs pointing to localhost or internal network IP ranges are prohibited.",
+                code: "FORBIDDEN_SSRF_HOST",
+            });
+        }
     }
 
     const validTypes = ["vehicle_condition", "part_damage", "receipt", "other"];
