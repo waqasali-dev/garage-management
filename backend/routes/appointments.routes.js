@@ -1,8 +1,10 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(authenticateToken);
 
 // Helper to format timestamps
 const combineDateTime = (dateStr, timeStr) => {
@@ -64,8 +66,10 @@ const validateWithinWorkshopHours = async (client, appointmentDate, startTime, e
 // 1. GET /api/appointments - List appointments with full joins
 // ==========================================
 router.get("/", async (req, res) => {
+    const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
     const { date, bay_id, vehicle_id, owner_id, status } = req.query;
-    const cacheKey = `garage:cache:appointments:${date || "all"}:${bay_id || "all"}:${owner_id || "all"}:${status || "all"}`;
+    const effectiveOwnerId = isOwner ? req.user?.owner_id : (owner_id || null);
+    const cacheKey = `garage:cache:appointments:${date || "all"}:${bay_id || "all"}:${effectiveOwnerId || "all"}:${status || "all"}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -88,8 +92,8 @@ router.get("/", async (req, res) => {
             queryParams.push(vehicle_id);
             whereConditions.push(`a.vehicle_id = $${queryParams.length}`);
         }
-        if (owner_id) {
-            queryParams.push(owner_id);
+        if (effectiveOwnerId) {
+            queryParams.push(effectiveOwnerId);
             whereConditions.push(`a.owner_id = $${queryParams.length}`);
         }
         if (status) {
@@ -147,7 +151,7 @@ router.get("/", async (req, res) => {
 // 2. GET /api/appointments/eligible-work-orders
 // Returns work orders in 'received', 'diagnosed', or 'scheduled' phase with schedule status
 // ==========================================
-router.get("/eligible-work-orders", async (req, res) => {
+router.get("/eligible-work-orders", requireRole(["admin", "staff"]), async (req, res) => {
     try {
         const query = `
             SELECT 
@@ -226,7 +230,7 @@ router.get("/eligible-work-orders", async (req, res) => {
 // 3. POST /api/appointments/admin-appoint
 // Admin appoints a car in 'received' or 'diagnosed' status to a bay slot
 // ==========================================
-router.post("/admin-appoint", async (req, res) => {
+router.post("/admin-appoint", requireRole(["admin"]), async (req, res) => {
     const client = await pool.connect();
 
     try {
@@ -557,7 +561,15 @@ router.post("/customer-book", async (req, res) => {
         }
 
         const vehicle = vehRes.rows[0];
-        const resolvedOwnerId = owner_id || vehicle.owner_id;
+        const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+        const effectiveOwnerId = isOwner && req.user?.owner_id ? req.user.owner_id : (owner_id || vehicle.owner_id);
+
+        if (isOwner && vehicle.owner_id !== effectiveOwnerId) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({ error: "Access denied. You cannot book an appointment for another customer's vehicle.", code: "FORBIDDEN_VEHICLE" });
+        }
+
+        const resolvedOwnerId = effectiveOwnerId;
 
         // STEP 1.5: Verify vehicle does not already have an active upcoming booking that has not passed
         const existingAppQuery = `
@@ -790,7 +802,7 @@ router.patch("/:id/cancel", async (req, res) => {
         await client.query("BEGIN");
 
         const appRes = await client.query(
-            `SELECT appointment_id, work_order_id, bay_id, appointment_date, start_time, end_time, status 
+            `SELECT appointment_id, owner_id, work_order_id, bay_id, appointment_date, start_time, end_time, status 
              FROM appointments WHERE appointment_id = $1;`,
             [id]
         );
@@ -801,6 +813,11 @@ router.patch("/:id/cancel", async (req, res) => {
         }
 
         const app = appRes.rows[0];
+        const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+        if (isOwner && req.user?.owner_id && app.owner_id !== req.user.owner_id) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({ error: "Access denied. You cannot cancel another customer's appointment.", code: "FORBIDDEN_APPOINTMENT" });
+        }
 
         // Update appointment status to cancelled
         await client.query(
@@ -854,7 +871,7 @@ router.patch("/:id/cancel", async (req, res) => {
 // ==========================================
 // 6. PUT /api/appointments/:id - Admin Edit / Reschedule Appointment
 // ==========================================
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const client = await pool.connect();
 
@@ -1034,7 +1051,7 @@ router.put("/:id", async (req, res) => {
 // ==========================================
 // 7. DELETE /api/appointments/:id - Admin Delete Appointment
 // ==========================================
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const { delete_work_order } = req.query;
     const client = await pool.connect();

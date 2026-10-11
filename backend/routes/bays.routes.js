@@ -1,8 +1,10 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(authenticateToken);
 
 // Helper to format TIME string "HH:MM:SS" or "HH:MM" to "HH:MM"
 const formatTimeHHMM = (timeStr) => {
@@ -27,7 +29,7 @@ const minutesToTime = (minutes) => {
 // ==========================================
 // 1. GET /api/bays - List all Workshop Bays with load telemetry
 // ==========================================
-router.get("/", async (req, res) => {
+router.get("/", requireRole(["admin", "staff"]), async (req, res) => {
     const cacheKey = "garage:cache:bays:all";
 
     try {
@@ -97,7 +99,7 @@ router.get("/", async (req, res) => {
 // ==========================================
 // 2. POST /api/bays - Create New Workshop Bay (Admin)
 // ==========================================
-router.post("/", async (req, res) => {
+router.post("/", requireRole(["admin"]), async (req, res) => {
     const {
         bay_id,
         bay_name,
@@ -163,7 +165,7 @@ router.post("/", async (req, res) => {
 // ==========================================
 // 3. PATCH /api/bays/:id - Update Bay Configuration (Admin)
 // ==========================================
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const {
         bay_name,
@@ -222,7 +224,7 @@ router.patch("/:id", async (req, res) => {
 // ==========================================
 // 4. DELETE /api/bays/:id - Delete Bay (Admin)
 // ==========================================
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
 
     try {

@@ -7,8 +7,8 @@ import { authenticateToken, requireRole, JWT_SECRET } from "../middleware/auth.j
 
 const router = express.Router();
 
-// GET /api/users - Get all users
-router.get("/", async (req, res) => {
+// GET /api/users - Get all users (Admin only)
+router.get("/", authenticateToken, requireRole(["admin"]), async (req, res) => {
     const cacheKey = "garage:cache:users:all";
 
     try {
@@ -85,30 +85,18 @@ export const handleCreateUser = async (req, res) => {
         if (userCount > 0) {
             const authHeader = req.headers["authorization"] || req.headers["Authorization"];
             const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-            let isAdminAuthorized = false;
 
-            if (token) {
-                try {
-                    const decoded = jwt.verify(token, JWT_SECRET);
-                    if (decoded.role === "admin") {
-                        isAdminAuthorized = true;
-                    } else {
-                        return res.status(403).json({ error: "Access denied. Only administrators can manage users." });
-                    }
-                } catch (err) {
-                    // Fall through to session header verification
-                }
+            if (!token) {
+                return res.status(401).json({ error: "Admin authentication required to create users.", code: "AUTH_REQUIRED" });
             }
 
-            if (!isAdminAuthorized) {
-                const roleHeader = (req.headers["x-user-role"] || req.body?.user?.role || "").toLowerCase();
-                if (roleHeader === "admin") {
-                    isAdminAuthorized = true;
+            try {
+                const decoded = jwt.verify(token, JWT_SECRET);
+                if (decoded.role !== "admin") {
+                    return res.status(403).json({ error: "Access denied. Only administrators can manage users.", code: "FORBIDDEN_ROLE" });
                 }
-            }
-
-            if (!isAdminAuthorized) {
-                return res.status(401).json({ error: "Admin authentication required to create users." });
+            } catch (err) {
+                return res.status(401).json({ error: "Invalid or expired admin authorization token.", code: "AUTH_TOKEN_INVALID" });
             }
         }
     } catch (countErr) {

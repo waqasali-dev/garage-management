@@ -1,6 +1,7 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -255,12 +256,21 @@ export const handleIntake = async (req, res) => {
 // WORK ORDERS LIST & METRICS
 // ==========================================
 export const handleGetWorkOrdersList = async (req, res) => {
-    const cacheKey = "garage:cache:workorders:list";
+    const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+    const ownerScopeId = isOwner ? req.user?.owner_id : null;
+    const cacheKey = `garage:cache:workorders:list:${ownerScopeId || "all"}`;
 
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
             return res.json({ success: true, source: "redis", data: cached });
+        }
+
+        let whereClause = "1=1";
+        const queryParams = [];
+        if (ownerScopeId) {
+            queryParams.push(ownerScopeId);
+            whereClause = `o.owner_id = $${queryParams.length}`;
         }
 
         const query = `
@@ -300,6 +310,7 @@ export const handleGetWorkOrdersList = async (req, res) => {
             JOIN car_owners o ON v.owner_id = o.owner_id
             LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
             LEFT JOIN staff_data sa ON w.service_advisor_id = sa.staff_id
+            WHERE ${whereClause}
             ORDER BY 
                 CASE 
                     WHEN w.status = 'in_progress' THEN 1
@@ -312,7 +323,7 @@ export const handleGetWorkOrdersList = async (req, res) => {
                 END,
                 w.created_at DESC;
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, queryParams);
 
         await setCache(cacheKey, result.rows, 300);
 
@@ -358,6 +369,10 @@ export const handleGetSingleWorkOrder = async (req, res) => {
         }
 
         const workOrder = mainResult.rows[0];
+        const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+        if (isOwner && req.user?.owner_id && workOrder.owner_id !== req.user.owner_id) {
+            return res.status(403).json({ error: "Access denied. You do not have permission to view this work order.", code: "FORBIDDEN_WORK_ORDER" });
+        }
         const canonicalId = workOrder.work_order_id;
 
         const itemsQuery = `
@@ -460,12 +475,15 @@ export const handleGetSingleWorkOrder = async (req, res) => {
     }
 };
 
+// Protect all router endpoints with authenticateToken
+router.use(authenticateToken);
+
 // Routes Registration
 router.get("/", handleGetWorkOrdersList);
 router.get("/:id", handleGetSingleWorkOrder);
 
 // POST /api/work-orders/:id/notes
-router.post("/:id/notes", async (req, res) => {
+router.post("/:id/notes", requireRole(["admin", "staff"]), async (req, res) => {
     const { id } = req.params;
     const { note, staff_id } = req.body;
 
@@ -496,7 +514,7 @@ router.post("/:id/notes", async (req, res) => {
 });
 
 // DELETE /api/work-orders/:id
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
 
     const client = await pool.connect();
@@ -603,7 +621,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 // Status & Progress Pipeline Transition
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", requireRole(["admin", "staff"]), async (req, res) => {
     const { id } = req.params;
     const { status, staff_id, notes } = req.body;
 
@@ -686,7 +704,7 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 // Update Work Order Details
-router.patch("/:id/details", async (req, res) => {
+router.patch("/:id/details", requireRole(["admin", "staff"]), async (req, res) => {
     const { id } = req.params;
     const { bay_assigned, assigned_staff_id, service_advisor_id, estimated_cost, initial_observations } = req.body;
 
@@ -728,7 +746,7 @@ router.patch("/:id/details", async (req, res) => {
 });
 
 // Line Items Management
-router.post("/:id/items", async (req, res) => {
+router.post("/:id/items", requireRole(["admin", "staff"]), async (req, res) => {
     const { id } = req.params;
     let { item_type, part_id, description, quantity_or_hours, unit_price } = req.body;
 
@@ -874,7 +892,7 @@ router.post("/:id/items", async (req, res) => {
     }
 });
 
-router.delete("/:id/items/:itemId", async (req, res) => {
+router.delete("/:id/items/:itemId", requireRole(["admin", "staff"]), async (req, res) => {
     const { id, itemId } = req.params;
 
     const client = await pool.connect();
@@ -975,7 +993,7 @@ router.delete("/:id/items/:itemId", async (req, res) => {
 });
 
 // Media Management
-router.post("/:id/media", async (req, res) => {
+router.post("/:id/media", requireRole(["admin", "staff"]), async (req, res) => {
     const { id } = req.params;
     const { file_url, file_type = "vehicle_condition" } = req.body;
 
@@ -1005,7 +1023,7 @@ router.post("/:id/media", async (req, res) => {
     }
 });
 
-router.delete("/:id/media/:mediaId", async (req, res) => {
+router.delete("/:id/media/:mediaId", requireRole(["admin", "staff"]), async (req, res) => {
     const { id, mediaId } = req.params;
 
     try {

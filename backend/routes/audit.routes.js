@@ -1,11 +1,15 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// GET /api/audit-logs - Paginated and filtered event stream with telemetry KPIs
-router.get("/", async (req, res) => {
+// Enforce authentication across all audit log routes
+router.use(authenticateToken);
+
+// GET /api/audit-logs - Paginated and filtered event stream with telemetry KPIs (Admin only)
+router.get("/", requireRole(["admin"]), async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = parseInt(req.query.offset, 10) || 0;
     const { range = "ALL", event_type = "all", search = "" } = req.query;
@@ -212,13 +216,15 @@ router.get("/", async (req, res) => {
     }
 });
 
-// POST /api/audit-logs - Record an audit event
-router.post("/", async (req, res) => {
+// POST /api/audit-logs - Record an audit event (Admin and Staff only)
+router.post("/", requireRole(["admin", "staff"]), async (req, res) => {
     const { work_order_id, staff_id, event_type, description, payload_json } = req.body;
 
     if (!event_type || !description) {
         return res.status(400).json({ error: "event_type and description are required." });
     }
+
+    const effectiveStaffId = staff_id ? parseInt(staff_id, 10) : (req.user?.staff_id || null);
 
     try {
         const query = `
@@ -228,7 +234,7 @@ router.post("/", async (req, res) => {
         `;
         const result = await pool.query(query, [
             work_order_id || null,
-            staff_id ? parseInt(staff_id, 10) : null,
+            effectiveStaffId,
             event_type,
             description.trim(),
             payload_json || null,

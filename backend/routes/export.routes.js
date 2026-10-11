@@ -1,8 +1,13 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// Enforce admin-only authentication for bulk data exports
+router.use(authenticateToken);
+router.use(requireRole(["admin"]));
 
 // GET /api/export/inventory.csv - Export inventory with short-term caching
 router.get("/inventory.csv", async (req, res) => {

@@ -1,8 +1,11 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(authenticateToken);
+router.use(requireRole(["admin", "staff"]));
 
 // GET /api/inventory & GET /api/inventory/items - Fetch all inventory parts with batch-aware valuation and KPI metrics
 export const handleGetInventory = async (req, res) => {
@@ -812,7 +815,7 @@ router.patch("/:id/restock", async (req, res) => {
 });
 
 // DELETE /api/inventory/:id - Delete a part from inventory
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const partId = parseInt(id, 10);
 

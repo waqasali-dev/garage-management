@@ -4,11 +4,14 @@ import { getCache, setCache, deleteCachePattern } from "../redis.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(authenticateToken);
 
 // GET /api/invoices - List all invoices with owner and vehicle details
 router.get("/", async (req, res) => {
+    const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
     const { owner_id } = req.query;
-    const cacheKey = `garage:cache:invoices:list:${owner_id || "all"}`;
+    const effectiveOwnerId = isOwner ? req.user?.owner_id : (owner_id && owner_id.trim() ? owner_id.trim() : null);
+    const cacheKey = `garage:cache:invoices:list:${effectiveOwnerId || "all"}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -24,8 +27,8 @@ router.get("/", async (req, res) => {
 
         let whereClause = "1=1";
         const queryParams = [];
-        if (owner_id && owner_id.trim()) {
-            queryParams.push(owner_id.trim());
+        if (effectiveOwnerId) {
+            queryParams.push(effectiveOwnerId);
             whereClause += ` AND i.owner_id = $${queryParams.length}`;
         }
 
@@ -145,6 +148,10 @@ router.get("/:id", async (req, res) => {
         }
 
         const invoice = invoiceResult.rows[0];
+        const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+        if (isOwner && req.user?.owner_id && invoice.owner_id !== req.user.owner_id) {
+            return res.status(403).json({ error: "Access denied. You do not have permission to view this invoice.", code: "FORBIDDEN_INVOICE" });
+        }
 
         // Fetch line items for this work order
         const itemsQuery = `
@@ -179,7 +186,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/invoices/generate - Create or refresh Tax Invoice from a Work Order
-router.post("/generate", async (req, res) => {
+router.post("/generate", requireRole(["admin", "staff"]), async (req, res) => {
     const { work_order_id, tax_rate = 0.05 } = req.body;
 
     if (!work_order_id) {
@@ -307,7 +314,7 @@ router.post("/generate", async (req, res) => {
 });
 
 // PATCH /api/invoices/:id/status - Update invoice payment status
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
@@ -442,7 +449,7 @@ const updateInvoiceTax = async (id, taxVal, res) => {
 };
 
 // PATCH /api/invoices/:id/customer-vat - Add or update customer VAT / TRN
-router.patch("/:id/customer-vat", async (req, res) => {
+router.patch("/:id/customer-vat", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const { customer_vat } = req.body;
     const cleanVat = customer_vat !== undefined && customer_vat !== null ? String(customer_vat).trim() : "";
@@ -488,21 +495,21 @@ router.patch("/:id/customer-vat", async (req, res) => {
 });
 
 // PATCH /api/invoices/:id/tax - Update invoice tax percentage
-router.patch("/:id/tax", async (req, res) => {
+router.patch("/:id/tax", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const taxVal = req.body.tax_percentage !== undefined ? req.body.tax_percentage : req.body.tax_rate;
     return updateInvoiceTax(id, taxVal, res);
 });
 
 // PUT /api/invoices/:id/tax - Alias
-router.put("/:id/tax", async (req, res) => {
+router.put("/:id/tax", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const taxVal = req.body.tax_percentage !== undefined ? req.body.tax_percentage : req.body.tax_rate;
     return updateInvoiceTax(id, taxVal, res);
 });
 
 // PATCH /api/invoices/:id - General update (supports customer_vat, tax_percentage and/or status)
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const { customer_vat, tax_percentage, tax_rate, status } = req.body;
 

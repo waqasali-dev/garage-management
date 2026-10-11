@@ -1,11 +1,13 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(authenticateToken);
 
 // GET /api/owners - Complete Car Owners Directory with metrics
-router.get("/", async (req, res) => {
+router.get("/", requireRole(["admin", "staff"]), async (req, res) => {
     const cacheKey = "garage:cache:owners:all";
 
     try {
@@ -114,7 +116,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/owners/unlinked - Fetch customers from car_owners without a user portal account with Redis caching
-router.get("/unlinked", async (req, res) => {
+router.get("/unlinked", requireRole(["admin"]), async (req, res) => {
     const cacheKey = "garage:cache:owners:unlinked";
 
     try {
@@ -171,6 +173,10 @@ router.get("/unlinked", async (req, res) => {
 // GET /api/owners/:id - Detailed profile with vehicles and work orders
 router.get("/:id", async (req, res) => {
     const { id } = req.params;
+    const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
+    if (isOwner && req.user?.owner_id && req.user.owner_id !== id) {
+        return res.status(403).json({ error: "Access denied. You may only view your own owner profile.", code: "FORBIDDEN_OWNER" });
+    }
     const cacheKey = `garage:cache:owner:details:${id}`;
 
     try {
@@ -248,7 +254,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // PATCH /api/owners/:id - Update owner profile details
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
     const { full_name, phone_number, email_address, billing_address, is_vip, vat_number } = req.body;
 

@@ -39,25 +39,11 @@ export const authenticateToken = (req, res, next) => {
             req.user = decoded;
             return next();
         } catch (err) {
-            // Token verification failed; fallback to session headers below if present
+            return res.status(401).json({
+                error: "Invalid or expired authorization token. Please log in again.",
+                code: "AUTH_TOKEN_INVALID",
+            });
         }
-    }
-
-    // Fallback: check X-User-Role / X-User-Email / X-Owner-Id headers
-    const roleHeader = (req.headers["x-user-role"] || req.body?.user?.role || "").toLowerCase();
-    const emailHeader = req.headers["x-user-email"] || req.body?.user?.email;
-    const userIdHeader = req.headers["x-user-id"] || req.body?.user?.user_id;
-    const ownerIdHeader = req.headers["x-owner-id"] || req.body?.user?.owner_id;
-
-    if (roleHeader) {
-        const normalizedRole = roleHeader === "car_owner" || roleHeader === "owner" ? "car_owner" : roleHeader;
-        req.user = {
-            user_id: userIdHeader || 1,
-            email: emailHeader || (roleHeader === "admin" ? "admin@precision.garage" : "owner@precision.garage"),
-            role: normalizedRole,
-            owner_id: ownerIdHeader || null,
-        };
-        return next();
     }
 
     return res.status(401).json({
@@ -73,7 +59,7 @@ export const authenticateToken = (req, res, next) => {
 export const requireRole = (allowedRoles = []) => {
     return (req, res, next) => {
         if (!req.user) {
-            return res.status(401).json({ error: "Authentication required." });
+            return res.status(401).json({ error: "Authentication required.", code: "AUTH_REQUIRED" });
         }
 
         const userRole = (req.user.role || "").toLowerCase();
@@ -83,8 +69,13 @@ export const requireRole = (allowedRoles = []) => {
             return next();
         }
 
-        const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase());
-        if (!normalizedAllowed.includes(userRole)) {
+        const normalizedAllowed = allowedRoles.map((r) => {
+            const low = r.toLowerCase();
+            return low === "owner" ? "car_owner" : low;
+        });
+        const normalizedUserRole = userRole === "owner" ? "car_owner" : userRole;
+
+        if (!normalizedAllowed.includes(normalizedUserRole)) {
             return res.status(403).json({
                 error: `Access denied. Role '${req.user.role}' is not authorized for this resource.`,
                 code: "FORBIDDEN_ROLE",

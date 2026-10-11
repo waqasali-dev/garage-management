@@ -1,8 +1,13 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// Enforce authentication & staff/admin permissions for workshop schedules
+router.use(authenticateToken);
+router.use(requireRole(["admin", "staff"]));
 
 // GET /api/schedules - Fetch all scheduled repair and maintenance tasks
 router.get("/", async (req, res) => {
@@ -291,8 +296,8 @@ router.patch("/:id", async (req, res) => {
     }
 });
 
-// DELETE /api/schedules/:id - Delete scheduled task
-router.delete("/:id", async (req, res) => {
+// DELETE /api/schedules/:id - Delete scheduled task (Admin only)
+router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
 
     try {

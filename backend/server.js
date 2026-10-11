@@ -11,6 +11,7 @@ import redisClient, { getCacheStats } from "./redis.js";
 // Middlewares
 import idempotencyMiddleware from "./middleware/idempotency.js";
 import errorHandler from "./middleware/errorHandler.js";
+import { authenticateToken, requireRole } from "./middleware/auth.js";
 
 // Modular Express Routers
 import authRoutes from "./routes/auth.routes.js";
@@ -46,6 +47,7 @@ const allowedOrigins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5000",
+    "http://127.0.0.1:5000",
     "https://garage-management-hy5h.onrender.com",
     process.env.FRONTEND_URL,
 ].filter(Boolean);
@@ -56,7 +58,7 @@ app.use(
             if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
                 return callback(null, true);
             }
-            return callback(null, true);
+            return callback(new Error(`CORS origin '${origin}' is not permitted by security policy.`), false);
         },
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -64,10 +66,6 @@ app.use(
             "Content-Type",
             "Authorization",
             "X-Idempotency-Key",
-            "X-User-Role",
-            "X-User-Id",
-            "X-User-Email",
-            "X-Owner-Id",
         ],
     })
 );
@@ -84,14 +82,12 @@ app.use(idempotencyMiddleware);
 app.get("/api/health", async (req, res) => {
     let dbStatus = "Disconnected";
     let serverTime = null;
-    let pgVersion = null;
     let redisStatus = redisClient.isReady ? "Connected (In-Memory Cache)" : "Disconnected";
 
     try {
-        const result = await pool.query("SELECT NOW() as server_time, version() as pg_version");
+        const result = await pool.query("SELECT NOW() as server_time");
         dbStatus = "Connected";
         serverTime = result.rows[0].server_time;
-        pgVersion = result.rows[0].pg_version;
     } catch (err) {
         dbStatus = `Error: ${err.message}`;
     }
@@ -103,7 +99,6 @@ app.get("/api/health", async (req, res) => {
         redis: redisStatus,
         cacheTelemetry: getCacheStats(),
         serverTime,
-        version: pgVersion,
     });
 });
 
@@ -114,7 +109,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/inventory", inventoryRoutes);
 
 // Work Orders & Intake Endpoints
-app.post("/api/intake", handleIntake);
+app.post("/api/intake", authenticateToken, requireRole(["admin", "staff"]), handleIntake);
 app.use("/api/work-orders", workOrdersRoutes);
 app.use("/api/staff/work-orders", workOrdersRoutes);
 

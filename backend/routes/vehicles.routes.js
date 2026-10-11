@@ -1,13 +1,29 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// Enforce authentication across all vehicle endpoints
+router.use(authenticateToken);
 
 // GET /api/vehicles or /api/owner/vehicles - List all vehicles with owner, active work order, and service metrics
 router.get(["/", "/vehicles"], async (req, res) => {
     const { owner_id, search } = req.query;
-    const cacheKey = `garage:cache:owner:vehicles:${owner_id || "all"}:${(search || "").trim().toLowerCase()}`;
+    const role = (req.user?.role || "").toLowerCase();
+    const isOwner = role === "owner" || role === "car_owner";
+
+    // Car owners are strictly restricted to their own vehicle records
+    let effectiveOwnerId = owner_id;
+    if (isOwner) {
+        effectiveOwnerId = req.user.owner_id || owner_id;
+        if (!effectiveOwnerId) {
+            return res.status(403).json({ error: "Access denied: Owner ID not associated with account." });
+        }
+    }
+
+    const cacheKey = `garage:cache:owner:vehicles:${effectiveOwnerId || "all"}:${(search || "").trim().toLowerCase()}`;
 
     try {
         const cached = await getCache(cacheKey);
@@ -18,8 +34,8 @@ router.get(["/", "/vehicles"], async (req, res) => {
         let whereClause = "1=1";
         const queryParams = [];
 
-        if (owner_id && owner_id.trim()) {
-            queryParams.push(owner_id.trim());
+        if (effectiveOwnerId && effectiveOwnerId.trim()) {
+            queryParams.push(effectiveOwnerId.trim());
             whereClause += ` AND v.owner_id = $${queryParams.length}`;
         }
 
@@ -130,8 +146,8 @@ router.get(["/", "/vehicles"], async (req, res) => {
         res.status(500).json({ error: "Failed to fetch vehicles", details: err.message });
     }
 });
-// GET /api/vehicles/vin/:vin - Fast Lookup existing vehicle & owner by VIN for intake auto-fill
-router.get("/vin/:vin", async (req, res) => {
+// GET /api/vehicles/vin/:vin - Fast Lookup existing vehicle & owner by VIN for intake auto-fill (Admin and Staff only)
+router.get("/vin/:vin", requireRole(["admin", "staff"]), async (req, res) => {
     const { vin } = req.params;
     const cleanVin = (vin || "").trim().toUpperCase();
 
@@ -186,12 +202,18 @@ router.get("/vin/:vin", async (req, res) => {
 // GET /api/vehicles/vin/:vin/history - Complete service history matched with VIN number
 router.get("/vin/:vin/history", async (req, res) => {
     const { vin } = req.params;
-    const cleanVin = vin.trim().toUpperCase();
+    const cleanVin = (vin || "").trim().toUpperCase();
+    const role = (req.user?.role || "").toLowerCase();
+    const isOwner = role === "owner" || role === "car_owner";
+
     const cacheKey = `garage:cache:vehicle:vin:history:${cleanVin}`;
 
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
+            if (isOwner && cached.vehicle?.owner_id !== req.user.owner_id) {
+                return res.status(403).json({ error: "Access denied. You do not own this vehicle." });
+            }
             return res.json({ success: true, source: "redis", data: cached });
         }
 
@@ -216,6 +238,11 @@ router.get("/vin/:vin/history", async (req, res) => {
         }
 
         const vehicle = vehicleResult.rows[0];
+
+        // Restrict car owners to only their own vehicle service histories
+        if (isOwner && vehicle.owner_id !== req.user.owner_id) {
+            return res.status(403).json({ error: "Access denied. You do not own this vehicle." });
+        }
 
         // 2. Fetch all Work Orders for this vehicle with invoice & tax resolution
         const workOrdersQuery = `

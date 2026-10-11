@@ -1,11 +1,13 @@
 import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(authenticateToken);
 
-// GET /api/staff - Complete Staff Directory with workload analytics
-router.get("/", async (req, res) => {
+// GET /api/staff - Complete Staff Directory with workload analytics (Admin only)
+router.get("/", requireRole(["admin"]), async (req, res) => {
     const cacheKey = "garage:cache:staff:all";
 
     try {
@@ -124,7 +126,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/staff/list - Simple active staff list for select dropdowns
-router.get("/list", async (req, res) => {
+router.get("/list", requireRole(["admin", "staff"]), async (req, res) => {
     const cacheKey = "garage:cache:staff:list:active";
     try {
         const cached = await getCache(cacheKey);
@@ -159,6 +161,10 @@ async function handleGetStaffProfile(req, res) {
     const cleanId = parseInt(id, 10);
     if (isNaN(cleanId)) {
         return res.status(400).json({ error: "Invalid staff ID" });
+    }
+
+    if (req.user?.role === "staff" && req.user?.staff_id !== cleanId) {
+        return res.status(403).json({ error: "Access denied. You may only view your own staff profile.", code: "FORBIDDEN_STAFF_PROFILE" });
     }
 
     const cacheKey = `garage:cache:staff:profile:${cleanId}`;
@@ -438,8 +444,8 @@ async function handleGetStaffProfile(req, res) {
     }
 }
 
-// PUT /api/staff/:id - Update staff profile details
-router.put("/:id", async (req, res) => {
+// PUT /api/staff/:id - Update staff profile details (Admin only)
+router.put("/:id", requireRole(["admin"]), async (req, res) => {
     try {
         const { id } = req.params;
         const { full_name, role, phone_number, residential_address, hourly_rate } = req.body;
@@ -482,8 +488,8 @@ router.put("/:id", async (req, res) => {
     }
 });
 
-// PATCH /api/staff/:id/status - Update staff active status
-router.patch("/:id/status", async (req, res) => {
+// PATCH /api/staff/:id/status - Update staff active status (Admin only)
+router.patch("/:id/status", requireRole(["admin"]), async (req, res) => {
     try {
         const { id } = req.params;
         const { is_active } = req.body;
@@ -518,8 +524,8 @@ router.patch("/:id/status", async (req, res) => {
     }
 });
 
-// DELETE /api/staff/:id - Delete staff member and linked user account
-router.delete("/:id", async (req, res) => {
+// DELETE /api/staff/:id - Delete staff member and linked user account (Admin only)
+router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
