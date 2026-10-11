@@ -340,11 +340,28 @@ export const handleGetWorkOrdersList = async (req, res) => {
 export const handleGetSingleWorkOrder = async (req, res) => {
     const rawId = req.params.id;
     const cleanId = (rawId || "").trim();
+    const rawRole = (req.user?.role || "").toLowerCase();
+    const isOwner = rawRole === "car_owner" || rawRole === "owner";
     const cacheKey = `garage:cache:workorder:details:${cleanId.toUpperCase()}`;
 
     try {
         const cached = await getCache(cacheKey);
         if (cached) {
+            if (isOwner) {
+                if (!req.user?.owner_id || cached.owner_id !== req.user.owner_id) {
+                    return res.status(403).json({
+                        error: "Access denied. You do not have permission to view this work order.",
+                        code: "FORBIDDEN_WORK_ORDER",
+                    });
+                }
+                const sanitizedCached = {
+                    ...cached,
+                    timeline: Array.isArray(cached.timeline)
+                        ? cached.timeline.filter((t) => !t.payload_json || t.payload_json.type !== "INTERNAL_NOTE")
+                        : [],
+                };
+                return res.json({ success: true, source: "redis", data: sanitizedCached });
+            }
             return res.json({ success: true, source: "redis", data: cached });
         }
 
@@ -369,9 +386,11 @@ export const handleGetSingleWorkOrder = async (req, res) => {
         }
 
         const workOrder = mainResult.rows[0];
-        const isOwner = req.user?.role === "car_owner" || req.user?.role === "owner";
-        if (isOwner && req.user?.owner_id && workOrder.owner_id !== req.user.owner_id) {
-            return res.status(403).json({ error: "Access denied. You do not have permission to view this work order.", code: "FORBIDDEN_WORK_ORDER" });
+        if (isOwner && (!req.user?.owner_id || workOrder.owner_id !== req.user.owner_id)) {
+            return res.status(403).json({
+                error: "Access denied. You do not have permission to view this work order.",
+                code: "FORBIDDEN_WORK_ORDER",
+            });
         }
         const canonicalId = workOrder.work_order_id;
 
@@ -461,7 +480,9 @@ export const handleGetSingleWorkOrder = async (req, res) => {
             ...workOrder,
             items: itemsResult.rows,
             media: mediaResult.rows,
-            timeline: timelineResult.rows,
+            timeline: isOwner
+                ? timelineResult.rows.filter((t) => !t.payload_json || t.payload_json.type !== "INTERNAL_NOTE")
+                : timelineResult.rows,
             scheduled_tasks: scheduledTasks,
             appointment: appointment,
         };
