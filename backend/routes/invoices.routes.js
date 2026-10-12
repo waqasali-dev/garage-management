@@ -2,6 +2,7 @@ import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { calculateTaxAmount, calculateTotalAmount } from "../utils/financial.js";
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -262,7 +263,7 @@ router.post("/generate", requireRole(["admin", "staff"]), async (req, res) => {
             }
         }
 
-        const taxAmount = parseFloat((subtotal * (effectiveTaxPercentage / 100.0)).toFixed(2));
+        const taxAmount = calculateTaxAmount(subtotal, effectiveTaxPercentage);
         const initialStatus = wo.status === 'completed' ? 'paid' : 'pending';
 
         // Upsert invoice record including tax_percentage and customer_vat

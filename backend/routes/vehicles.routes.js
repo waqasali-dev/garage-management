@@ -2,6 +2,7 @@ import express from "express";
 import pool from "../db.js";
 import { getCache, setCache, deleteCachePattern } from "../redis.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { toCents, fromCents, sumMonetary } from "../utils/financial.js";
 
 const router = express.Router();
 
@@ -91,7 +92,7 @@ router.get(["/", "/vehicles"], async (req, res) => {
                     SELECT COALESCE(SUM(
                         CASE 
                             WHEN i.subtotal IS NOT NULL THEN (i.subtotal + COALESCE(i.tax_amount, 0))
-                            ELSE (COALESCE(w.total_cost, 0) * 1.05)
+                            ELSE ROUND((COALESCE(w.total_cost, 0) * 1.05)::numeric, 2)
                         END
                     ), 0.00) 
                     FROM work_order_data w 
@@ -257,7 +258,7 @@ router.get("/vin/:vin/history", async (req, res) => {
                 i.status AS invoice_status,
                 CASE 
                     WHEN i.subtotal IS NOT NULL THEN (i.subtotal + COALESCE(i.tax_amount, 0))
-                    ELSE (COALESCE(w.total_cost, 0) * 1.05)
+                    ELSE ROUND((COALESCE(w.total_cost, 0) * 1.05)::numeric, 2)
                 END AS total_with_tax
             FROM work_order_data w
             LEFT JOIN staff_data s ON w.assigned_staff_id = s.staff_id
@@ -324,17 +325,23 @@ router.get("/vin/:vin/history", async (req, res) => {
             const media = mediaByOrder[wo.work_order_id] || [];
             const tasks = tasksByOrder[wo.work_order_id] || [];
 
-            const partsTotal = items
-                .filter((i) => i.item_type === "part")
-                .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0);
+            const partsTotal = sumMonetary(
+                items.filter((i) => i.item_type === "part").map((i) => i.total_price)
+            );
 
-            const laborTotal = items
-                .filter((i) => i.item_type === "labor")
-                .reduce((sum, i) => sum + (parseFloat(i.total_price) || 0), 0);
+            const laborTotal = sumMonetary(
+                items.filter((i) => i.item_type === "labor").map((i) => i.total_price)
+            );
+
+            const resolvedTotalWithTax = fromCents(
+                wo.total_with_tax !== null && wo.total_with_tax !== undefined
+                    ? toCents(wo.total_with_tax)
+                    : Math.round(toCents(wo.total_cost || 0) * 1.05)
+            );
 
             return {
                 ...wo,
-                total_with_tax: parseFloat(wo.total_with_tax) || (parseFloat(wo.total_cost || 0) * 1.05),
+                total_with_tax: resolvedTotalWithTax,
                 items,
                 media,
                 scheduled_tasks: tasks,
@@ -344,10 +351,7 @@ router.get("/vin/:vin/history", async (req, res) => {
         });
 
         // 5. Compute High-Level Metrics
-        const totalSpent = enhancedWorkOrders.reduce(
-            (sum, wo) => sum + (parseFloat(wo.total_with_tax) || (parseFloat(wo.total_cost || 0) * 1.05)),
-            0
-        );
+        const totalSpent = sumMonetary(enhancedWorkOrders.map((wo) => wo.total_with_tax));
         const totalPartsReplaced = enhancedWorkOrders.reduce(
             (sum, wo) => sum + wo.items.filter((i) => i.item_type === "part").length,
             0
