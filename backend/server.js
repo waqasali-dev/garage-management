@@ -76,6 +76,20 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // Mutex / Idempotency protection for state mutations
 app.use(idempotencyMiddleware);
 
+// Middleware: Sanitize internal database error details in production responses (CWE-209 / SEC-11)
+app.use((req, res, next) => {
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+        if (process.env.NODE_ENV === "production" && body && typeof body === "object") {
+            if (res.statusCode >= 500 && body.details) {
+                delete body.details;
+            }
+        }
+        return originalJson(body);
+    };
+    next();
+});
+
 // ==========================================
 // 1. HEALTH CHECK & TELEMETRY
 // ==========================================
