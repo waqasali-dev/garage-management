@@ -12,11 +12,23 @@ if (!process.env.DATABASE_URL) {
     console.error('❌ DATABASE_URL is missing in backend/.env');
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+const sslRejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== undefined
+    ? process.env.PG_SSL_REJECT_UNAUTHORIZED === "true"
+    : isProduction;
+
+if (!sslRejectUnauthorized) {
+    console.warn("⚠️ SECURITY WARNING (SEC-12): PostgreSQL TLS certificate verification is disabled (rejectUnauthorized: false). Set PG_SSL_REJECT_UNAUTHORIZED=true in production to prevent MitM.");
+}
+
 const poolConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false,
-    },
+    ssl: process.env.DATABASE_URL?.includes("sslmode=disable")
+        ? false
+        : {
+            rejectUnauthorized: sslRejectUnauthorized,
+            ...(process.env.PG_CA_CERT ? { ca: process.env.PG_CA_CERT } : {}),
+        },
     max: parseInt(process.env.PG_MAX_CONNECTIONS, 10) || 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,

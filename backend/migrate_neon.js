@@ -15,11 +15,19 @@ if (!connectionString) {
     process.exit(1);
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+const sslRejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== undefined
+    ? process.env.PG_SSL_REJECT_UNAUTHORIZED === "true"
+    : isProduction;
+
 const pool = new pg.Pool({
     connectionString,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: connectionString?.includes("sslmode=disable")
+        ? false
+        : {
+            rejectUnauthorized: sslRejectUnauthorized,
+            ...(process.env.PG_CA_CERT ? { ca: process.env.PG_CA_CERT } : {}),
+        },
 });
 
 async function runMigration() {
