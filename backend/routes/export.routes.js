@@ -9,6 +9,21 @@ const router = express.Router();
 router.use(authenticateToken);
 router.use(requireRole(["admin"]));
 
+/**
+ * Sanitize cell values against CSV Formula / DDE Injection (CWE-1236)
+ * Prepend a single quote (') if the cell starts with formula trigger characters: =, +, -, @, \t, \r, %
+ * Also escape embedded double quotes with ""
+ */
+export const sanitizeCsvCell = (val) => {
+    if (val === null || val === undefined) return '""';
+    let str = String(val);
+    str = str.replace(/"/g, '""');
+    if (/^[=+\-@\t\r%]/.test(str)) {
+        str = `'${str}`;
+    }
+    return `"${str}"`;
+};
+
 // GET /api/export/inventory.csv - Export inventory with short-term caching
 router.get("/inventory.csv", async (req, res) => {
     const cacheKey = "garage:cache:export:inventory:csv";
@@ -27,7 +42,15 @@ router.get("/inventory.csv", async (req, res) => {
 
         let csv = "SKU,Part Name,Category,Stock,Reorder Threshold,Unit Cost,Selling Price\n";
         for (const r of result.rows) {
-            csv += `"${r.sku}","${r.part_name}","${r.category}",${r.stock_quantity},${r.reorder_threshold},${r.unit_cost},${r.selling_price}\n`;
+            csv += [
+                sanitizeCsvCell(r.sku),
+                sanitizeCsvCell(r.part_name),
+                sanitizeCsvCell(r.category),
+                sanitizeCsvCell(r.stock_quantity),
+                sanitizeCsvCell(r.reorder_threshold),
+                sanitizeCsvCell(r.unit_cost),
+                sanitizeCsvCell(r.selling_price),
+            ].join(",") + "\n";
         }
 
         await setCache(cacheKey, csv, 60);
@@ -63,7 +86,19 @@ router.get("/work-orders.csv", async (req, res) => {
 
         let csv = "Work Order ID,VIN,Make,Model,Year,License Plate,Owner,Status,Bay,Total Cost,Created Date\n";
         for (const r of result.rows) {
-            csv += `"${r.work_order_id}","${r.vin}","${r.make}","${r.model}",${r.year},"${r.license_plate}","${r.owner_name}","${r.status}","${r.bay_assigned || ''}",${r.total_cost},"${new Date(r.created_at).toISOString()}"\n`;
+            csv += [
+                sanitizeCsvCell(r.work_order_id),
+                sanitizeCsvCell(r.vin),
+                sanitizeCsvCell(r.make),
+                sanitizeCsvCell(r.model),
+                sanitizeCsvCell(r.year),
+                sanitizeCsvCell(r.license_plate),
+                sanitizeCsvCell(r.owner_name),
+                sanitizeCsvCell(r.status),
+                sanitizeCsvCell(r.bay_assigned || ""),
+                sanitizeCsvCell(r.total_cost),
+                sanitizeCsvCell(new Date(r.created_at).toISOString()),
+            ].join(",") + "\n";
         }
 
         await setCache(cacheKey, csv, 60);
