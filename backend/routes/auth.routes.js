@@ -6,6 +6,9 @@ import { generateToken, authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
+// Standard constant-time dummy hash to mitigate timing attacks against user enumeration
+const DUMMY_HASH = "$2b$10$fV2hX5fC8t7uM0s2J5hJg.Qy1t8z0v6N5w3p8q2R4y6U8i0o1p3s4";
+
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
     try {
@@ -19,18 +22,15 @@ router.post("/login", async (req, res) => {
             [email.trim()]
         );
 
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: "Invalid credentials." });
-        }
-
         const user = result.rows[0];
+        const hashToCompare = user ? user.password : DUMMY_HASH;
+        const isMatch = await bcrypt.compare(password, hashToCompare);
 
-        if (!user.is_active) {
-            return res.status(403).json({ error: "This account has been deactivated/suspended." });
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
+        // Constant response for invalid user, wrong password, or suspended account (CWE-204 / SEC-14)
+        if (!user || !isMatch || !user.is_active) {
+            if (user && !user.is_active && isMatch) {
+                console.warn(`[AUTH] Login attempt for deactivated account: ${user.email}`);
+            }
             return res.status(401).json({ error: "Invalid credentials." });
         }
 
