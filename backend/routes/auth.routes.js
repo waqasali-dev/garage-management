@@ -3,14 +3,15 @@ import bcrypt from "bcrypt";
 import pool from "../db.js";
 import { deleteCachePattern } from "../redis.js";
 import { generateToken, authenticateToken } from "../middleware/auth.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
 // Standard constant-time dummy hash to mitigate timing attacks against user enumeration
 const DUMMY_HASH = "$2b$10$fV2hX5fC8t7uM0s2J5hJg.Qy1t8z0v6N5w3p8q2R4y6U8i0o1p3s4";
 
-// POST /api/auth/login
-router.post("/login", async (req, res) => {
+// POST /api/auth/login (Rate-limited against brute force)
+router.post("/login", authLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
@@ -83,8 +84,8 @@ router.post("/login", async (req, res) => {
     }
 });
 
-// POST /api/auth/change-password
-router.post("/change-password", authenticateToken, async (req, res) => {
+// POST /api/auth/change-password (Rate-limited against brute force)
+router.post("/change-password", authLimiter, authenticateToken, async (req, res) => {
     const { current_password, new_password } = req.body;
     const userId = req.user?.user_id;
 
