@@ -4,7 +4,7 @@ import pool from "../db.js";
 import { deleteCachePattern } from "../redis.js";
 import { generateToken, authenticateToken } from "../middleware/auth.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
-import { setAuthCookie } from "../middleware/cookies.js";
+import { setAuthCookie, clearAuthCookie } from "../middleware/cookies.js";
 
 const router = express.Router();
 
@@ -115,12 +115,54 @@ router.post("/change-password", authLimiter, authenticateToken, async (req, res)
             newHash,
             userId,
         ]);
-
         res.json({ success: true, message: "Password updated successfully." });
     } catch (err) {
         console.error("Error changing password:", err);
         res.status(500).json({ error: "Failed to update password", details: err.message });
     }
+});
+
+// GET /api/auth/me - Verify current session and return fresh user details
+router.get("/me", authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user?.user_id;
+        const detailsResult = await pool.query(
+            `SELECT 
+                u.user_id,
+                u.email,
+                u.role,
+                u.staff_id,
+                u.owner_id,
+                u.is_active,
+                u.created_at,
+                u.last_login,
+                COALESCE(s.full_name, o.full_name, 'System Administrator') AS full_name
+             FROM users u
+             LEFT JOIN staff_data s ON u.staff_id = s.staff_id
+             LEFT JOIN car_owners o ON u.owner_id = o.owner_id
+             WHERE u.user_id = $1;`,
+            [userId]
+        );
+
+        if (detailsResult.rows.length === 0 || !detailsResult.rows[0].is_active) {
+            clearAuthCookie(res);
+            return res.status(401).json({ error: "Session invalid or account inactive.", code: "SESSION_EXPIRED" });
+        }
+
+        res.json({
+            success: true,
+            user: detailsResult.rows[0],
+        });
+    } catch (err) {
+        console.error("Session verification error:", err);
+        res.status(500).json({ error: "Failed to verify session", details: err.message });
+    }
+});
+
+// POST /api/auth/logout - Clear session cookie
+router.post("/logout", (req, res) => {
+    clearAuthCookie(res);
+    res.json({ success: true, message: "Logged out successfully." });
 });
 
 export default router;
