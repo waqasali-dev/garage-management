@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { extractToken } from "./cookies.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
@@ -35,11 +36,10 @@ export const generateToken = (user) => {
 };
 
 /**
- * Authenticate JWT Bearer Token Middleware with resilient session recovery
+ * Authenticate JWT Token Middleware with cookie extraction and resilient bearer fallback
  */
 export const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers["authorization"] || req.headers["Authorization"];
-    const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const token = extractToken(req);
 
     if (token) {
         try {
@@ -55,7 +55,7 @@ export const authenticateToken = (req, res, next) => {
     }
 
     return res.status(401).json({
-        error: "Authentication required. Please provide a valid Authorization Bearer token.",
+        error: "Authentication required. Please provide a valid session cookie or Authorization Bearer token.",
         code: "AUTH_TOKEN_MISSING",
     });
 };
