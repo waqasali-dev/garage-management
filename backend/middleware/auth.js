@@ -2,6 +2,8 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import pool from "../db.js";
+import { getCache, setCache } from "../redis.js";
 import { extractToken } from "./cookies.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,15 +38,45 @@ export const generateToken = (user) => {
 };
 
 /**
- * Authenticate JWT Token Middleware with cookie extraction and resilient bearer fallback
+ * Authenticate JWT Token Middleware with cookie extraction, resilient bearer fallback,
+ * and real-time active status verification to mitigate stateless drift (SEC-2.2).
  */
-export const authenticateToken = (req, res, next) => {
+export const authenticateToken = async (req, res, next) => {
     const token = extractToken(req);
 
     if (token) {
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
             req.user = decoded;
+
+            // Mitigate stateless token drift - verify user active status in real time
+            if (decoded.user_id) {
+                const activeCacheKey = `garage:user_active:${decoded.user_id}`;
+                let isActive = await getCache(activeCacheKey);
+
+                if (isActive === null) {
+                    const statusRes = await pool.query(
+                        "SELECT is_active FROM users WHERE user_id = $1;",
+                        [decoded.user_id]
+                    );
+                    if (statusRes.rows.length === 0) {
+                        return res.status(401).json({
+                            error: "User account no longer exists. Please log in again.",
+                            code: "AUTH_USER_NOT_FOUND",
+                        });
+                    }
+                    isActive = Boolean(statusRes.rows[0].is_active);
+                    await setCache(activeCacheKey, isActive, 60); // 60s cache with active invalidation
+                }
+
+                if (!isActive) {
+                    return res.status(401).json({
+                        error: "Account has been deactivated or suspended.",
+                        code: "AUTH_ACCOUNT_DEACTIVATED",
+                    });
+                }
+            }
+
             return next();
         } catch (err) {
             return res.status(401).json({

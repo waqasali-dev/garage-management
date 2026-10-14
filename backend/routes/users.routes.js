@@ -2,8 +2,9 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../db.js";
-import { getCache, setCache, deleteCachePattern } from "../redis.js";
+import { getCache, setCache, deleteCache, deleteCachePattern } from "../redis.js";
 import { authenticateToken, requireRole, JWT_SECRET } from "../middleware/auth.js";
+import { extractToken } from "../middleware/cookies.js";
 
 const router = express.Router();
 
@@ -83,8 +84,7 @@ export const handleCreateUser = async (req, res) => {
         const userCount = parseInt(userCountRes.rows[0]?.count, 10) || 0;
 
         if (userCount > 0) {
-            const authHeader = req.headers["authorization"] || req.headers["Authorization"];
-            const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+            const token = extractToken(req);
 
             if (!token) {
                 return res.status(401).json({ error: "Admin authentication required to create users.", code: "AUTH_REQUIRED" });
@@ -376,6 +376,7 @@ router.patch("/:id/status", authenticateToken, requireRole(["admin"]), async (re
             );
         }
 
+        await deleteCache(`garage:user_active:${userId}`);
         await deleteCachePattern("garage:cache:users:*");
         await deleteCachePattern("garage:cache:staff:*");
         await deleteCachePattern("garage:cache:owners:*");
@@ -418,6 +419,7 @@ router.delete("/:id", authenticateToken, requireRole(["admin"]), async (req, res
             );
         }
 
+        await deleteCache(`garage:user_active:${userId}`);
         await deleteCachePattern("garage:cache:users:*");
         await deleteCachePattern("garage:cache:staff:*");
         await deleteCachePattern("garage:cache:owners:*");
