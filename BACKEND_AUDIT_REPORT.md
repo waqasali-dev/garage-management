@@ -250,39 +250,32 @@ However, the audit revealed **critical architectural vulnerabilities** in access
 
 ## 2. Sessions & Cookies Audit
 
-### 2.1 Complete Absence of HTTP Cookies
-* **Inspection Result:**
-  - `cookie-parser` is **not installed** in [`backend/package.json`](file:///c:/Codding/garage-management/backend/package.json).
-  - No route sets or reads cookies.
-  - Zero presence of `HttpOnly`, `Secure`, `SameSite=Strict/Lax`, or `__Host-` prefixed cookie security policies.
-* **Architectural Flaw:**
-  Authentication relies exclusively on returning the JWT token in JSON response payloads (`res.json({ token, user })`).
-* **Consequence:** The client is forced to persist the JWT token in browser `localStorage` or `sessionStorage`. Any Cross-Site Scripting (XSS) vulnerability anywhere on the frontend allows immediate exfiltration of the authentication token.
+### 2.1 Complete Absence of HTTP Cookies [RESOLVED ✅]
+* **Inspection Result (Historical):**
+  - `cookie-parser` was previously missing from [`backend/package.json`](file:///c:/Codding/garage-management/backend/package.json).
+  - No route set or read cookies; JWT was stored exclusively in `localStorage`.
+* **Resolution Implemented:**
+  - Installed `cookie-parser` and registered it globally in [`backend/server.js`](file:///c:/Codding/garage-management/backend/server.js).
+  - Created [`backend/middleware/cookies.js`](file:///c:/Codding/garage-management/backend/middleware/cookies.js) providing centralized `setAuthCookie()`, `clearAuthCookie()`, and `extractToken()` helper functions with `HttpOnly`, `SameSite`, and environment-adaptive `Secure` flags.
+  - Updated [`backend/routes/auth.routes.js`](file:///c:/Codding/garage-management/backend/routes/auth.routes.js) to issue cookies upon login and clear them upon logout (`POST /api/auth/logout`), while maintaining dual backwards compatibility for `Authorization: Bearer` headers.
+  - Implemented session verification endpoint `GET /api/auth/me`.
+  - Updated frontend [`frontend/src/config/api.js`](file:///c:/Codding/garage-management/frontend/src/config/api.js) and [`frontend/src/context/AuthContext.js`](file:///c:/Codding/garage-management/frontend/src/context/AuthContext.js) to send `credentials: 'include'` and verify the session automatically on application mount.
 
-### 2.2 Token Lifetime & Lack of Revocation (Stateless Drift)
-* **Inspection Result:**
-  - `JWT_EXPIRES_IN` defaults to `7d` (7 days).
-  - No refresh token mechanism exists.
-  - There is no token blacklist (in Redis or PostgreSQL) to revoke tokens upon logout, password change, or user deactivation.
-* **Consequence:**
-  If an administrator deactivates a user account or an employee leaves the company, any existing JWT token previously issued to that user **remains completely valid for up to 7 days**, because `authenticateToken` only checks token signature and expiration without checking `users.is_active` in the database.
+### 2.2 Token Lifetime & Lack of Revocation (Stateless Drift) [RESOLVED ✅]
+* **Inspection Result (Historical):**
+  - Tokens were valid for 7 days without verifying user active status in the database.
+* **Resolution Implemented:**
+  - Updated `authenticateToken` in [`backend/middleware/auth.js`](file:///c:/Codding/garage-management/backend/middleware/auth.js) to query `users.is_active` in real time with high-performance 60-second Redis/in-memory caching.
+  - Deactivated or suspended accounts are instantly rejected with `AUTH_ACCOUNT_DEACTIVATED`.
+  - Integrated immediate cache invalidation (`deleteCache("garage:user_active:<userId>")`) across user status updates and soft deactivations in [`backend/routes/users.routes.js`](file:///c:/Codding/garage-management/backend/routes/users.routes.js).
 
-### 2.3 Idempotency Session Collision & Cross-Talk Risk
-* **Location:** [`backend/middleware/idempotency.js`](file:///c:/Codding/garage-management/backend/middleware/idempotency.js#L25-L36)
-* **Mechanics:**
-  When a client does not send an explicit `X-Idempotency-Key` header:
-  ```javascript
-  const ip = req.ip || req.headers["x-forwarded-for"] || "client";
-  signature = `hash:${crypto
-      .createHash("sha256")
-      .update(`${ip}:${req.method}:${req.originalUrl}:${bodyStr}`)
-      .digest("hex")}`;
-  ```
-* **Consequence:**
-  Behind a corporate NAT, reverse proxy, or Cloudflare, multiple distinct clients share the same IP. If two different customers submit the same action (e.g. drop-off form or appointment request with identical fields) within 60 seconds:
-  1. The second customer is either blocked (`409 Duplicate in-flight request`), OR
-  2. The second customer receives a cached replay of the first customer's response (`X-Idempotent-Replay: true`), exposing the first customer's generated `work_order_id` or invoice data!
-* **Remediation:** Include authenticated `req.user.user_id` in the idempotency signature. For unauthenticated endpoints, do not cache replay responses unless an explicit unique client key is sent.
+### 2.3 Idempotency Session Collision & Cross-Talk Risk [RESOLVED ✅]
+* **Location:** [`backend/middleware/idempotency.js`](file:///c:/Codding/garage-management/backend/middleware/idempotency.js)
+* **Mechanics (Historical):**
+  - Unauthenticated NAT/proxy IPs could experience cross-talk replay collision if identical requests were dispatched.
+* **Resolution Implemented:**
+  - Bound user authentication tokens and identities directly into the idempotency signature (`user:<hash>` vs `ip:<ip>`).
+  - Restricted automated response replay caching strictly to authenticated requests or explicit client-supplied `X-Idempotency-Key` headers, eliminating cross-talk data leakage behind shared corporate proxies.
 
 ---
 
