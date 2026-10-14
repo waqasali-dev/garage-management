@@ -5,10 +5,12 @@ import {
     getIdempotencyRecord,
     setIdempotencyRecord,
 } from "../redis.js";
+import { extractToken } from "./cookies.js";
 
 /**
  * Global Idempotency & Concurrency Mutex Middleware
- * Protects mutating requests (POST, PUT, PATCH, DELETE) against duplicate submissions & race conditions.
+ * Protects mutating requests (POST, PUT, PATCH, DELETE) against duplicate submissions & race conditions
+ * while strictly isolating user sessions to prevent IP cross-talk behind NAT/proxies (SEC-2.3).
  */
 export const idempotencyMiddleware = async (req, res, next) => {
     // Only intercept state-mutating HTTP methods
@@ -16,23 +18,39 @@ export const idempotencyMiddleware = async (req, res, next) => {
         return next();
     }
 
-    // Determine unique idempotency signature
     const clientKey = req.headers["x-idempotency-key"];
+    const token = extractToken(req);
+    const ip = req.ip || req.headers["x-forwarded-for"] || "client";
+
+    // Bind identity to prevent cross-talk behind shared NAT / proxies (SEC-2.3)
+    let userIdentifier = "anon";
+    if (token) {
+        userIdentifier = `user:${crypto.createHash("sha256").update(token).digest("hex").slice(0, 16)}`;
+    } else {
+        userIdentifier = `ip:${ip}`;
+    }
+
     let signature;
+    let shouldCacheReplay = false;
 
     if (clientKey) {
-        signature = `key:${clientKey}`;
+        // Explicit client key: always eligible for replay caching, scoped to user identity
+        signature = `key:${userIdentifier}:${clientKey}`;
+        shouldCacheReplay = true;
     } else {
         const bodyStr = req.body
             ? typeof req.body === "string"
                 ? req.body.substring(0, 10000)
                 : JSON.stringify(req.body).substring(0, 10000)
             : "";
-        const ip = req.ip || req.headers["x-forwarded-for"] || "client";
-        signature = `hash:${crypto
+        const bodyHash = crypto
             .createHash("sha256")
-            .update(`${ip}:${req.method}:${req.originalUrl}:${bodyStr}`)
-            .digest("hex")}`;
+            .update(`${req.method}:${req.originalUrl}:${bodyStr}`)
+            .digest("hex");
+
+        signature = `hash:${userIdentifier}:${bodyHash}`;
+        // Only cache automated replay for authenticated users; never cache replay for unauthenticated requests without an explicit key
+        shouldCacheReplay = Boolean(token);
     }
 
     const lockKey = `garage:lock:idempotency:${signature}`;
@@ -40,10 +58,12 @@ export const idempotencyMiddleware = async (req, res, next) => {
 
     try {
         // Step 1: Check if this exact request already completed and cached its response
-        const cachedResponse = await getIdempotencyRecord(resultKey);
-        if (cachedResponse && cachedResponse.status && cachedResponse.body) {
-            res.setHeader("X-Idempotent-Replay", "true");
-            return res.status(cachedResponse.status).json(cachedResponse.body);
+        if (shouldCacheReplay) {
+            const cachedResponse = await getIdempotencyRecord(resultKey);
+            if (cachedResponse && cachedResponse.status && cachedResponse.body) {
+                res.setHeader("X-Idempotent-Replay", "true");
+                return res.status(cachedResponse.status).json(cachedResponse.body);
+            }
         }
 
         // Step 2: Acquire atomic distributed execution lock (TTL: 15 seconds)
@@ -67,8 +87,8 @@ export const idempotencyMiddleware = async (req, res, next) => {
             isCompleted = true;
 
             try {
-                // If operation succeeded (2xx), cache idempotent result for 60s
-                if (res.statusCode >= 200 && res.statusCode < 400) {
+                // If operation succeeded (2xx) and replay caching is permitted, cache result
+                if (shouldCacheReplay && res.statusCode >= 200 && res.statusCode < 400) {
                     let parsedBody = body;
                     if (typeof body === "string" && isJson) {
                         try {
