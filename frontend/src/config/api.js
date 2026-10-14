@@ -94,6 +94,7 @@ if (typeof window !== 'undefined' && window.fetch) {
 
             const enhancedInit = {
                 ...init,
+                credentials: init.credentials || 'include',
                 headers,
             };
 
@@ -115,6 +116,7 @@ if (typeof window !== 'undefined' && window.fetch) {
 
         const enhancedInit = {
             ...init,
+            credentials: init.credentials || 'include',
             headers,
         };
 

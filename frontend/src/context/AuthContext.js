@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import API_BASE_URL from '../config/api';
 
 const AuthContext = createContext(null);
 
@@ -24,6 +25,50 @@ export function AuthProvider({ children }) {
         }
     });
 
+    const [loading, setLoading] = useState(true);
+
+    // Verify session with backend on initial mount using HttpOnly cookie or bearer token
+    useEffect(() => {
+        let isMounted = true;
+
+        const verifySession = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/auth/me`, {
+                    credentials: 'include',
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.success && data?.user && isMounted) {
+                        setUser(data.user);
+                        try {
+                            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data.user));
+                        } catch (_) {}
+                    }
+                } else if (res.status === 401 || res.status === 403) {
+                    // Session invalid or account deactivated
+                    if (isMounted) {
+                        setUser(null);
+                        setToken(null);
+                        try {
+                            localStorage.removeItem(AUTH_STORAGE_KEY);
+                            localStorage.removeItem(AUTH_TOKEN_KEY);
+                        } catch (_) {}
+                    }
+                }
+            } catch (err) {
+                console.warn('[AUTH] Session verification deferred (offline or network error):', err.message);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+
+        verifySession();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
     const login = (userData, tokenData) => {
         setUser(userData);
         if (tokenData) {
@@ -39,7 +84,7 @@ export function AuthProvider({ children }) {
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
         setUser(null);
         setToken(null);
         try {
@@ -47,6 +92,16 @@ export function AuthProvider({ children }) {
             localStorage.removeItem(AUTH_TOKEN_KEY);
         } catch (e) {
             console.error('Error removing auth credentials:', e);
+        }
+
+        // Notify backend to clear HttpOnly cookie
+        try {
+            await fetch(`${API_BASE_URL}/auth/logout`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+        } catch (e) {
+            // Silently ignore network failures on logout
         }
     };
 
@@ -69,6 +124,7 @@ export function AuthProvider({ children }) {
                 isStaff,
                 isOwner,
                 isAuthenticated,
+                loading,
                 login,
                 logout,
             }}
