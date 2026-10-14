@@ -4,6 +4,7 @@ import pool from "../db.js";
 import { deleteCachePattern } from "../redis.js";
 import { generateToken, authenticateToken } from "../middleware/auth.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
+import { setAuthCookie } from "../middleware/cookies.js";
 
 const router = express.Router();
 
@@ -71,6 +72,7 @@ router.post("/login", authLimiter, async (req, res) => {
         };
 
         const token = generateToken(safeUser);
+        setAuthCookie(res, token);
 
         return res.json({
             success: true,
