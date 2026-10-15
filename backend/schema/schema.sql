@@ -356,3 +356,51 @@ CREATE INDEX IF NOT EXISTS idx_appointments_vehicle ON appointments(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_owner ON appointments(owner_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_workshop_bays_active ON workshop_bays(is_active);
+
+-- ============================================================================
+-- 6. TRIGGERS: 3NF FINANCIAL TOTALS SYNCHRONIZATION (Section 3.1 Issue 1)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_sync_work_order_totals()
+RETURNS TRIGGER AS $$
+DECLARE
+    target_wo_id VARCHAR(30);
+    new_subtotal NUMERIC(10, 2);
+BEGIN
+    IF (TG_OP = 'DELETE') THEN
+        target_wo_id := OLD.work_order_id;
+    ELSE
+        target_wo_id := NEW.work_order_id;
+    END IF;
+
+    SELECT COALESCE(SUM(total_price), 0.00)
+    INTO new_subtotal
+    FROM work_order_items
+    WHERE work_order_id = target_wo_id;
+
+    UPDATE work_order_data
+    SET total_cost = new_subtotal,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE work_order_id = target_wo_id;
+
+    UPDATE invoice_data
+    SET subtotal = new_subtotal,
+        tax_amount = ROUND(new_subtotal * (tax_percentage / 100.0), 2)
+    WHERE work_order_id = target_wo_id
+      AND status = 'pending';
+
+    IF (TG_OP = 'DELETE') THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_work_order_totals ON work_order_items;
+
+CREATE TRIGGER trg_sync_work_order_totals
+AFTER INSERT OR UPDATE OR DELETE ON work_order_items
+FOR EACH ROW
+EXECUTE FUNCTION fn_sync_work_order_totals();
+
