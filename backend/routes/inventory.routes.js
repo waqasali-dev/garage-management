@@ -640,14 +640,10 @@ router.patch("/:id", async (req, res) => {
                 }
             }
 
-            // Sync total stock quantity from active batches
+            // Fetch part with 100% synchronized stock quantity from database trigger
             const syncRes = await client.query(
-                `UPDATE inventory_data 
-                 SET stock_quantity = COALESCE((SELECT SUM(quantity_remaining) FROM inventory_batches WHERE part_id = $1), $2),
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE part_id = $1
-                 RETURNING *;`,
-                [partId, newStock]
+                "SELECT * FROM inventory_data WHERE part_id = $1;",
+                [partId]
             );
             if (syncRes.rows.length > 0) {
                 updatedPart = syncRes.rows[0];
@@ -821,18 +817,17 @@ router.patch("/:id/restock", async (req, res) => {
             ]
         );
 
-        // 4. Update overall inventory_data stock quantity and current reference prices
+        // 4. Update catalog reference prices (stock quantity is automatically synchronized by database trigger)
         const updatePartQuery = `
             UPDATE inventory_data
             SET 
-                stock_quantity = stock_quantity + $1,
-                unit_cost = $2,
-                selling_price = $3
-            WHERE part_id = $4
+                unit_cost = $1,
+                selling_price = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE part_id = $3
             RETURNING *;
         `;
         const updatedPartRes = await client.query(updatePartQuery, [
-            qtyToAdd,
             batchCost,
             batchSellingPrice,
             partId,
