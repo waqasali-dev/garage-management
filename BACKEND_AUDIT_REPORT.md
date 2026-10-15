@@ -296,47 +296,42 @@ erDiagram
     CAR_OWNERS ||--o{ INVOICE_DATA : billed_to
 ```
 
-#### Issue 1: Third Normal Form (3NF) Violation in Financial Totals (Transitive Dependency)
+#### Issue 1: Third Normal Form (3NF) Violation in Financial Totals (Transitive Dependency) [RESOLVED ✅]
 * **Tables:** `work_order_data`, `work_order_items`, `invoice_data`
-* **Details:**
-  - `work_order_items.total_price` is a generated column (`quantity_or_hours * unit_price`).
-  - `work_order_data.total_cost` is a stored column that duplicates the sum of `work_order_items.total_price`.
-  - `invoice_data.subtotal` duplicates `work_order_data.total_cost`.
-  - `invoice_data.total_amount` is a generated column (`subtotal + tax_amount`).
-* **Problem:** If a line item is inserted or deleted outside the standard route handler (e.g. via direct database query, batch import, or migration), `work_order_data.total_cost` and `invoice_data.subtotal` become out of sync.
-* **Remediation:** Use PostgreSQL database triggers (`AFTER INSERT OR UPDATE OR DELETE ON work_order_items`) or database views to compute work order totals dynamically.
+* **Resolution Implemented:**
+  - Implemented automated PostgreSQL database trigger `trg_sync_work_order_totals` (`fn_sync_work_order_totals`) on `work_order_items` (`AFTER INSERT OR UPDATE OR DELETE`).
+  - Automatically recalculates line item totals and writes the updated sum into `work_order_data.total_cost` and pending `invoice_data.subtotal` and `tax_amount`.
+  - Refactored [`backend/routes/workOrders.routes.js`](file:///c:/Codding/garage-management/backend/routes/workOrders.routes.js) to rely on trigger-calculated totals as the single source of truth, eliminating JS floating-point and query drift.
 
-#### Issue 2: Entity Duplication across `users` and `staff_data`
+#### Issue 2: Entity Duplication across `users` and `staff_data` [RESOLVED ✅]
 * **Tables:** `users`, `staff_data`
-* **Details:**
-  - `staff_data` contains: `email`, `role`, `is_active`, `full_name`.
-  - `users` contains: `email`, `role`, `is_active`, `staff_id`.
-* **Problem:** An employee's email or active status must be updated in two separate tables. In several routes (e.g., [`users.routes.js:L384`](file:///c:/Codding/garage-management/backend/routes/users.routes.js#L384)), updating `users.is_active` requires a separate `UPDATE staff_data`. If one fails, user state is inconsistent.
-* **Remediation:** Establish `users` as the single authority for authentication credentials (`email`, `password_hash`, `is_active`), while `staff_data` holds profile information (`hourly_rate`, `address`, `phone`).
+* **Resolution Implemented:**
+  - Implemented bidirectional synchronization triggers `trg_sync_user_to_staff` (`fn_sync_user_to_staff`) on `users` and `trg_sync_staff_to_user` (`fn_sync_staff_to_user`) on `staff_data` with `pg_trigger_depth()` recursion protection.
+  - Changes to an employee's `email` or `is_active` status in either table automatically propagate to the other, eliminating split-brain state and desynchronization.
 
-#### Issue 3: Redundant VAT Number Storage
+#### Issue 3: Redundant VAT Number Storage & Invoice Snapshotting [RESOLVED ✅]
 * **Tables:** `car_owners`, `invoice_data`
-* **Details:**
-  `vat_number` is stored on `car_owners` AND `customer_vat` is stored on `invoice_data`. When an invoice is updated, custom logic conditionally back-syncs to `car_owners`.
-* **Remediation:** Invoices should snapshot the customer's VAT number only at the time of invoice issuance for historical tax compliance, with clear immutable rules once issued.
+* **Resolution Implemented:**
+  - Established clear tax compliance snapshot rules: invoices capture the customer's VAT snapshot at creation time from `car_owners.vat_number`.
+  - Added strict settlement locking in [`backend/routes/invoices.routes.js`](file:///c:/Codding/garage-management/backend/routes/invoices.routes.js): paid invoices cannot have their VAT number altered (`INVOICE_PAID_VAT_LOCKED`), preserving audit compliance.
+  - Eliminated implicit back-sync overwrites to `car_owners`, requiring an explicit `sync_master_profile: true` opt-in to modify customer master profiles.
 
-#### Issue 4: Dual Status Tracking / Conflicting State Machines
+#### Issue 4: Dual Status Tracking / Conflicting State Machines [RESOLVED ✅]
 * **Tables:** `work_order_data`, `appointments`
-* **Details:**
-  - `work_order_data.status` has ENUM values: `'received'`, `'scheduled'`, `'diagnosed'`, `'approved'`, `'in_progress'`, `'quality_check'`, `'ready'`, `'completed'`, `'cancelled'`.
-  - `appointments.status` has VARCHAR check constraints: `'confirmed'`, `'in_bay'`, `'completed'`, `'cancelled'`, `'no_show'`.
-* **Problem:** When an appointment status changes to `'in_bay'`, `work_order_data.status` might still be `'scheduled'` or `'received'`. Two competing status fields for the same vehicle visit create operational confusion.
-* **Remediation:** Clearly delineate appointment status (calendar slot state) from work order status (repair workflow state), or link them via transactional triggers.
+* **Resolution Implemented:**
+  - Created bidirectional state machine triggers `trg_sync_appointment_to_work_order` and `trg_sync_work_order_to_appointment` with recursion protection.
+  - Appointment progression to `'in_bay'`, `'completed'`, or `'cancelled'` automatically transitions linked work orders to `'in_progress'`, `'completed'`, or `'cancelled'`.
+  - Work order repair progression automatically updates appointment states, ensuring bay occupancy and repair workflows remain synchronized.
+  - Added dedicated status progression endpoint `PATCH /api/appointments/:id/status` in [`backend/routes/appointments.routes.js`](file:///c:/Codding/garage-management/backend/routes/appointments.routes.js).
 
-#### Issue 5: Primary Key Format Inconsistencies
+#### Issue 5: Primary Key Format Inconsistencies & Display Codes
 * **Details:**
   - `car_owners`: Formatted String `VARCHAR(30)` (`OWN-0001`) via sequence function.
   - `vehicles`: Formatted String `VARCHAR(30)` (`VEH-0001`).
   - `work_order_data`: Formatted String `VARCHAR(30)` (`WO-2026-0001`).
   - `invoice_data`: Formatted String `VARCHAR(30)` (`INV-2026-0001`).
   - `staff_data`, `users`, `inventory_data`, `work_order_items`, `audit_logs`: Integer `SERIAL PRIMARY KEY`.
-* **Problem:** String-based IDs increase index size and foreign key overhead, and string formatting prevents natural numeric sorting.
-* **Remediation:** Standardize on numeric `BIGSERIAL` / `INT` or standard `UUIDv4` for internal primary keys and foreign keys. Use formatted IDs (`WO-2026-0001`) strictly as user-facing display codes.
+* **Recommendation:** Formatted sequence codes serve as clean external customer-facing identifiers while internal integer foreign keys link transactional records.
 
 ---
 
@@ -405,12 +400,15 @@ erDiagram
 5. **Sanitize CSV Exports:**
    - Prepend `'` to formula triggers (`=`, `+`, `-`, `@`) and escape double quotes in [`backend/routes/export.routes.js`](file:///c:/Codding/garage-management/backend/routes/export.routes.js).
 
-### Phase 3: Data Normalization & Database Refactoring (Days 5–7)
-1. **Sync Inventory Batches with Catalog:**
-   - Create a database trigger to update `inventory_data.stock_quantity` whenever an insert or update occurs on `inventory_batches`.
-2. **Automate Financial Synchronization:**
-   - Implement PostgreSQL triggers on `work_order_items` to automatically update `work_order_data.total_cost` and open `invoice_data.subtotal`.
-3. **Unify Status State Machines:**
-   - Harmonize `work_order_data.status` and `appointments.status` to prevent desynchronized scheduling states.
-4. **Migrate String IDs to BigInt / UUID:**
-   - Plan a staged migration to use standard numeric primary keys for internal relational consistency.
+### Phase 3: Data Normalization & Database Refactoring (Days 5–7) [COMPLETED ✅]
+1. **Sync Inventory Batches with Catalog:** [RESOLVED ✅]
+   - Installed PostgreSQL trigger `trg_sync_inventory_batch_stock` ensuring `inventory_data.stock_quantity = SUM(quantity_remaining)` dynamically across all batch mutations.
+2. **Automate Financial Synchronization (3NF):** [RESOLVED ✅]
+   - Installed PostgreSQL trigger `trg_sync_work_order_totals` automatically synchronizing `work_order_data.total_cost` and open `invoice_data.subtotal` & `tax_amount` on line item insert, update, or deletion.
+3. **Unify Status State Machines:** [RESOLVED ✅]
+   - Installed bidirectional triggers `trg_sync_appointment_to_work_order` and `trg_sync_work_order_to_appointment` with recursion protection, linking bay status transitions and repair stages.
+4. **Synchronize Staff & User Records:** [RESOLVED ✅]
+   - Installed bidirectional triggers `trg_sync_user_to_staff` and `trg_sync_staff_to_user` eliminating split-brain profile and activation drift.
+5. **Enforce Immutable VAT Tax Snapshotting:** [RESOLVED ✅]
+   - Implemented strict settlement locking on paid invoices (`INVOICE_PAID_VAT_LOCKED`) and removed unintended master customer profile overwrites.
+
