@@ -877,23 +877,17 @@ router.post("/:id/items", requireRole(["admin", "staff"]), async (req, res) => {
         }
 
         // Recalculate total_cost on work_order_data
-        const calcQuery = `
-            UPDATE work_order_data 
-            SET total_cost = (
-                SELECT COALESCE(SUM(total_price), 0.00) 
-                FROM work_order_items 
-                WHERE work_order_id = $1
-            ),
-            updated_at = CURRENT_TIMESTAMP
-            WHERE work_order_id = $1
-            RETURNING total_cost;
-        `;
-        const totalResult = await client.query(calcQuery, [id]);
+        // 3NF Automated Sync: Total cost and pending invoice are updated atomically by database trigger
+        const totalResult = await client.query(
+            "SELECT total_cost FROM work_order_data WHERE work_order_id = $1;",
+            [id]
+        );
 
         await client.query("COMMIT");
 
         await deleteCachePattern("garage:cache:workorders:*");
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:invoices:*");
         await deleteCachePattern("garage:cache:owner:vehicles:*");
         await deleteCachePattern("garage:cache:vehicle:*");
         await deleteCachePattern("garage:cache:owners:*");
@@ -978,23 +972,17 @@ router.delete("/:id/items/:itemId", requireRole(["admin", "staff"]), async (req,
             [parseInt(itemId, 10), id]
         );
 
-        const calcQuery = `
-            UPDATE work_order_data 
-            SET total_cost = (
-                SELECT COALESCE(SUM(total_price), 0.00) 
-                FROM work_order_items 
-                WHERE work_order_id = $1
-            ),
-            updated_at = CURRENT_TIMESTAMP
-            WHERE work_order_id = $1
-            RETURNING total_cost;
-        `;
-        const totalResult = await client.query(calcQuery, [id]);
+        // 3NF Automated Sync: Total cost and pending invoice are updated atomically by database trigger
+        const totalResult = await client.query(
+            "SELECT total_cost FROM work_order_data WHERE work_order_id = $1;",
+            [id]
+        );
 
         await client.query("COMMIT");
 
         await deleteCachePattern("garage:cache:workorders:*");
         await deleteCache(`garage:cache:workorder:details:${id}`);
+        await deleteCachePattern("garage:cache:invoices:*");
         await deleteCachePattern("garage:cache:owner:vehicles:*");
         await deleteCachePattern("garage:cache:vehicle:*");
         await deleteCachePattern("garage:cache:owners:*");
