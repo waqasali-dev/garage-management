@@ -1130,4 +1130,71 @@ router.delete("/:id", requireRole(["admin"]), async (req, res) => {
     }
 });
 
+// ==========================================
+// 8. PATCH /api/appointments/:id/status
+// Harmonized status transition endpoint (Section 3.1 Issue 4)
+// ==========================================
+router.patch("/:id/status", requireRole(["admin", "staff"]), async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const allowedStatuses = ["confirmed", "in_bay", "completed", "cancelled", "no_show"];
+    if (!status || !allowedStatuses.includes(status)) {
+        return res.status(400).json({
+            error: `Invalid status '${status}'. Must be one of: ${allowedStatuses.join(", ")}`,
+        });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const updateRes = await client.query(
+            `UPDATE appointments
+             SET status = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE appointment_id = $2
+             RETURNING *;`,
+            [status, id]
+        );
+
+        if (updateRes.rows.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "Appointment not found." });
+        }
+
+        const updatedAppointment = updateRes.rows[0];
+
+        // Also fetch the synchronized work order status if linked
+        let syncedWorkOrder = null;
+        if (updatedAppointment.work_order_id) {
+            const woRes = await client.query(
+                "SELECT work_order_id, status, bay_assigned, updated_at FROM work_order_data WHERE work_order_id = $1;",
+                [updatedAppointment.work_order_id]
+            );
+            syncedWorkOrder = woRes.rows[0] || null;
+        }
+
+        await client.query("COMMIT");
+
+        await deleteCachePattern("garage:cache:appointments:*");
+        await deleteCachePattern("garage:cache:schedules:*");
+        await deleteCachePattern("garage:cache:workorder:*");
+        await deleteCachePattern("garage:cache:workorders:*");
+        await deleteCachePattern("garage:cache:bays:*");
+
+        res.json({
+            success: true,
+            message: `Appointment status updated to '${status}'. Synchronized with work order lifecycle.`,
+            appointment: updatedAppointment,
+            workOrder: syncedWorkOrder,
+        });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("Error updating appointment status:", err);
+        res.status(500).json({ error: "Failed to update appointment status", details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 export default router;
