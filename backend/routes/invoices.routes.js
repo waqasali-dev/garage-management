@@ -465,13 +465,35 @@ const updateInvoiceTax = async (id, taxVal, res) => {
     }
 };
 
-// PATCH /api/invoices/:id/customer-vat - Add or update customer VAT / TRN
+// PATCH /api/invoices/:id/customer-vat - Add or update customer VAT / TRN snapshot
 router.patch("/:id/customer-vat", requireRole(["admin"]), async (req, res) => {
     const { id } = req.params;
-    const { customer_vat } = req.body;
+    const { customer_vat, sync_master_profile = false } = req.body;
     const cleanVat = customer_vat !== undefined && customer_vat !== null ? String(customer_vat).trim() : "";
 
     try {
+        // Guard: Check if invoice exists and verify settlement state
+        const checkQuery = `
+            SELECT invoice_id, work_order_id, owner_id, status, customer_vat
+            FROM invoice_data 
+            WHERE UPPER(TRIM(invoice_id)) = UPPER(TRIM($1))
+               OR UPPER(TRIM(work_order_id)) = UPPER(TRIM($1));
+        `;
+        const checkResult = await pool.query(checkQuery, [id.trim()]);
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: "Invoice not found." });
+        }
+
+        const inv = checkResult.rows[0];
+
+        // Hard lock: Historical tax snapshots are immutable on settled/paid invoices (Section 3.1 Issue 3)
+        if (inv.status === "paid") {
+            return res.status(403).json({
+                error: "This invoice is finalized and marked as 'Paid'. Statutory tax numbers cannot be modified on settled tax invoices.",
+                code: "INVOICE_PAID_VAT_LOCKED",
+            });
+        }
+
         const updateQuery = `
             UPDATE invoice_data
             SET customer_vat = $1
@@ -480,29 +502,26 @@ router.patch("/:id/customer-vat", requireRole(["admin"]), async (req, res) => {
             RETURNING invoice_id, work_order_id, owner_id, customer_vat;
         `;
         const result = await pool.query(updateQuery, [cleanVat, id.trim()]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Invoice not found." });
-        }
+        const updated = result.rows[0];
 
-        const inv = result.rows[0];
-
-        // Also update the car_owners profile if owner_id exists
-        if (inv.owner_id && cleanVat) {
+        // Explicitly opt-in only: Update car_owners master profile only if requested
+        if (sync_master_profile && updated.owner_id && cleanVat) {
             await pool.query(
                 "UPDATE car_owners SET vat_number = $1 WHERE owner_id = $2;",
-                [cleanVat, inv.owner_id]
+                [cleanVat, updated.owner_id]
             );
+            await deleteCachePattern("garage:cache:owner*");
         }
 
         await deleteCachePattern("garage:cache:invoice*");
-        await deleteCachePattern("garage:cache:owner*");
 
         return res.json({
             success: true,
-            message: cleanVat ? `Customer VAT updated to ${cleanVat}.` : "Customer VAT cleared.",
+            message: cleanVat ? `Invoice tax snapshot VAT updated to ${cleanVat}.` : "Customer VAT cleared from invoice.",
             data: {
-                invoice_id: inv.invoice_id,
+                invoice_id: updated.invoice_id,
                 customer_vat: cleanVat,
+                master_profile_updated: Boolean(sync_master_profile && cleanVat),
             },
         });
     } catch (err) {
